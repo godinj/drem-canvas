@@ -1,0 +1,73 @@
+#pragma once
+#include <JuceHeader.h>
+
+namespace dc
+{
+
+namespace IDs
+{
+    #define DECLARE_ID(name) const juce::Identifier name (#name);
+
+    DECLARE_ID (PROJECT)
+    DECLARE_ID (TRACKS)
+    DECLARE_ID (TRACK)
+    DECLARE_ID (AUDIO_CLIP)
+    DECLARE_ID (MIDI_CLIP)
+    DECLARE_ID (name)
+    DECLARE_ID (colour)
+    DECLARE_ID (volume)
+    DECLARE_ID (pan)
+    DECLARE_ID (mute)
+    DECLARE_ID (solo)
+    DECLARE_ID (armed)
+    DECLARE_ID (sourceFile)
+    DECLARE_ID (startPosition)    // in samples
+    DECLARE_ID (length)           // in samples
+    DECLARE_ID (trimStart)        // in samples
+    DECLARE_ID (trimEnd)          // in samples
+    DECLARE_ID (fadeInLength)
+    DECLARE_ID (fadeOutLength)
+    DECLARE_ID (tempo)
+    DECLARE_ID (timeSigNumerator)
+    DECLARE_ID (timeSigDenominator)
+    DECLARE_ID (sampleRate)
+
+    #undef DECLARE_ID
+}
+
+class Project
+{
+public:
+    Project();
+
+    // Serialization
+    bool saveToFile (const juce::File& file) const;
+    bool loadFromFile (const juce::File& file);
+
+    // Track management
+    juce::ValueTree addTrack (const juce::String& name);
+    void removeTrack (int index);
+    int getNumTracks() const;
+    juce::ValueTree getTrack (int index) const;
+
+    juce::ValueTree& getState() { return state; }
+    const juce::ValueTree& getState() const { return state; }
+
+    juce::UndoManager& getUndoManager() { return undoManager; }
+
+    // Project properties
+    double getTempo() const;
+    void setTempo (double bpm);
+    double getSampleRate() const;
+    void setSampleRate (double sr);
+
+private:
+    juce::ValueTree state;
+    juce::UndoManager undoManager;
+
+    void createDefaultState();
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Project)
+};
+
+} // namespace dc
