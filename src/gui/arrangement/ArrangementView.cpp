@@ -7,6 +7,12 @@ ArrangementView::ArrangementView (Project& proj, TransportController& transport)
     : project (proj),
       transportController (transport)
 {
+    timeRuler.onSeek = [this] (double timeInSeconds)
+    {
+        double sr = transportController.getSampleRate();
+        if (sr > 0.0)
+            transportController.setPositionInSamples (static_cast<int64_t> (timeInSeconds * sr));
+    };
     addAndMakeVisible (timeRuler);
     addAndMakeVisible (viewport);
 
@@ -105,6 +111,7 @@ void ArrangementView::resized()
 
 void ArrangementView::timerCallback()
 {
+    timeRuler.setScrollOffset (static_cast<double> (viewport.getViewPositionX()));
     repaint();
 }
 

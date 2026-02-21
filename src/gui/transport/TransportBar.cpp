@@ -8,7 +8,6 @@ TransportBar::TransportBar (TransportController& transport)
 {
     addAndMakeVisible (playButton);
     addAndMakeVisible (stopButton);
-    addAndMakeVisible (openButton);
     addAndMakeVisible (timeDisplay);
 
     playButton.onClick = [this]
@@ -20,12 +19,6 @@ TransportBar::TransportBar (TransportController& transport)
     {
         transportController.stop();
         transportController.setPositionInSamples (0);
-    };
-
-    openButton.onClick = [this]
-    {
-        if (onOpenFile)
-            onOpenFile();
     };
 
     timeDisplay.setFont (juce::Font (juce::Font::getDefaultMonospacedFontName(), 16.0f, juce::Font::plain));
@@ -60,9 +53,6 @@ void TransportBar::resized()
     // Play and Stop buttons on the left
     playButton.setBounds (bounds.removeFromLeft (buttonWidth).reduced (margin));
     stopButton.setBounds (bounds.removeFromLeft (buttonWidth).reduced (margin));
-
-    // Open button on the right
-    openButton.setBounds (bounds.removeFromRight (100).reduced (margin));
 
     // Time display in the remaining center area
     timeDisplay.setBounds (bounds.reduced (margin));

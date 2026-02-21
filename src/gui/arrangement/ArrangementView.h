@@ -18,13 +18,13 @@ public:
 
     void paint (juce::Graphics& g) override;
     void resized() override;
+    void rebuildTrackLanes();
 
 private:
     void timerCallback() override;
     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
     void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override {}
-    void rebuildTrackLanes();
 
     Project& project;
     TransportController& transportController;

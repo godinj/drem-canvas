@@ -22,6 +22,7 @@ public:
 
     void paint (juce::Graphics& g) override;
     void resized() override;
+    bool keyPressed (const juce::KeyPress& key) override;
 
 private:
     void showAudioSettings();
@@ -40,9 +41,8 @@ private:
     // Engine
     AudioEngine audioEngine;
     TransportController transportController;
-    std::unique_ptr<MixBusProcessor> mixBusProcessor;
     juce::AudioProcessorGraph::Node::Ptr mixBusNode;
-    juce::OwnedArray<TrackProcessor> trackProcessors;
+    juce::Array<TrackProcessor*> trackProcessors;              // non-owning; graph owns the processors
     juce::Array<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
 
     // Model
@@ -53,7 +53,7 @@ private:
     std::unique_ptr<ArrangementView> arrangementView;
     std::unique_ptr<MixerPanel> mixerPanel;
     juce::TextButton audioSettingsButton { "Audio Settings" };
-    juce::TextButton addTrackButton { "Add Track" };
+    juce::TextButton addTrackButton { "Import Audio" };
 
     juce::StretchableLayoutManager layout;
     juce::StretchableLayoutResizerBar layoutResizer { &layout, 1, false };

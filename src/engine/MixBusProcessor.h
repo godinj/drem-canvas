@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <atomic>
+#include "TransportController.h"
 
 namespace dc
 {
@@ -8,7 +9,7 @@ namespace dc
 class MixBusProcessor : public juce::AudioProcessor
 {
 public:
-    MixBusProcessor();
+    MixBusProcessor (TransportController& transport);
 
     const juce::String getName() const override { return "MixBus"; }
     void prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock) override;
@@ -41,6 +42,7 @@ public:
     float getMasterGain() const  { return masterGain.load(); }
 
 private:
+    TransportController& transportController;
     std::atomic<float> peakLeft { 0.0f };
     std::atomic<float> peakRight { 0.0f };
     std::atomic<float> masterGain { 1.0f };

@@ -5,7 +5,9 @@ namespace dc
 {
 
 TrackProcessor::TrackProcessor (TransportController& transport)
-    : transportController (transport)
+    : AudioProcessor (BusesProperties()
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      transportController (transport)
 {
     formatManager.registerBasicFormats();
 }
@@ -99,6 +101,21 @@ void TrackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
     if (numChannels >= 2)
         buffer.applyGain (1, 0, buffer.getNumSamples(), rightAmp);
+
+    // Update peak meters
+    if (numChannels >= 1)
+    {
+        float mag = buffer.getMagnitude (0, 0, buffer.getNumSamples());
+        float old = peakLeft.load();
+        peakLeft.store (std::max (mag, old * 0.95f));
+    }
+
+    if (numChannels >= 2)
+    {
+        float mag = buffer.getMagnitude (1, 0, buffer.getNumSamples());
+        float old = peakRight.load();
+        peakRight.store (std::max (mag, old * 0.95f));
+    }
 }
 
 int64_t TrackProcessor::getFileLengthInSamples() const

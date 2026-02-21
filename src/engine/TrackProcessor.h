@@ -46,6 +46,10 @@ public:
 
     int64_t getFileLengthInSamples() const;
 
+    // Metering
+    float getPeakLevelLeft() const  { return peakLeft.load(); }
+    float getPeakLevelRight() const { return peakRight.load(); }
+
 private:
     TransportController& transportController;
     juce::AudioFormatManager formatManager;
@@ -56,6 +60,8 @@ private:
     std::atomic<float> gain { 1.0f };
     std::atomic<float> pan { 0.0f };
     std::atomic<bool> muted { false };
+    std::atomic<float> peakLeft { 0.0f };
+    std::atomic<float> peakRight { 0.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TrackProcessor)
 };

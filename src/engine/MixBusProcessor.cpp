@@ -3,10 +3,11 @@
 namespace dc
 {
 
-MixBusProcessor::MixBusProcessor()
+MixBusProcessor::MixBusProcessor (TransportController& transport)
     : AudioProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      transportController (transport)
 {
 }
 
@@ -21,6 +22,8 @@ void MixBusProcessor::releaseResources()
 
 void MixBusProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midiMessages*/)
 {
+    transportController.advancePosition (buffer.getNumSamples());
+
     const float gain = masterGain.load();
 
     // Apply master gain to all channels

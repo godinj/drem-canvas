@@ -1,6 +1,7 @@
 #include "MainComponent.h"
 #include "model/Track.h"
 #include "model/AudioClip.h"
+#include "gui/mixer/ChannelStrip.h"
 
 namespace dc
 {
@@ -17,12 +18,7 @@ MainComponent::MainComponent()
         : 44100.0);
 
     // Create mix bus processor and add to graph
-    mixBusProcessor = std::make_unique<MixBusProcessor>();
-    mixBusNode = audioEngine.addProcessor (std::make_unique<MixBusProcessor>());
-
-    // Keep a reference to the actual processor in the graph
-    mixBusProcessor.reset();
-    auto* mixBusInGraph = dynamic_cast<MixBusProcessor*> (mixBusNode->getProcessor());
+    mixBusNode = audioEngine.addProcessor (std::make_unique<MixBusProcessor> (transportController));
 
     // Connect mix bus output to audio output
     audioEngine.connectNodes (mixBusNode->nodeID, 0,
@@ -31,7 +27,6 @@ MainComponent::MainComponent()
                               audioEngine.getAudioOutputNode()->nodeID, 1);
 
     // Set up GUI components
-    transportBar.onOpenFile = [this] { openFile(); };
     addAndMakeVisible (transportBar);
 
     arrangementView = std::make_unique<ArrangementView> (project, transportController);
@@ -57,6 +52,7 @@ MainComponent::MainComponent()
     layout.setItemLayout (1, 4, 4, 4);            // resizer bar
     layout.setItemLayout (2, 100, -1.0, -0.35);   // mixer: 35%
 
+    setWantsKeyboardFocus (true);
     setSize (1400, 900);
 }
 
@@ -64,6 +60,9 @@ MainComponent::~MainComponent()
 {
     project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
     setLookAndFeel (nullptr);
+    trackProcessors.clear();
+    trackNodes.clear();
+    mixBusNode = nullptr;
     audioEngine.shutdown();
 }
 
@@ -79,13 +78,24 @@ void MainComponent::resized()
     // Top bar: transport + buttons
     auto topBar = area.removeFromTop (40);
     audioSettingsButton.setBounds (topBar.removeFromRight (120).reduced (4));
-    addTrackButton.setBounds (topBar.removeFromRight (100).reduced (4));
+    addTrackButton.setBounds (topBar.removeFromRight (120).reduced (4));
     transportBar.setBounds (topBar);
 
     // Resizable layout for arrangement and mixer
     juce::Component* comps[] = { arrangementView.get(), &layoutResizer, mixerPanel.get() };
     layout.layOutComponents (comps, 3, area.getX(), area.getY(),
                              area.getWidth(), area.getHeight(), true, true);
+}
+
+bool MainComponent::keyPressed (const juce::KeyPress& key)
+{
+    if (key == juce::KeyPress::spaceKey)
+    {
+        transportController.togglePlayStop();
+        return true;
+    }
+
+    return false;
 }
 
 void MainComponent::showAudioSettings()
@@ -139,12 +149,16 @@ void MainComponent::addTrackFromFile (const juce::File& file)
 
 void MainComponent::rebuildAudioGraph()
 {
+    // Suspend audio processing while modifying the graph to avoid
+    // the audio thread dereferencing nodes we're about to remove.
+    audioEngine.getGraph().suspendProcessing (true);
+
     // Remove existing track nodes
     for (auto& node : trackNodes)
         if (node != nullptr)
             audioEngine.removeProcessor (node->nodeID);
 
-    trackProcessors.clear();
+    trackProcessors.clear();   // non-owning — graph deleted the processors above
     trackNodes.clear();
 
     // Create a processor for each track
@@ -153,24 +167,24 @@ void MainComponent::rebuildAudioGraph()
         auto trackState = project.getTrack (i);
         Track track (trackState);
 
-        auto* processor = new TrackProcessor (transportController);
-        trackProcessors.add (processor);
+        auto processor = std::make_unique<TrackProcessor> (transportController);
+        auto* processorPtr = processor.get();
 
         // Load the first clip's audio file
         if (track.getNumClips() > 0)
         {
             AudioClip clip (track.getClip (0));
-            processor->loadFile (clip.getSourceFile());
+            processorPtr->loadFile (clip.getSourceFile());
         }
 
         // Sync gain/pan/mute from model
-        processor->setGain (track.getVolume());
-        processor->setPan (track.getPan());
-        processor->setMuted (track.isMuted());
+        processorPtr->setGain (track.getVolume());
+        processorPtr->setPan (track.getPan());
+        processorPtr->setMuted (track.isMuted());
 
-        // Add to graph
-        auto node = audioEngine.addProcessor (
-            std::unique_ptr<juce::AudioProcessor> (processor));
+        // Add to graph — graph takes sole ownership
+        auto node = audioEngine.addProcessor (std::move (processor));
+        trackProcessors.add (processorPtr);
         trackNodes.add (node);
 
         // Connect to mix bus (stereo)
@@ -181,9 +195,23 @@ void MainComponent::rebuildAudioGraph()
         }
     }
 
-    // Wire mixer panel meters
+    audioEngine.getGraph().suspendProcessing (false);
+
+    // Rebuild UI views
+    if (arrangementView != nullptr)
+        arrangementView->rebuildTrackLanes();
+
     if (mixerPanel != nullptr)
     {
+        mixerPanel->onWireMeter = [this] (int trackIndex, ChannelStrip& strip)
+        {
+            if (trackIndex < trackProcessors.size())
+            {
+                auto* proc = trackProcessors[trackIndex];
+                strip.getMeter().getLeftLevel  = [proc] { return proc->getPeakLevelLeft(); };
+                strip.getMeter().getRightLevel = [proc] { return proc->getPeakLevelRight(); };
+            }
+        };
         mixerPanel->rebuildStrips();
     }
 }

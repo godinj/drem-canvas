@@ -13,9 +13,6 @@ public:
     void paint (juce::Graphics& g) override;
     void resized() override;
 
-    // Callback for when user wants to open a file
-    std::function<void()> onOpenFile;
-
 private:
     void timerCallback() override;
 
@@ -23,7 +20,6 @@ private:
 
     juce::TextButton playButton { "Play" };
     juce::TextButton stopButton { "Stop" };
-    juce::TextButton openButton { "Open File..." };
     juce::Label timeDisplay;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TransportBar)
