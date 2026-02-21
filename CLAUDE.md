@@ -39,6 +39,52 @@ open "build/DremCanvas_artefacts/Release/Drem Canvas.app"
 - Track selection lives in `Arrangement`, clip selection in `VimContext`
 - `Project::getUndoManager()` provides the shared `juce::UndoManager`
 
+## Playhead & Timeline Coordinate System
+
+All timeline positions (playhead, clips, markers) follow one coordinate transformation chain. Every component that draws on the timeline MUST use this same math to stay aligned.
+
+**Conversion chain:**
+```
+SAMPLES  (TransportController::getPositionInSamples(), clip startPosition/length)
+   ÷ sampleRate
+SECONDS  (logical timeline position)
+   × pixelsPerSecond
+TIMELINE PIXELS  (absolute pixel offset from time=0)
+   + headerWidth (150px)
+   - scrollOffset (viewport.getViewPositionX())
+SCREEN PIXELS  (on-screen x coordinate)
+```
+
+**Canonical formulas:**
+```cpp
+// Playhead screen position (ArrangementView::paint)
+float cursorX = float(posInSamples / sampleRate * pixelsPerSecond)
+              + 150.0f - float(viewport.getViewPositionX());
+
+// Clip bounds (TrackLane::resized)
+int x = roundToInt((startPosition / sampleRate) * pixelsPerSecond) + headerWidth;
+int w = roundToInt((length / sampleRate) * pixelsPerSecond);
+
+// TimeRuler tick position
+float x = float((time - scrollOffset / pixelsPerSecond) * pixelsPerSecond) + headerWidth;
+
+// Mouse click to time (TimeRuler seek)
+double timeInSeconds = (double(mouseX - headerWidth) + scrollOffset) / pixelsPerSecond;
+```
+
+**Shared constants (must stay in sync across components):**
+- `headerWidth = 150` — defined in `TrackLane` and `TimeRuler` (track name column width)
+- `pixelsPerSecond = 100.0` — zoom level, stored in `ArrangementView` and propagated to `TrackLane`/`TimeRuler`
+- `sampleRate` — from `TransportController::getSampleRate()` or `Project::getSampleRate()`
+
+**Rules:**
+- All positions in the model (`startPosition`, `length`, `trimStart`, `trimEnd`) are in **samples**, never seconds or pixels
+- `TransportController` stores position as `std::atomic<int64_t>` samples — safe to read from any thread
+- Conversion to seconds/pixels happens only in GUI code at draw time
+- The playhead is drawn in `ArrangementView::paint()` as a red vertical line (not using the `Cursor` component)
+- `ArrangementView` repaints at 30Hz via `juce::Timer` to animate the playhead
+- When adding new timeline-aware components, always derive screen position using the full chain above — do not skip the scroll offset or header width
+
 ## Conventions
 
 - JUCE coding style: spaces around operators, braces on new line for classes/functions, `camelCase` methods, `PascalCase` classes
