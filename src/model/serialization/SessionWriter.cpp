@@ -39,6 +39,12 @@ bool SessionWriter::writeSession (const juce::ValueTree& projectState, const juc
     }
 
     cleanupStaleTrackFiles (sessionDir, trackCount);
+
+    // Write .gitignore if it doesn't already exist (preserve user customizations)
+    auto gitignore = sessionDir.getChildFile (".gitignore");
+    if (! gitignore.existsAsFile())
+        gitignore.replaceWithText ("peaks/\nexport/\n*.tmp\n");
+
     return true;
 }
 

@@ -94,6 +94,7 @@ target_sources(DremCanvas PRIVATE
 
     # Utils
     src/utils/AudioFileUtils.cpp
+    src/utils/GitIntegration.cpp
     src/utils/UndoSystem.cpp
 
     # Model - Phase 8
