@@ -36,4 +36,18 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (UndoSystem)
 };
 
+class ScopedTransaction
+{
+public:
+    explicit ScopedTransaction (UndoSystem& us, const juce::String& name)
+    {
+        us.beginTransaction (name);
+    }
+
+    ~ScopedTransaction() = default;
+
+private:
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ScopedTransaction)
+};
+
 } // namespace dc

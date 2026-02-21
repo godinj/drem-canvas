@@ -3,9 +3,10 @@
 namespace dc
 {
 
-MixerPanel::MixerPanel (Project& proj, MixBusProcessor& bus)
+MixerPanel::MixerPanel (Project& proj, MixBusProcessor& bus, UndoSystem* us)
     : project (proj),
-      masterBus (bus)
+      masterBus (bus),
+      undoSystem (us)
 {
     // Create master strip with a special "Master" ValueTree state
     juce::ValueTree masterState (IDs::TRACK);
@@ -57,7 +58,7 @@ void MixerPanel::rebuildStrips()
     for (int i = 0; i < numTracks; ++i)
     {
         auto trackState = project.getTrack (i);
-        auto* strip = strips.add (new ChannelStrip (trackState));
+        auto* strip = strips.add (new ChannelStrip (trackState, undoSystem));
         addAndMakeVisible (strip);
 
         // Wire meter sources via callback if provided

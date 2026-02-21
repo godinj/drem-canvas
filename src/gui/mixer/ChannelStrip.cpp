@@ -3,8 +3,9 @@
 namespace dc
 {
 
-ChannelStrip::ChannelStrip (const juce::ValueTree& state)
-    : trackState (state)
+ChannelStrip::ChannelStrip (const juce::ValueTree& state, UndoSystem* us)
+    : trackState (state),
+      undoSystem (us)
 {
     trackState.addListener (this);
 
@@ -16,7 +17,13 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state)
     fader.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     fader.onValueChange = [this]
     {
-        trackState.setProperty (IDs::volume, static_cast<float> (fader.getValue()), nullptr);
+        juce::UndoManager* um = nullptr;
+        if (undoSystem != nullptr)
+        {
+            undoSystem->beginCoalescedTransaction ("Adjust Volume");
+            um = &undoSystem->getUndoManager();
+        }
+        trackState.setProperty (IDs::volume, static_cast<float> (fader.getValue()), um);
         if (onStateChanged)
             onStateChanged();
     };
@@ -29,7 +36,13 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state)
     panKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     panKnob.onValueChange = [this]
     {
-        trackState.setProperty (IDs::pan, static_cast<float> (panKnob.getValue()), nullptr);
+        juce::UndoManager* um = nullptr;
+        if (undoSystem != nullptr)
+        {
+            undoSystem->beginCoalescedTransaction ("Adjust Pan");
+            um = &undoSystem->getUndoManager();
+        }
+        trackState.setProperty (IDs::pan, static_cast<float> (panKnob.getValue()), um);
         if (onStateChanged)
             onStateChanged();
     };
@@ -41,7 +54,13 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state)
     muteButton.setToggleState (trackState.getProperty (IDs::mute, false), juce::dontSendNotification);
     muteButton.onClick = [this]
     {
-        trackState.setProperty (IDs::mute, muteButton.getToggleState(), nullptr);
+        juce::UndoManager* um = nullptr;
+        if (undoSystem != nullptr)
+        {
+            undoSystem->beginTransaction ("Toggle Mute");
+            um = &undoSystem->getUndoManager();
+        }
+        trackState.setProperty (IDs::mute, muteButton.getToggleState(), um);
         if (onStateChanged)
             onStateChanged();
     };
@@ -53,7 +72,13 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state)
     soloButton.setToggleState (trackState.getProperty (IDs::solo, false), juce::dontSendNotification);
     soloButton.onClick = [this]
     {
-        trackState.setProperty (IDs::solo, soloButton.getToggleState(), nullptr);
+        juce::UndoManager* um = nullptr;
+        if (undoSystem != nullptr)
+        {
+            undoSystem->beginTransaction ("Toggle Solo");
+            um = &undoSystem->getUndoManager();
+        }
+        trackState.setProperty (IDs::solo, soloButton.getToggleState(), um);
         if (onStateChanged)
             onStateChanged();
     };
