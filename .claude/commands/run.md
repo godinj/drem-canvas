@@ -1,0 +1,1 @@
+Build the project (run `cmake --build build`, creating the build dir with `cmake -B build -DCMAKE_BUILD_TYPE=Release` first if needed). If the build fails, report errors and stop. If it succeeds, launch the app with `open "build/DremCanvas_artefacts/Release/Drem Canvas.app"`.
