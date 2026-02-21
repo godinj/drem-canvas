@@ -59,3 +59,20 @@ Phases 1-4 and 8-10 implemented:
 - YAML session save/load
 
 See `PRD.md` for full specification.
+
+## Parallel Feature Branches
+
+Three features are being developed in parallel via git worktrees. When merging, integrate one at a time and resolve conflicts before the next.
+
+| Worktree | Branch | Scope |
+|----------|--------|-------|
+| `../drem-canvas-vim-commands/` | `feature/vim-commands` | Phase 5: operators, visual mode, command line, search, registers |
+| `../drem-canvas-advanced-editing/` | `feature/advanced-editing` | Phase 11: clip drag/trim/fades, crossfades, undo polish, tempo map |
+| `../drem-canvas-git-integration/` | `feature/git-integration` | Phase 12: git commands, semantic diff, bounce/export, automation |
+
+Merge workflow:
+```bash
+git merge feature/vim-commands
+git merge feature/advanced-editing
+git merge feature/git-integration
+```
