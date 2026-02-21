@@ -1,80 +1,110 @@
-# Drem Canvas — DAW Project
+# Drem Canvas — feature/advanced-editing
 
-## Build
+## Mission
+
+Implement **Phase 11** from `PRD.md`: Advanced editing features — clip manipulation, undo polish, tempo map, and editing tools.
+
+## Build & Run
 
 ```bash
 cmake --build build
-```
-
-If the build directory doesn't exist:
-
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-```
-
-Run:
-
-```bash
 open "build/DremCanvas_artefacts/Release/Drem Canvas.app"
 ```
 
+If no `build/` dir: `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build`
+
 ## Architecture
 
-- **C++17** with **JUCE 8** framework, **yaml-cpp** for serialization
-- Namespace: `dc`
-- `src/engine/` — Real-time audio (never allocates or locks on audio thread)
-- `src/model/` — Data model using JUCE `ValueTree` (message thread only)
-- `src/gui/` — Presentational components observing model state
-- `src/vim/` — Vim modal navigation (KeyListener intercepting before child widgets)
-- `src/plugins/` — VST3/AU plugin hosting
-- `src/utils/` — Helpers (undo, audio file utils)
+- **C++17**, **JUCE 8**, namespace `dc`
+- `src/model/` — ValueTree-based data model (Track, AudioClip, MidiClip, Arrangement)
+- `src/gui/arrangement/` — ArrangementView, TrackLane, WaveformView (timeline UI)
+- `src/utils/UndoSystem.h/.cpp` — UndoManager wrapper
+- `src/model/TempoMap.h/.cpp` — Tempo/time-sig conversion utilities
 
-## Key Patterns
+## What to Implement
 
-- `ValueTree` is the single source of truth for all model state
-- GUI components observe ValueTree changes via `ValueTree::Listener`
-- Audio thread communicates with GUI via `std::atomic` and lock-free FIFOs
-- `VimEngine` is a `juce::KeyListener` attached to `MainComponent` — intercepts all keys in Normal mode, passes through in Insert mode
-- Track selection lives in `Arrangement`, clip selection in `VimContext`
-- `Project::getUndoManager()` provides the shared `juce::UndoManager`
+### 1. Clip Drag-and-Drop
+
+In `TrackLane` / `ArrangementView`:
+- Mouse drag to move clips along the timeline (update `startPosition` in ValueTree)
+- Drag clips between tracks (remove from source track, add to target)
+- Snap-to-grid based on tempo map grid divisions
+- Visual feedback during drag (ghost clip at drop position)
+
+### 2. Clip Trimming
+
+- Drag left/right edges of clips to adjust `trimStart` / `trimEnd`
+- Show resize cursor when hovering clip edges
+- Respect original source file boundaries
+- Waveform view updates in real-time during trim
+
+### 3. Clip Fades
+
+- Drag fade handles at clip corners to adjust `fadeInLength` / `fadeOutLength`
+- Draw fade curves on WaveformView (linear or S-curve overlay)
+- `AudioClip` model already has fade properties — wire them to `TrackProcessor`
+
+### 4. Auto-Crossfades
+
+- When clips overlap on the same track, automatically create a crossfade region
+- Adjustable crossfade curve (linear, equal-power, S-curve)
+- Visual crossfade indicator in TrackLane
+
+### 5. Undo System Polish
+
+Enhance `src/utils/UndoSystem.h/.cpp`:
+- Transaction grouping — multiple related edits form one undoable action
+- Coalescing for continuous changes (e.g., fader drags coalesce into one undo step)
+- Every edit operation should be fully undoable via `Ctrl+Z` / `u` in vim
+- Verify: make edit, undo, redo — state is identical
+
+### 6. TempoMap Enhancements
+
+Extend `src/model/TempoMap.h/.cpp`:
+- Support tempo changes at arbitrary positions (tempo automation)
+- Time-signature changes
+- Bar/beat grid calculation for snap-to-grid
+- Display grid lines in ArrangementView based on tempo
+
+### 7. Selection System
+
+- Multi-select clips (Shift+click or vim visual mode range)
+- Rubber-band selection in arrangement view
+- Selected clips highlighted, operations apply to all selected
+- `selectAll()` / `deselectAll()` on Arrangement
+
+### 8. Vim Editing Shortcuts
+
+Wire these into `VimEngine` normal mode:
+- `<` / `>` — nudge selected clip by grid unit
+- `+` / `-` — zoom horizontally
+- `Ctrl+` `+`/`-` — zoom vertically
+- `J` — join adjacent regions on same track
+
+## Key Files to Modify
+
+- `src/gui/arrangement/TrackLane.h/.cpp` — Drag, trim, fade handles, crossfade visuals
+- `src/gui/arrangement/WaveformView.h/.cpp` — Fade curve overlay
+- `src/gui/arrangement/ArrangementView.h/.cpp` — Grid lines, rubber-band selection, zoom
+- `src/model/AudioClip.h/.cpp` — Fade/crossfade model helpers
+- `src/model/TempoMap.h/.cpp` — Tempo automation, grid calculations
+- `src/model/Arrangement.h/.cpp` — Multi-selection
+- `src/utils/UndoSystem.h/.cpp` — Transaction grouping, coalescing
+- `src/engine/TrackProcessor.h/.cpp` — Apply fades during playback
+- `src/vim/VimEngine.h/.cpp` — Nudge, zoom, join bindings
+
+## Verification
+
+- Drag a clip to a new position — undo restores it
+- Trim a clip's start — waveform adjusts, playback respects trim
+- Overlap two clips — crossfade appears and sounds correct
+- Fader drag produces a single undo step (coalescing works)
+- `<` / `>` nudges clip by one grid unit
+- `+` / `-` zooms the arrangement view
+- `J` joins two adjacent clips into one
 
 ## Conventions
 
-- JUCE coding style: spaces around operators, braces on new line for classes/functions, `camelCase` methods, `PascalCase` classes
-- Header includes use `<JuceHeader.h>` plus project-relative paths (e.g., `"model/Project.h"`)
-- All new `.cpp` files must be added to `target_sources` in `CMakeLists.txt`
-- Always verify with `cmake --build build` after changes
-
-## Current State
-
-Phases 1-4 and 8-10 implemented:
-- Audio engine with multi-track playback and recording
-- Arrangement view with waveform display
-- Mixer with channel strips and metering
-- MIDI engine and piano roll editor
-- VST3/AU plugin hosting
-- Vim modal engine (Normal/Insert modes, hjkl, basic actions, visual cursor)
-- VimStatusBar with mode/context/cursor/playhead display
-- YAML session save/load
-
-See `PRD.md` for full specification.
-
-## Parallel Feature Branches
-
-Features are being developed in parallel via git worktrees. When merging, integrate one at a time and resolve conflicts before the next.
-
-| Worktree | Branch | Scope |
-|----------|--------|-------|
-| `../drem-canvas-vim-commands/` | `feature/vim-commands` | Phase 5: operators, visual mode, command line, search, registers |
-| `../drem-canvas-advanced-editing/` | `feature/advanced-editing` | Phase 11: clip drag/trim/fades, crossfades, undo polish, tempo map |
-| `../drem-canvas-git-integration/` | `feature/git-integration` | Phase 12: git commands, semantic diff, bounce/export, automation |
-| `../drem-canvas-mixer-implementation/` | `feature/mixer-implementation` | Phase 6: vim mixer context, fader/pan modes, strip selection, master bus |
-
-Merge workflow:
-```bash
-git merge feature/vim-commands
-git merge feature/mixer-implementation
-git merge feature/advanced-editing
-git merge feature/git-integration
-```
+- JUCE coding style (spaces around operators, camelCase methods, PascalCase classes)
+- All new `.cpp` files go in `CMakeLists.txt` `target_sources`
+- Always verify: `cmake --build build`
