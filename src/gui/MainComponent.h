@@ -30,6 +30,8 @@ private:
     void addTrackFromFile (const juce::File& file);
     void rebuildAudioGraph();
     void syncTrackProcessorsFromModel();
+    void saveSession();
+    void loadSession();
 
     // ValueTree listener
     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
@@ -52,8 +54,12 @@ private:
     TransportBar transportBar;
     std::unique_ptr<ArrangementView> arrangementView;
     std::unique_ptr<MixerPanel> mixerPanel;
+    juce::TextButton saveSessionButton { "Save Session" };
+    juce::TextButton loadSessionButton { "Load Session" };
     juce::TextButton audioSettingsButton { "Audio Settings" };
     juce::TextButton addTrackButton { "Import Audio" };
+
+    juce::File currentSessionDirectory;
 
     juce::StretchableLayoutManager layout;
     juce::StretchableLayoutResizerBar layoutResizer { &layout, 1, false };

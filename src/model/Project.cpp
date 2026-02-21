@@ -1,4 +1,6 @@
 #include "Project.h"
+#include "serialization/SessionWriter.h"
+#include "serialization/SessionReader.h"
 
 namespace dc
 {
@@ -88,6 +90,22 @@ double Project::getSampleRate() const
 void Project::setSampleRate (double sr)
 {
     state.setProperty (IDs::sampleRate, sr, &undoManager);
+}
+
+bool Project::saveSessionToDirectory (const juce::File& sessionDir) const
+{
+    return SessionWriter::writeSession (state, sessionDir);
+}
+
+bool Project::loadSessionFromDirectory (const juce::File& sessionDir)
+{
+    auto newState = SessionReader::readSession (sessionDir);
+
+    if (! newState.isValid() || ! newState.hasType (IDs::PROJECT))
+        return false;
+
+    state = newState;
+    return true;
 }
 
 } // namespace dc

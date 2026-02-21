@@ -38,6 +38,12 @@ MainComponent::MainComponent()
 
     addAndMakeVisible (layoutResizer);
 
+    saveSessionButton.onClick = [this] { saveSession(); };
+    addAndMakeVisible (saveSessionButton);
+
+    loadSessionButton.onClick = [this] { loadSession(); };
+    addAndMakeVisible (loadSessionButton);
+
     audioSettingsButton.onClick = [this] { showAudioSettings(); };
     addAndMakeVisible (audioSettingsButton);
 
@@ -79,6 +85,8 @@ void MainComponent::resized()
     auto topBar = area.removeFromTop (40);
     audioSettingsButton.setBounds (topBar.removeFromRight (120).reduced (4));
     addTrackButton.setBounds (topBar.removeFromRight (120).reduced (4));
+    loadSessionButton.setBounds (topBar.removeFromRight (120).reduced (4));
+    saveSessionButton.setBounds (topBar.removeFromRight (120).reduced (4));
     transportBar.setBounds (topBar);
 
     // Resizable layout for arrangement and mixer
@@ -228,6 +236,70 @@ void MainComponent::syncTrackProcessorsFromModel()
         processor->setPan (track.getPan());
         processor->setMuted (track.isMuted());
     }
+}
+
+void MainComponent::saveSession()
+{
+    auto chooser = std::make_shared<juce::FileChooser> (
+        "Save Session Directory...",
+        currentSessionDirectory.exists() ? currentSessionDirectory : juce::File::getSpecialLocation (juce::File::userHomeDirectory),
+        "");
+
+    chooser->launchAsync (juce::FileBrowserComponent::saveMode
+                        | juce::FileBrowserComponent::canSelectDirectories,
+        [this, chooser] (const juce::FileChooser& fc)
+        {
+            auto dir = fc.getResult();
+            if (dir == juce::File())
+                return;
+
+            if (project.saveSessionToDirectory (dir))
+            {
+                currentSessionDirectory = dir;
+            }
+            else
+            {
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
+                    "Save Error", "Failed to save session to:\n" + dir.getFullPathName());
+            }
+        });
+}
+
+void MainComponent::loadSession()
+{
+    auto chooser = std::make_shared<juce::FileChooser> (
+        "Load Session Directory...",
+        currentSessionDirectory.exists() ? currentSessionDirectory : juce::File::getSpecialLocation (juce::File::userHomeDirectory),
+        "");
+
+    chooser->launchAsync (juce::FileBrowserComponent::openMode
+                        | juce::FileBrowserComponent::canSelectDirectories,
+        [this, chooser] (const juce::FileChooser& fc)
+        {
+            auto dir = fc.getResult();
+            if (dir == juce::File() || ! dir.isDirectory())
+                return;
+
+            // Remove listener from old TRACKS node before replacing state
+            project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
+
+            if (project.loadSessionFromDirectory (dir))
+            {
+                currentSessionDirectory = dir;
+
+                // Re-add listener on the new TRACKS node
+                project.getState().getChildWithName (IDs::TRACKS).addListener (this);
+                rebuildAudioGraph();
+            }
+            else
+            {
+                // Restore listener on old (unchanged) TRACKS node
+                project.getState().getChildWithName (IDs::TRACKS).addListener (this);
+
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
+                    "Load Error", "Failed to load session from:\n" + dir.getFullPathName());
+            }
+        });
 }
 
 void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier& property)

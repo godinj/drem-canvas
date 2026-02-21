@@ -1,0 +1,239 @@
+#include "YAMLSerializer.h"
+#include "model/Project.h"
+
+namespace dc
+{
+
+namespace
+{
+    const juce::Identifier masterVolumeId ("masterVolume");
+    const juce::Identifier midiDataId ("midiData");
+}
+
+// --- Helpers ---
+
+juce::String YAMLSerializer::colourToHex (juce::Colour c)
+{
+    return c.toDisplayString (true).toLowerCase();
+}
+
+juce::Colour YAMLSerializer::hexToColour (const juce::String& hex)
+{
+    return juce::Colour (static_cast<juce::uint32> (hex.getHexValue64()));
+}
+
+juce::String YAMLSerializer::makeRelativePath (const juce::File& file, const juce::File& sessionDir)
+{
+    return file.getRelativePathFrom (sessionDir);
+}
+
+juce::File YAMLSerializer::resolveRelativePath (const juce::String& relativePath, const juce::File& sessionDir)
+{
+    return sessionDir.getChildFile (relativePath);
+}
+
+// --- Emit ---
+
+YAML::Node YAMLSerializer::emitSessionMeta (const juce::ValueTree& projectState, int trackCount)
+{
+    YAML::Node root;
+    root["drem_canvas_version"] = "0.1.0";
+
+    YAML::Node proj;
+    proj["tempo"] = static_cast<double> (projectState.getProperty (IDs::tempo, 120.0));
+
+    YAML::Node timeSig;
+    timeSig["numerator"] = static_cast<int> (projectState.getProperty (IDs::timeSigNumerator, 4));
+    timeSig["denominator"] = static_cast<int> (projectState.getProperty (IDs::timeSigDenominator, 4));
+    proj["time_signature"] = timeSig;
+
+    proj["sample_rate"] = static_cast<double> (projectState.getProperty (IDs::sampleRate, 44100.0));
+    proj["master_volume"] = static_cast<double> (static_cast<float> (projectState.getProperty (masterVolumeId, 1.0f)));
+
+    root["project"] = proj;
+    root["track_count"] = trackCount;
+
+    return root;
+}
+
+YAML::Node YAMLSerializer::emitTrack (const juce::ValueTree& trackState, const juce::File& sessionDir)
+{
+    YAML::Node root;
+    YAML::Node track;
+
+    track["name"] = trackState.getProperty (IDs::name, juce::String()).toString().toStdString();
+
+    auto colour = juce::Colour (static_cast<juce::uint32> (static_cast<int> (trackState.getProperty (IDs::colour, 0))));
+    track["colour"] = colourToHex (colour).toStdString();
+
+    YAML::Node mixer;
+    mixer["volume"] = static_cast<double> (static_cast<float> (trackState.getProperty (IDs::volume, 1.0f)));
+    mixer["pan"] = static_cast<double> (static_cast<float> (trackState.getProperty (IDs::pan, 0.0f)));
+    mixer["mute"] = static_cast<bool> (trackState.getProperty (IDs::mute, false));
+    mixer["solo"] = static_cast<bool> (trackState.getProperty (IDs::solo, false));
+    mixer["armed"] = static_cast<bool> (trackState.getProperty (IDs::armed, false));
+    track["mixer"] = mixer;
+
+    YAML::Node clips;
+    for (int i = 0; i < trackState.getNumChildren(); ++i)
+    {
+        auto child = trackState.getChild (i);
+        if (child.hasType (IDs::AUDIO_CLIP))
+            clips.push_back (emitAudioClip (child, sessionDir));
+        else if (child.hasType (IDs::MIDI_CLIP))
+            clips.push_back (emitMidiClip (child));
+    }
+    track["clips"] = clips;
+
+    root["track"] = track;
+    return root;
+}
+
+YAML::Node YAMLSerializer::emitAudioClip (const juce::ValueTree& clipState, const juce::File& sessionDir)
+{
+    YAML::Node clip;
+    clip["type"] = "audio";
+
+    juce::File sourceFile (clipState.getProperty (IDs::sourceFile, juce::String()).toString());
+    clip["source_file"] = makeRelativePath (sourceFile, sessionDir).toStdString();
+
+    clip["start_position"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+    clip["length"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+    clip["trim_start"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0)));
+    clip["trim_end"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::trimEnd, 0)));
+    clip["fade_in_length"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::fadeInLength, 0)));
+    clip["fade_out_length"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::fadeOutLength, 0)));
+
+    return clip;
+}
+
+YAML::Node YAMLSerializer::emitMidiClip (const juce::ValueTree& clipState)
+{
+    YAML::Node clip;
+    clip["type"] = "midi";
+
+    clip["start_position"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+    clip["length"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+
+    juce::String base64Data = clipState.getProperty (midiDataId, juce::String());
+    clip["midi_data"] = base64Data.toStdString();
+
+    return clip;
+}
+
+// --- Parse ---
+
+juce::ValueTree YAMLSerializer::parseSessionMeta (const YAML::Node& node)
+{
+    juce::ValueTree state (IDs::PROJECT);
+    state.appendChild (juce::ValueTree (IDs::TRACKS), nullptr);
+
+    if (auto proj = node["project"])
+    {
+        if (proj["tempo"])
+            state.setProperty (IDs::tempo, proj["tempo"].as<double>(), nullptr);
+
+        if (auto ts = proj["time_signature"])
+        {
+            if (ts["numerator"])
+                state.setProperty (IDs::timeSigNumerator, ts["numerator"].as<int>(), nullptr);
+            if (ts["denominator"])
+                state.setProperty (IDs::timeSigDenominator, ts["denominator"].as<int>(), nullptr);
+        }
+
+        if (proj["sample_rate"])
+            state.setProperty (IDs::sampleRate, proj["sample_rate"].as<double>(), nullptr);
+
+        if (proj["master_volume"])
+            state.setProperty (masterVolumeId, static_cast<float> (proj["master_volume"].as<double>()), nullptr);
+    }
+
+    return state;
+}
+
+juce::ValueTree YAMLSerializer::parseTrack (const YAML::Node& node, const juce::File& sessionDir)
+{
+    juce::ValueTree trackState (IDs::TRACK);
+
+    auto track = node["track"];
+    if (! track)
+        return trackState;
+
+    if (track["name"])
+        trackState.setProperty (IDs::name, juce::String (track["name"].as<std::string>()), nullptr);
+
+    if (track["colour"])
+        trackState.setProperty (IDs::colour, static_cast<int> (hexToColour (juce::String (track["colour"].as<std::string>())).getARGB()), nullptr);
+
+    if (auto mixer = track["mixer"])
+    {
+        if (mixer["volume"])
+            trackState.setProperty (IDs::volume, static_cast<float> (mixer["volume"].as<double>()), nullptr);
+        if (mixer["pan"])
+            trackState.setProperty (IDs::pan, static_cast<float> (mixer["pan"].as<double>()), nullptr);
+        if (mixer["mute"])
+            trackState.setProperty (IDs::mute, mixer["mute"].as<bool>(), nullptr);
+        if (mixer["solo"])
+            trackState.setProperty (IDs::solo, mixer["solo"].as<bool>(), nullptr);
+        if (mixer["armed"])
+            trackState.setProperty (IDs::armed, mixer["armed"].as<bool>(), nullptr);
+    }
+
+    if (auto clips = track["clips"])
+    {
+        for (std::size_t i = 0; i < clips.size(); ++i)
+        {
+            auto clipNode = clips[i];
+            auto type = clipNode["type"].as<std::string>();
+
+            if (type == "audio")
+                trackState.appendChild (parseAudioClip (clipNode, sessionDir), nullptr);
+            else if (type == "midi")
+                trackState.appendChild (parseMidiClip (clipNode), nullptr);
+        }
+    }
+
+    return trackState;
+}
+
+juce::ValueTree YAMLSerializer::parseAudioClip (const YAML::Node& node, const juce::File& sessionDir)
+{
+    juce::ValueTree clip (IDs::AUDIO_CLIP);
+
+    if (node["source_file"])
+    {
+        auto resolved = resolveRelativePath (juce::String (node["source_file"].as<std::string>()), sessionDir);
+        clip.setProperty (IDs::sourceFile, resolved.getFullPathName(), nullptr);
+    }
+
+    if (node["start_position"])
+        clip.setProperty (IDs::startPosition, static_cast<juce::int64> (node["start_position"].as<int64_t>()), nullptr);
+    if (node["length"])
+        clip.setProperty (IDs::length, static_cast<juce::int64> (node["length"].as<int64_t>()), nullptr);
+    if (node["trim_start"])
+        clip.setProperty (IDs::trimStart, static_cast<juce::int64> (node["trim_start"].as<int64_t>()), nullptr);
+    if (node["trim_end"])
+        clip.setProperty (IDs::trimEnd, static_cast<juce::int64> (node["trim_end"].as<int64_t>()), nullptr);
+    if (node["fade_in_length"])
+        clip.setProperty (IDs::fadeInLength, static_cast<juce::int64> (node["fade_in_length"].as<int64_t>()), nullptr);
+    if (node["fade_out_length"])
+        clip.setProperty (IDs::fadeOutLength, static_cast<juce::int64> (node["fade_out_length"].as<int64_t>()), nullptr);
+
+    return clip;
+}
+
+juce::ValueTree YAMLSerializer::parseMidiClip (const YAML::Node& node)
+{
+    juce::ValueTree clip (IDs::MIDI_CLIP);
+
+    if (node["start_position"])
+        clip.setProperty (IDs::startPosition, static_cast<juce::int64> (node["start_position"].as<int64_t>()), nullptr);
+    if (node["length"])
+        clip.setProperty (IDs::length, static_cast<juce::int64> (node["length"].as<int64_t>()), nullptr);
+    if (node["midi_data"])
+        clip.setProperty (midiDataId, juce::String (node["midi_data"].as<std::string>()), nullptr);
+
+    return clip;
+}
+
+} // namespace dc

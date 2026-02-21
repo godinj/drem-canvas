@@ -6,6 +6,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(libs/JUCE)
 
+# yaml-cpp for YAML session serialization
+include(FetchContent)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
+FetchContent_Declare(
+    yaml-cpp
+    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+    GIT_TAG 0.8.0
+)
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(yaml-cpp)
+
 juce_add_gui_app(DremCanvas
     PRODUCT_NAME "Drem Canvas"
     COMPANY_NAME "Drem"
@@ -79,6 +92,11 @@ target_sources(DremCanvas PRIVATE
     # Model - Phase 8
     src/model/Arrangement.cpp
     src/model/MixerState.cpp
+
+    # Serialization
+    src/model/serialization/YAMLSerializer.cpp
+    src/model/serialization/SessionWriter.cpp
+    src/model/serialization/SessionReader.cpp
 )
 
 target_include_directories(DremCanvas PRIVATE src)
@@ -105,4 +123,5 @@ target_link_libraries(DremCanvas PRIVATE
     juce::juce_gui_extra
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
+    yaml-cpp::yaml-cpp
 )

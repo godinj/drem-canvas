@@ -40,9 +40,13 @@ class Project
 public:
     Project();
 
-    // Serialization
+    // Serialization (XML)
     bool saveToFile (const juce::File& file) const;
     bool loadFromFile (const juce::File& file);
+
+    // Serialization (YAML session directory)
+    bool saveSessionToDirectory (const juce::File& sessionDir) const;
+    bool loadSessionFromDirectory (const juce::File& sessionDir);
 
     // Track management
     juce::ValueTree addTrack (const juce::String& name);
