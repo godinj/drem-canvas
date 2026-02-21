@@ -5,9 +5,14 @@
 #include "engine/MixBusProcessor.h"
 #include "engine/TrackProcessor.h"
 #include "model/Project.h"
+#include "model/Arrangement.h"
+#include "model/TempoMap.h"
+#include "vim/VimEngine.h"
+#include "vim/VimContext.h"
 #include "gui/transport/TransportBar.h"
 #include "gui/arrangement/ArrangementView.h"
 #include "gui/mixer/MixerPanel.h"
+#include "gui/vim/VimStatusBar.h"
 #include "gui/common/DremLookAndFeel.h"
 
 namespace dc
@@ -22,7 +27,6 @@ public:
 
     void paint (juce::Graphics& g) override;
     void resized() override;
-    bool keyPressed (const juce::KeyPress& key) override;
 
 private:
     void showAudioSettings();
@@ -49,6 +53,10 @@ private:
 
     // Model
     Project project;
+    Arrangement arrangement { project };
+    TempoMap tempoMap;
+    VimContext vimContext;
+    std::unique_ptr<VimEngine> vimEngine;
 
     // GUI
     TransportBar transportBar;
@@ -60,6 +68,8 @@ private:
     juce::TextButton addTrackButton { "Import Audio" };
 
     juce::File currentSessionDirectory;
+
+    std::unique_ptr<VimStatusBar> vimStatusBar;
 
     juce::StretchableLayoutManager layout;
     juce::StretchableLayoutResizerBar layoutResizer { &layout, 1, false };

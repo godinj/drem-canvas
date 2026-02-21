@@ -14,6 +14,7 @@ public:
     ~TrackLane() override;
 
     void paint (juce::Graphics& g) override;
+    void paintOverChildren (juce::Graphics& g) override;
     void resized() override;
 
     // Pixels per second for zoom control
@@ -21,6 +22,10 @@ public:
     double getPixelsPerSecond() const { return pixelsPerSecond; }
 
     void setSampleRate (double sr) { sampleRate = sr; }
+
+    // Vim cursor selection
+    void setSelected (bool shouldBeSelected);
+    void setSelectedClipIndex (int index);
 
 private:
     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
@@ -33,6 +38,8 @@ private:
 
     double pixelsPerSecond = 100.0;
     double sampleRate = 44100.0;
+    bool selected = false;
+    int selectedClipIndex = -1;
 
     static constexpr int headerWidth = 150;
 

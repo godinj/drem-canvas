@@ -29,7 +29,7 @@ MainComponent::MainComponent()
     // Set up GUI components
     addAndMakeVisible (transportBar);
 
-    arrangementView = std::make_unique<ArrangementView> (project, transportController);
+    arrangementView = std::make_unique<ArrangementView> (project, transportController, arrangement, vimContext);
     addAndMakeVisible (*arrangementView);
 
     mixerPanel = std::make_unique<MixerPanel> (project,
@@ -50,8 +50,24 @@ MainComponent::MainComponent()
     addTrackButton.onClick = [this] { openFile(); };
     addAndMakeVisible (addTrackButton);
 
+    // Vim modal engine
+    vimEngine = std::make_unique<VimEngine> (project, transportController, arrangement, vimContext);
+    addKeyListener (vimEngine.get());
+
+    vimEngine->addListener (arrangementView.get());
+
+    vimStatusBar = std::make_unique<VimStatusBar> (*vimEngine, vimContext, arrangement, transportController);
+    addAndMakeVisible (*vimStatusBar);
+
+    // Sync tempo map from project
+    tempoMap.setTempo (project.getTempo());
+
     // Listen to track changes for audio graph sync
     project.getState().getChildWithName (IDs::TRACKS).addListener (this);
+
+    // Select first track if available
+    if (arrangement.getNumTracks() > 0)
+        arrangement.selectTrack (0);
 
     // Layout: arrangement on top, resizer, mixer on bottom
     layout.setItemLayout (0, 100, -1.0, -0.65);  // arrangement: 65%
@@ -64,6 +80,8 @@ MainComponent::MainComponent()
 
 MainComponent::~MainComponent()
 {
+    vimEngine->removeListener (arrangementView.get());
+    removeKeyListener (vimEngine.get());
     project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
     setLookAndFeel (nullptr);
     trackProcessors.clear();
@@ -89,21 +107,14 @@ void MainComponent::resized()
     saveSessionButton.setBounds (topBar.removeFromRight (120).reduced (4));
     transportBar.setBounds (topBar);
 
+    // Status bar at bottom
+    if (vimStatusBar != nullptr)
+        vimStatusBar->setBounds (area.removeFromBottom (VimStatusBar::preferredHeight));
+
     // Resizable layout for arrangement and mixer
     juce::Component* comps[] = { arrangementView.get(), &layoutResizer, mixerPanel.get() };
     layout.layOutComponents (comps, 3, area.getX(), area.getY(),
                              area.getWidth(), area.getHeight(), true, true);
-}
-
-bool MainComponent::keyPressed (const juce::KeyPress& key)
-{
-    if (key == juce::KeyPress::spaceKey)
-    {
-        transportController.togglePlayStop();
-        return true;
-    }
-
-    return false;
 }
 
 void MainComponent::showAudioSettings()

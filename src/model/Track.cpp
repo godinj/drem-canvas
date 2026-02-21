@@ -99,9 +99,9 @@ juce::ValueTree Track::getClip (int index) const
     return state.getChild (index);
 }
 
-void Track::removeClip (int index)
+void Track::removeClip (int index, juce::UndoManager* um)
 {
-    state.removeChild (index, nullptr);
+    state.removeChild (index, um);
 }
 
 } // namespace dc

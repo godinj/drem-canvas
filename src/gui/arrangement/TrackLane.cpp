@@ -23,8 +23,22 @@ void TrackLane::paint (juce::Graphics& g)
     auto headerArea = bounds.removeFromLeft (headerWidth);
 
     auto trackColour = juce::Colour (static_cast<juce::uint32> (static_cast<int> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4488aa)))));
-    g.setColour (trackColour.darker (0.5f));
-    g.fillRect (headerArea);
+
+    if (selected)
+    {
+        // Brighter header when selected
+        g.setColour (trackColour.darker (0.2f));
+        g.fillRect (headerArea);
+
+        // Accent strip on left edge
+        g.setColour (juce::Colour (0xff50c878));
+        g.fillRect (headerArea.removeFromLeft (3));
+    }
+    else
+    {
+        g.setColour (trackColour.darker (0.5f));
+        g.fillRect (headerArea);
+    }
 
     g.setColour (juce::Colours::white);
     g.setFont (juce::Font (14.0f));
@@ -36,6 +50,24 @@ void TrackLane::paint (juce::Graphics& g)
     // Draw horizontal separator at bottom
     g.setColour (juce::Colours::white.withAlpha (0.15f));
     g.drawHorizontalLine (getHeight() - 1, 0.0f, static_cast<float> (getWidth()));
+}
+
+void TrackLane::paintOverChildren (juce::Graphics& g)
+{
+    if (! selected || selectedClipIndex < 0 || selectedClipIndex >= clipViews.size())
+        return;
+
+    // Draw selection highlight around the selected clip
+    auto* clipView = clipViews[selectedClipIndex];
+    auto clipBounds = clipView->getBounds().toFloat();
+
+    // Outer glow
+    g.setColour (juce::Colour (0xff50c878).withAlpha (0.25f));
+    g.fillRoundedRectangle (clipBounds.expanded (2.0f), 3.0f);
+
+    // Selection border
+    g.setColour (juce::Colour (0xff50c878));
+    g.drawRoundedRectangle (clipBounds, 3.0f, 2.0f);
 }
 
 void TrackLane::resized()
@@ -95,6 +127,24 @@ void TrackLane::rebuildClipViews()
     }
 
     resized();
+}
+
+void TrackLane::setSelected (bool shouldBeSelected)
+{
+    if (selected != shouldBeSelected)
+    {
+        selected = shouldBeSelected;
+        repaint();
+    }
+}
+
+void TrackLane::setSelectedClipIndex (int index)
+{
+    if (selectedClipIndex != index)
+    {
+        selectedClipIndex = index;
+        repaint();
+    }
 }
 
 void TrackLane::valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&)

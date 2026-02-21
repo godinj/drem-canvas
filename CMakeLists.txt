@@ -85,6 +85,13 @@ target_sources(DremCanvas PRIVATE
     # GUI - Common
     src/gui/common/DremLookAndFeel.cpp
 
+    # Vim
+    src/vim/VimContext.cpp
+    src/vim/VimEngine.cpp
+
+    # GUI - Vim
+    src/gui/vim/VimStatusBar.cpp
+
     # Utils
     src/utils/AudioFileUtils.cpp
     src/utils/UndoSystem.cpp

@@ -36,7 +36,7 @@ public:
     juce::ValueTree addAudioClip (const juce::File& sourceFile, int64_t startPosition, int64_t length);
     int getNumClips() const;
     juce::ValueTree getClip (int index) const;
-    void removeClip (int index);
+    void removeClip (int index, juce::UndoManager* um = nullptr);
 
     juce::ValueTree& getState() { return state; }
     const juce::ValueTree& getState() const { return state; }

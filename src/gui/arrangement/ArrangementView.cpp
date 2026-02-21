@@ -3,9 +3,12 @@
 namespace dc
 {
 
-ArrangementView::ArrangementView (Project& proj, TransportController& transport)
+ArrangementView::ArrangementView (Project& proj, TransportController& transport,
+                                   Arrangement& arr, VimContext& vc)
     : project (proj),
-      transportController (transport)
+      transportController (transport),
+      arrangement (arr),
+      vimContext (vc)
 {
     timeRuler.onSeek = [this] (double timeInSeconds)
     {
@@ -57,6 +60,7 @@ void ArrangementView::rebuildTrackLanes()
         trackContainer.addAndMakeVisible (lane);
     }
 
+    updateSelectionVisuals();
     resized();
 }
 
@@ -125,6 +129,53 @@ void ArrangementView::valueTreeChildRemoved (juce::ValueTree& parent, juce::Valu
 {
     if (parent.hasType (IDs::TRACKS))
         rebuildTrackLanes();
+}
+
+// ── VimEngine::Listener ─────────────────────────────────────────────────────
+
+void ArrangementView::vimModeChanged (VimEngine::Mode)
+{
+    // Could change visual style per mode in the future
+}
+
+void ArrangementView::vimContextChanged()
+{
+    updateSelectionVisuals();
+    ensureSelectedTrackVisible();
+}
+
+void ArrangementView::updateSelectionVisuals()
+{
+    int selectedTrack = arrangement.getSelectedTrackIndex();
+    int selectedClip  = vimContext.getSelectedClipIndex();
+
+    for (int i = 0; i < trackLanes.size(); ++i)
+    {
+        bool isSelected = (i == selectedTrack);
+        trackLanes[i]->setSelected (isSelected);
+        trackLanes[i]->setSelectedClipIndex (isSelected ? selectedClip : -1);
+    }
+}
+
+void ArrangementView::ensureSelectedTrackVisible()
+{
+    int idx = arrangement.getSelectedTrackIndex();
+
+    if (idx < 0 || idx >= trackLanes.size())
+        return;
+
+    // Compute the track's y-range in the track container
+    int trackTop    = idx * trackHeight;
+    int trackBottom = trackTop + trackHeight;
+
+    // Current visible range in the viewport
+    int viewTop    = viewport.getViewPositionY();
+    int viewBottom = viewTop + viewport.getViewHeight();
+
+    if (trackTop < viewTop)
+        viewport.setViewPosition (viewport.getViewPositionX(), trackTop);
+    else if (trackBottom > viewBottom)
+        viewport.setViewPosition (viewport.getViewPositionX(), trackBottom - viewport.getViewHeight());
 }
 
 } // namespace dc
