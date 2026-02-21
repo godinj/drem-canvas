@@ -1,102 +1,80 @@
-# Drem Canvas — feature/vim-commands
+# Drem Canvas — DAW Project
 
-## Mission
-
-Implement **Phase 5** from `PRD.md`: Vim Operators, Visual Mode, and Command Mode.
-
-## Build & Run
+## Build
 
 ```bash
 cmake --build build
+```
+
+If the build directory doesn't exist:
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+Run:
+
+```bash
 open "build/DremCanvas_artefacts/Release/Drem Canvas.app"
 ```
 
-If no `build/` dir: `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build`
-
 ## Architecture
 
-- **C++17**, **JUCE 8**, namespace `dc`
-- `src/vim/VimEngine.h/.cpp` — State machine, key dispatch (currently Normal/Insert only)
-- `src/vim/VimContext.h/.cpp` — Panel focus, clip selection, clipboard
-- `src/gui/vim/VimStatusBar.h/.cpp` — Mode indicator at bottom of window
-- `src/gui/MainComponent.h/.cpp` — VimEngine attached as KeyListener
+- **C++17** with **JUCE 8** framework, **yaml-cpp** for serialization
+- Namespace: `dc`
+- `src/engine/` — Real-time audio (never allocates or locks on audio thread)
+- `src/model/` — Data model using JUCE `ValueTree` (message thread only)
+- `src/gui/` — Presentational components observing model state
+- `src/vim/` — Vim modal navigation (KeyListener intercepting before child widgets)
+- `src/plugins/` — VST3/AU plugin hosting
+- `src/utils/` — Helpers (undo, audio file utils)
 
-## What to Implement
+## Key Patterns
 
-### 1. Operator-Pending Mode
-
-Extend `VimEngine` with an operator-pending state:
-- `d` + motion = delete (e.g., `d$` delete to end of track, `d3j` delete 3 tracks)
-- `y` + motion = yank/copy
-- `c` + motion = change (delete + enter insert mode)
-- Number prefixes: `3j` = move down 3 tracks, `5x` = delete 5 regions
-- Pending operator shown in VimStatusBar
-
-### 2. Visual Mode
-
-Add `Visual` and `VisualLine` modes to `VimEngine::Mode`:
-- `v` from Normal enters Visual — extends selection across regions
-- `V` from Normal enters Visual-Line — selects entire tracks
-- `hjkl` extends the selection range
-- Operators (`d`, `y`, `c`) act on the visual selection then return to Normal
-- `Escape` cancels and returns to Normal
-- Visual selection must be rendered in `TrackLane` (highlight selected range)
-
-### 3. VimCommandLine (`src/vim/VimCommandLine.h/.cpp`)
-
-New component replacing the status bar when `:` is pressed:
-- Text input with `:` prompt
-- Tab-completion for commands, track names
-- Command history (up/down arrows)
-- `Enter` executes, `Escape` cancels
-- Core commands: `:w` (save), `:q` (quit), `:wq`, `:set tempo <bpm>`, `:track <name>`, `:bus <name>`, `:<number>` (jump to track)
-
-### 4. Search (`/`)
-
-- `/` opens search prompt in status bar area
-- Incremental search across regions, markers, track names
-- `n` / `N` for next/prev match
-- Match count shown in status bar
-
-### 5. Additional Motions
-
-- `w` / `b` — next/previous region boundary
-- `f{char}` — jump to marker starting with char
-- `m{char}` — set named marker at playhead
-- `'{char}` — jump to named marker
-- `.` — repeat last action
-
-### 6. Registers and Marks
-
-- Default register for yank/paste (already exists as clipboard in VimContext)
-- Named registers `"a`-`"z` for multiple clipboards
-- `"+` for system clipboard
-- Marks stored in VimContext
-
-## Key Files to Modify
-
-- `src/vim/VimEngine.h/.cpp` — Add modes, operator-pending state, number prefix accumulator
-- `src/vim/VimContext.h/.cpp` — Add registers, marks storage
-- `src/gui/vim/VimStatusBar.h/.cpp` — Show pending operator, visual mode indicator
-- `src/gui/arrangement/TrackLane.h/.cpp` — Visual mode selection rendering
-
-## Key Files to Create
-
-- `src/vim/VimCommandLine.h/.cpp` — Command-line widget and parser
-- `src/vim/VimRegisters.h/.cpp` — Named registers (optional, can be part of VimContext)
-
-## Verification
-
-- `d3j` deletes 3 tracks worth of clips
-- `v` + `jjl` + `d` selects and deletes a range
-- `V` + `jj` + `y` yanks entire tracks
-- `:set tempo 140` changes tempo
-- `/kick` finds regions containing "kick"
-- `.` repeats the last delete/yank/paste
-- `"ay` yanks to register `a`, `"ap` pastes from it
+- `ValueTree` is the single source of truth for all model state
+- GUI components observe ValueTree changes via `ValueTree::Listener`
+- Audio thread communicates with GUI via `std::atomic` and lock-free FIFOs
+- `VimEngine` is a `juce::KeyListener` attached to `MainComponent` — intercepts all keys in Normal mode, passes through in Insert mode
+- Track selection lives in `Arrangement`, clip selection in `VimContext`
+- `Project::getUndoManager()` provides the shared `juce::UndoManager`
 
 ## Conventions
 
-- JUCE coding style (see main CLAUDE.md patterns in PRD.md)
-- All new `.cpp` files go in `CMakeLists.txt` `target_sources`
-- Always verify: `cmake --build build`
+- JUCE coding style: spaces around operators, braces on new line for classes/functions, `camelCase` methods, `PascalCase` classes
+- Header includes use `<JuceHeader.h>` plus project-relative paths (e.g., `"model/Project.h"`)
+- All new `.cpp` files must be added to `target_sources` in `CMakeLists.txt`
+- Always verify with `cmake --build build` after changes
+
+## Current State
+
+Phases 1-4 and 8-10 implemented:
+- Audio engine with multi-track playback and recording
+- Arrangement view with waveform display
+- Mixer with channel strips and metering
+- MIDI engine and piano roll editor
+- VST3/AU plugin hosting
+- Vim modal engine (Normal/Insert modes, hjkl, basic actions, visual cursor)
+- VimStatusBar with mode/context/cursor/playhead display
+- YAML session save/load
+
+See `PRD.md` for full specification.
+
+## Parallel Feature Branches
+
+Features are being developed in parallel via git worktrees. When merging, integrate one at a time and resolve conflicts before the next.
+
+| Worktree | Branch | Scope |
+|----------|--------|-------|
+| `../drem-canvas-vim-commands/` | `feature/vim-commands` | Phase 5: operators, visual mode, command line, search, registers |
+| `../drem-canvas-advanced-editing/` | `feature/advanced-editing` | Phase 11: clip drag/trim/fades, crossfades, undo polish, tempo map |
+| `../drem-canvas-git-integration/` | `feature/git-integration` | Phase 12: git commands, semantic diff, bounce/export, automation |
+| `../drem-canvas-mixer-implementation/` | `feature/mixer-implementation` | Phase 6: vim mixer context, fader/pan modes, strip selection, master bus |
+
+Merge workflow:
+```bash
+git merge feature/vim-commands
+git merge feature/mixer-implementation
+git merge feature/advanced-editing
+git merge feature/git-integration
+```
