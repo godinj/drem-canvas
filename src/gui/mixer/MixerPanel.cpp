@@ -69,6 +69,20 @@ void MixerPanel::rebuildStrips()
     repaint();
 }
 
+void MixerPanel::setSelectedStripIndex (int index)
+{
+    if (selectedStripIndex == index)
+        return;
+
+    selectedStripIndex = index;
+
+    for (int i = 0; i < strips.size(); ++i)
+        strips[i]->setSelected (i == index);
+
+    if (masterStrip != nullptr)
+        masterStrip->setSelected (index == strips.size());
+}
+
 void MixerPanel::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (0xff1e1e2e));

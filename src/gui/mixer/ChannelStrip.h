@@ -18,6 +18,9 @@ public:
 
     MeterComponent& getMeter() { return meter; }
 
+    // Vim cursor selection
+    void setSelected (bool shouldBeSelected);
+
     // Callback when volume/pan/mute/solo changes
     std::function<void()> onStateChanged;
 
@@ -32,6 +35,8 @@ private:
     juce::TextButton soloButton { "S" };
     juce::Label nameLabel;
     MeterComponent meter;
+
+    bool selected = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChannelStrip)
 };
