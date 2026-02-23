@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Glow filter for the waveform bars -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0 0 0 0 0.29
+                0 0 0 0 0.62
+                0 0 0 0 1
+                0 0 0 0.6 0" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Subtle inner shadow for depth -->
+    <filter id="innerShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="blur"/>
+      <feOffset dx="0" dy="4" result="offsetBlur"/>
+      <feComposite in="SourceGraphic" in2="offsetBlur" operator="over"/>
+    </filter>
+
+    <!-- Radial gradient for background depth -->
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#262640"/>
+      <stop offset="100%" stop-color="#1e1e2e"/>
+    </radialGradient>
+
+    <!-- Linear gradient for waveform bars -->
+    <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6ab4ff"/>
+      <stop offset="50%" stop-color="#4a9eff"/>
+      <stop offset="100%" stop-color="#3580d4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect x="32" y="32" width="960" height="960" rx="180" ry="180" fill="url(#bgGrad)"/>
+
+  <!-- Subtle border for depth -->
+  <rect x="32" y="32" width="960" height="960" rx="180" ry="180"
+        fill="none" stroke="#3a3a5c" stroke-width="3"/>
+
+  <!-- Waveform bars — stylized audio waveform, symmetric around center -->
+  <g filter="url(#glow)" transform="translate(512, 512)">
+    <!-- Center line (subtle) -->
+    <line x1="-320" y1="0" x2="320" y2="0" stroke="#4a9eff" stroke-opacity="0.15" stroke-width="2"/>
+
+    <!-- Waveform bars — 13 bars with varying heights to form a waveform envelope -->
+    <!-- Each bar is centered vertically (symmetric above/below centerline) -->
+
+    <!-- Bar 1 (leftmost) -->
+    <rect x="-312" y="-40" width="36" height="80" rx="18" fill="url(#barGrad)" opacity="0.7"/>
+
+    <!-- Bar 2 -->
+    <rect x="-260" y="-90" width="36" height="180" rx="18" fill="url(#barGrad)" opacity="0.8"/>
+
+    <!-- Bar 3 -->
+    <rect x="-208" y="-140" width="36" height="280" rx="18" fill="url(#barGrad)" opacity="0.85"/>
+
+    <!-- Bar 4 -->
+    <rect x="-156" y="-200" width="36" height="400" rx="18" fill="url(#barGrad)" opacity="0.9"/>
+
+    <!-- Bar 5 -->
+    <rect x="-104" y="-260" width="36" height="520" rx="18" fill="url(#barGrad)" opacity="0.95"/>
+
+    <!-- Bar 6 -->
+    <rect x="-52" y="-300" width="36" height="600" rx="18" fill="url(#barGrad)"/>
+
+    <!-- Bar 7 (center — tallest) -->
+    <rect x="0" y="-320" width="36" height="640" rx="18" fill="url(#barGrad)"/>
+
+    <!-- Bar 8 -->
+    <rect x="52" y="-280" width="36" height="560" rx="18" fill="url(#barGrad)"/>
+
+    <!-- Bar 9 -->
+    <rect x="104" y="-220" width="36" height="440" rx="18" fill="url(#barGrad)" opacity="0.95"/>
+
+    <!-- Bar 10 -->
+    <rect x="156" y="-160" width="36" height="320" rx="18" fill="url(#barGrad)" opacity="0.9"/>
+
+    <!-- Bar 11 -->
+    <rect x="208" y="-110" width="36" height="220" rx="18" fill="url(#barGrad)" opacity="0.85"/>
+
+    <!-- Bar 12 -->
+    <rect x="260" y="-60" width="36" height="120" rx="18" fill="url(#barGrad)" opacity="0.8"/>
+
+    <!-- Bar 13 (rightmost) - asymmetric touch for organic feel -->
+    <rect x="312" y="-30" width="36" height="60" rx="18" fill="url(#barGrad)" opacity="0.7"/>
+  </g>
+</svg>

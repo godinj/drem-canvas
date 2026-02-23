@@ -23,6 +23,8 @@ juce_add_gui_app(DremCanvas
     PRODUCT_NAME "Drem Canvas"
     COMPANY_NAME "Drem"
     BUNDLE_ID "com.drem.canvas"
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon_1024.png"
+    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon_256.png"
 )
 
 juce_generate_juce_header(DremCanvas)
