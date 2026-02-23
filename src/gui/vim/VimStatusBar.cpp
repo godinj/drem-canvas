@@ -37,12 +37,13 @@ void VimStatusBar::paint (juce::Graphics& g)
     auto modeText = isNormal ? "-- NORMAL --" : "-- INSERT --";
     g.drawText (modeText, modeArea.reduced (6, 0), juce::Justification::centredLeft);
 
-    // ── Pending key indicator ───────────────────────────────────────────
-    if (engine.hasPendingKey())
+    // ── Pending state indicator ─────────────────────────────────────────
+    if (engine.hasPendingState())
     {
-        auto pendingArea = area.removeFromLeft (30);
+        auto pendingArea = area.removeFromLeft (80);
         g.setColour (juce::Colour (0xffffcc00)); // yellow
-        g.drawText ("g", pendingArea, juce::Justification::centred);
+        g.drawText (engine.getPendingDisplay(), pendingArea.reduced (4, 0),
+                    juce::Justification::centredLeft);
     }
 
     // ── Context panel segment ───────────────────────────────────────────
