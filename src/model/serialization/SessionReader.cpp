@@ -46,6 +46,16 @@ juce::ValueTree SessionReader::readSession (const juce::File& sessionDir)
                 tracks.appendChild (trackState, nullptr);
         }
 
+        // Parse sequencer.yaml if it exists
+        auto sequencerFile = sessionDir.getChildFile ("sequencer.yaml");
+        if (sequencerFile.existsAsFile())
+        {
+            auto seqNode = YAML::LoadFile (sequencerFile.getFullPathName().toStdString());
+            auto seqState = YAMLSerializer::parseStepSequencer (seqNode);
+            if (seqState.isValid())
+                projectState.appendChild (seqState, nullptr);
+        }
+
         return projectState;
     }
     catch (const YAML::Exception&)

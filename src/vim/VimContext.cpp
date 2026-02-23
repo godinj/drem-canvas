@@ -5,12 +5,23 @@ namespace dc
 
 void VimContext::cyclePanel()
 {
-    activePanel = (activePanel == Editor) ? Mixer : Editor;
+    switch (activePanel)
+    {
+        case Editor:    activePanel = Mixer;     break;
+        case Mixer:     activePanel = Sequencer; break;
+        case Sequencer: activePanel = Editor;    break;
+    }
 }
 
 juce::String VimContext::getPanelName() const
 {
-    return activePanel == Editor ? "Editor" : "Mixer";
+    switch (activePanel)
+    {
+        case Editor:    return "Editor";
+        case Mixer:     return "Mixer";
+        case Sequencer: return "Sequencer";
+    }
+    return "Editor";
 }
 
 void VimContext::setClipboardMulti (const juce::Array<juce::ValueTree>& clips, bool linewise)

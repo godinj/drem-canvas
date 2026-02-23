@@ -1,4 +1,5 @@
 #include "Project.h"
+#include "StepSequencer.h"
 #include "serialization/SessionWriter.h"
 #include "serialization/SessionReader.h"
 
@@ -18,6 +19,7 @@ void Project::createDefaultState()
     state.setProperty (IDs::timeSigNumerator, 4, nullptr);
     state.setProperty (IDs::timeSigDenominator, 4, nullptr);
     state.setProperty (IDs::sampleRate, 44100.0, nullptr);
+    state.appendChild (StepSequencer::createDefaultState(), nullptr);
 }
 
 bool Project::saveToFile (const juce::File& file) const

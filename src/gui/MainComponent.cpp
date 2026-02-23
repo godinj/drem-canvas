@@ -1,6 +1,7 @@
 #include "MainComponent.h"
 #include "model/Track.h"
 #include "model/AudioClip.h"
+#include "model/StepSequencer.h"
 #include "gui/mixer/ChannelStrip.h"
 
 namespace dc
@@ -26,6 +27,20 @@ MainComponent::MainComponent()
     audioEngine.connectNodes (mixBusNode->nodeID, 1,
                               audioEngine.getAudioOutputNode()->nodeID, 1);
 
+    // Create step sequencer processor and add to graph
+    {
+        auto proc = std::make_unique<StepSequencerProcessor> (transportController);
+        sequencerProcessor = proc.get();
+        sequencerNode = audioEngine.addProcessor (std::move (proc));
+
+        // Connect sequencer to mix bus (stereo — MIDI flows internally)
+        audioEngine.connectNodes (sequencerNode->nodeID, 0, mixBusNode->nodeID, 0);
+        audioEngine.connectNodes (sequencerNode->nodeID, 1, mixBusNode->nodeID, 1);
+
+        sequencerProcessor->setTempo (project.getTempo());
+        syncSequencerFromModel();
+    }
+
     // Set up GUI components
     addAndMakeVisible (transportBar);
 
@@ -36,6 +51,9 @@ MainComponent::MainComponent()
         *dynamic_cast<MixBusProcessor*> (mixBusNode->getProcessor()),
         &project.getUndoSystem());
     addAndMakeVisible (*mixerPanel);
+
+    sequencerView = std::make_unique<StepSequencerView> (project, sequencerProcessor);
+    addChildComponent (*sequencerView); // Hidden initially; shown when panel == Sequencer
 
     addAndMakeVisible (layoutResizer);
 
@@ -56,6 +74,7 @@ MainComponent::MainComponent()
     addKeyListener (vimEngine.get());
 
     vimEngine->addListener (arrangementView.get());
+    vimEngine->addListener (this);
 
     vimStatusBar = std::make_unique<VimStatusBar> (*vimEngine, vimContext, arrangement, transportController);
     addAndMakeVisible (*vimStatusBar);
@@ -65,6 +84,9 @@ MainComponent::MainComponent()
 
     // Listen to track changes for audio graph sync
     project.getState().getChildWithName (IDs::TRACKS).addListener (this);
+
+    // Listen to step sequencer changes for engine sync
+    project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
 
     // Select first track if available
     if (arrangement.getNumTracks() > 0)
@@ -81,12 +103,16 @@ MainComponent::MainComponent()
 
 MainComponent::~MainComponent()
 {
+    vimEngine->removeListener (this);
     vimEngine->removeListener (arrangementView.get());
     removeKeyListener (vimEngine.get());
+    project.getState().getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
     project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
     setLookAndFeel (nullptr);
     trackProcessors.clear();
     trackNodes.clear();
+    sequencerProcessor = nullptr;
+    sequencerNode = nullptr;
     mixBusNode = nullptr;
     audioEngine.shutdown();
 }
@@ -112,8 +138,15 @@ void MainComponent::resized()
     if (vimStatusBar != nullptr)
         vimStatusBar->setBounds (area.removeFromBottom (VimStatusBar::preferredHeight));
 
-    // Resizable layout for arrangement and mixer
-    juce::Component* comps[] = { arrangementView.get(), &layoutResizer, mixerPanel.get() };
+    // Determine which bottom panel to show
+    juce::Component* bottomPanel = nullptr;
+    if (vimContext.getPanel() == VimContext::Sequencer && sequencerView != nullptr)
+        bottomPanel = sequencerView.get();
+    else
+        bottomPanel = mixerPanel.get();
+
+    // Resizable layout for arrangement and bottom panel
+    juce::Component* comps[] = { arrangementView.get(), &layoutResizer, bottomPanel };
     layout.layOutComponents (comps, 3, area.getX(), area.getY(),
                              area.getWidth(), area.getHeight(), true, true);
 }
@@ -253,6 +286,60 @@ void MainComponent::syncTrackProcessorsFromModel()
     }
 }
 
+void MainComponent::syncSequencerFromModel()
+{
+    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    if (! seqState.isValid() || sequencerProcessor == nullptr)
+        return;
+
+    StepSequencer seq (seqState);
+    auto pattern = seq.getActivePattern();
+    if (! pattern.isValid())
+        return;
+
+    StepSequencerProcessor::PatternSnapshot snapshot;
+    snapshot.numRows      = seq.getNumRows();
+    snapshot.numSteps     = static_cast<int> (pattern.getProperty (IDs::numSteps, 16));
+    snapshot.stepDivision = static_cast<int> (pattern.getProperty (IDs::stepDivision, 4));
+    snapshot.swing        = seq.getSwing();
+
+    // Check for any soloed row
+    snapshot.hasSoloedRow = false;
+    for (int r = 0; r < snapshot.numRows; ++r)
+    {
+        auto row = seq.getRow (r);
+        if (StepSequencer::isRowSoloed (row))
+        {
+            snapshot.hasSoloedRow = true;
+            break;
+        }
+    }
+
+    for (int r = 0; r < snapshot.numRows && r < StepSequencerProcessor::maxRows; ++r)
+    {
+        auto rowState = seq.getRow (r);
+        auto& rowData = snapshot.rows[r];
+
+        rowData.noteNumber = StepSequencer::getRowNoteNumber (rowState);
+        rowData.mute       = StepSequencer::isRowMuted (rowState);
+        rowData.solo       = StepSequencer::isRowSoloed (rowState);
+
+        int stepCount = StepSequencer::getStepCount (rowState);
+        for (int s = 0; s < stepCount && s < StepSequencerProcessor::maxSteps; ++s)
+        {
+            auto stepState = StepSequencer::getStep (rowState, s);
+            auto& stepData = rowData.steps[s];
+
+            stepData.active      = StepSequencer::isStepActive (stepState);
+            stepData.velocity    = StepSequencer::getStepVelocity (stepState);
+            stepData.probability = StepSequencer::getStepProbability (stepState);
+            stepData.noteLength  = StepSequencer::getStepNoteLength (stepState);
+        }
+    }
+
+    sequencerProcessor->updatePatternSnapshot (snapshot);
+}
+
 void MainComponent::saveSession()
 {
     auto chooser = std::make_shared<juce::FileChooser> (
@@ -295,21 +382,25 @@ void MainComponent::loadSession()
             if (dir == juce::File() || ! dir.isDirectory())
                 return;
 
-            // Remove listener from old TRACKS node before replacing state
+            // Remove listeners from old nodes before replacing state
+            project.getState().getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
             project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
 
             if (project.loadSessionFromDirectory (dir))
             {
                 currentSessionDirectory = dir;
 
-                // Re-add listener on the new TRACKS node
+                // Re-add listeners on the new nodes
                 project.getState().getChildWithName (IDs::TRACKS).addListener (this);
+                project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
                 rebuildAudioGraph();
+                syncSequencerFromModel();
             }
             else
             {
-                // Restore listener on old (unchanged) TRACKS node
+                // Restore listeners on old (unchanged) nodes
                 project.getState().getChildWithName (IDs::TRACKS).addListener (this);
+                project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
 
                 juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
                     "Load Error", "Failed to load session from:\n" + dir.getFullPathName());
@@ -324,18 +415,69 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
         if (property == IDs::volume || property == IDs::pan || property == IDs::mute)
             syncTrackProcessorsFromModel();
     }
+
+    // Tempo change — sync to sequencer processor
+    if (tree.hasType (IDs::PROJECT) && property == IDs::tempo)
+    {
+        if (sequencerProcessor != nullptr)
+            sequencerProcessor->setTempo (project.getTempo());
+    }
+
+    // Any step sequencer property change
+    if (tree.hasType (IDs::STEP_SEQUENCER) || tree.hasType (IDs::STEP_PATTERN)
+        || tree.hasType (IDs::STEP_ROW) || tree.hasType (IDs::STEP))
+    {
+        syncSequencerFromModel();
+    }
 }
 
 void MainComponent::valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree&)
 {
     if (parent.hasType (IDs::TRACKS))
         rebuildAudioGraph();
+
+    if (parent.hasType (IDs::STEP_SEQUENCER) || parent.hasType (IDs::STEP_PATTERN)
+        || parent.hasType (IDs::STEP_ROW))
+        syncSequencerFromModel();
 }
 
 void MainComponent::valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree&, int)
 {
     if (parent.hasType (IDs::TRACKS))
         rebuildAudioGraph();
+
+    if (parent.hasType (IDs::STEP_SEQUENCER) || parent.hasType (IDs::STEP_PATTERN)
+        || parent.hasType (IDs::STEP_ROW))
+        syncSequencerFromModel();
+}
+
+// ── VimEngine::Listener ─────────────────────────────────────────────────────
+
+void MainComponent::vimModeChanged (VimEngine::Mode)
+{
+    // No panel work needed on mode change
+}
+
+void MainComponent::vimContextChanged()
+{
+    updatePanelVisibility();
+
+    // Sync grid cursor to VimContext
+    if (sequencerView != nullptr)
+        sequencerView->getGrid().setCursorPosition (vimContext.getSeqRow(), vimContext.getSeqStep());
+}
+
+void MainComponent::updatePanelVisibility()
+{
+    bool showSequencer = (vimContext.getPanel() == VimContext::Sequencer);
+
+    if (mixerPanel != nullptr)
+        mixerPanel->setVisible (! showSequencer);
+
+    if (sequencerView != nullptr)
+        sequencerView->setVisible (showSequencer);
+
+    resized();
 }
 
 } // namespace dc

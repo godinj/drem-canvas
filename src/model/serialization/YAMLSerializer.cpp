@@ -236,4 +236,168 @@ juce::ValueTree YAMLSerializer::parseMidiClip (const YAML::Node& node)
     return clip;
 }
 
+// --- Step Sequencer Emit ---
+
+YAML::Node YAMLSerializer::emitStepSequencer (const juce::ValueTree& sequencerState)
+{
+    YAML::Node root;
+    YAML::Node seq;
+
+    seq["num_steps"] = static_cast<int> (sequencerState.getProperty (IDs::numSteps, 16));
+    seq["swing"] = static_cast<double> (sequencerState.getProperty (IDs::swing, 0.0));
+    seq["active_pattern_bank"] = static_cast<int> (sequencerState.getProperty (IDs::activePatternBank, 0));
+    seq["active_pattern_slot"] = static_cast<int> (sequencerState.getProperty (IDs::activePatternSlot, 0));
+
+    YAML::Node patterns;
+    for (int i = 0; i < sequencerState.getNumChildren(); ++i)
+    {
+        auto child = sequencerState.getChild (i);
+        if (child.hasType (IDs::STEP_PATTERN))
+            patterns.push_back (emitStepPattern (child));
+    }
+    seq["patterns"] = patterns;
+
+    root["step_sequencer"] = seq;
+    return root;
+}
+
+YAML::Node YAMLSerializer::emitStepPattern (const juce::ValueTree& patternState)
+{
+    YAML::Node pattern;
+    pattern["bank"] = static_cast<int> (patternState.getProperty (IDs::bank, 0));
+    pattern["slot"] = static_cast<int> (patternState.getProperty (IDs::slot, 0));
+    pattern["name"] = patternState.getProperty (IDs::name, juce::String ("?")).toString().toStdString();
+    pattern["num_steps"] = static_cast<int> (patternState.getProperty (IDs::numSteps, 16));
+    pattern["step_division"] = static_cast<int> (patternState.getProperty (IDs::stepDivision, 4));
+
+    YAML::Node rows;
+    for (int i = 0; i < patternState.getNumChildren(); ++i)
+    {
+        auto child = patternState.getChild (i);
+        if (child.hasType (IDs::STEP_ROW))
+            rows.push_back (emitStepRow (child));
+    }
+    pattern["rows"] = rows;
+
+    return pattern;
+}
+
+YAML::Node YAMLSerializer::emitStepRow (const juce::ValueTree& rowState)
+{
+    YAML::Node row;
+    row["note_number"] = static_cast<int> (rowState.getProperty (IDs::noteNumber, 36));
+    row["name"] = rowState.getProperty (IDs::name, juce::String ("---")).toString().toStdString();
+    row["mute"] = static_cast<bool> (rowState.getProperty (IDs::mute, false));
+    row["solo"] = static_cast<bool> (rowState.getProperty (IDs::solo, false));
+
+    YAML::Node steps;
+    for (int i = 0; i < rowState.getNumChildren(); ++i)
+    {
+        auto child = rowState.getChild (i);
+        if (child.hasType (IDs::STEP))
+        {
+            YAML::Node step;
+            step["index"] = static_cast<int> (child.getProperty (IDs::index, 0));
+            step["active"] = static_cast<bool> (child.getProperty (IDs::active, false));
+            step["velocity"] = static_cast<int> (child.getProperty (IDs::velocity, 100));
+            step["probability"] = static_cast<double> (child.getProperty (IDs::probability, 1.0));
+            step["note_length"] = static_cast<double> (child.getProperty (IDs::noteLength, 1.0));
+            steps.push_back (step);
+        }
+    }
+    row["steps"] = steps;
+
+    return row;
+}
+
+// --- Step Sequencer Parse ---
+
+juce::ValueTree YAMLSerializer::parseStepSequencer (const YAML::Node& node)
+{
+    juce::ValueTree state (IDs::STEP_SEQUENCER);
+
+    auto seq = node["step_sequencer"];
+    if (! seq)
+        return state;
+
+    if (seq["num_steps"])
+        state.setProperty (IDs::numSteps, seq["num_steps"].as<int>(), nullptr);
+    if (seq["swing"])
+        state.setProperty (IDs::swing, seq["swing"].as<double>(), nullptr);
+    if (seq["active_pattern_bank"])
+        state.setProperty (IDs::activePatternBank, seq["active_pattern_bank"].as<int>(), nullptr);
+    if (seq["active_pattern_slot"])
+        state.setProperty (IDs::activePatternSlot, seq["active_pattern_slot"].as<int>(), nullptr);
+
+    if (auto patterns = seq["patterns"])
+    {
+        for (std::size_t i = 0; i < patterns.size(); ++i)
+            state.appendChild (parseStepPattern (patterns[i]), nullptr);
+    }
+
+    return state;
+}
+
+juce::ValueTree YAMLSerializer::parseStepPattern (const YAML::Node& node)
+{
+    juce::ValueTree pattern (IDs::STEP_PATTERN);
+
+    if (node["bank"])
+        pattern.setProperty (IDs::bank, node["bank"].as<int>(), nullptr);
+    if (node["slot"])
+        pattern.setProperty (IDs::slot, node["slot"].as<int>(), nullptr);
+    if (node["name"])
+        pattern.setProperty (IDs::name, juce::String (node["name"].as<std::string>()), nullptr);
+    if (node["num_steps"])
+        pattern.setProperty (IDs::numSteps, node["num_steps"].as<int>(), nullptr);
+    if (node["step_division"])
+        pattern.setProperty (IDs::stepDivision, node["step_division"].as<int>(), nullptr);
+
+    if (auto rows = node["rows"])
+    {
+        for (std::size_t i = 0; i < rows.size(); ++i)
+            pattern.appendChild (parseStepRow (rows[i]), nullptr);
+    }
+
+    return pattern;
+}
+
+juce::ValueTree YAMLSerializer::parseStepRow (const YAML::Node& node)
+{
+    juce::ValueTree row (IDs::STEP_ROW);
+
+    if (node["note_number"])
+        row.setProperty (IDs::noteNumber, node["note_number"].as<int>(), nullptr);
+    if (node["name"])
+        row.setProperty (IDs::name, juce::String (node["name"].as<std::string>()), nullptr);
+    if (node["mute"])
+        row.setProperty (IDs::mute, node["mute"].as<bool>(), nullptr);
+    if (node["solo"])
+        row.setProperty (IDs::solo, node["solo"].as<bool>(), nullptr);
+
+    if (auto steps = node["steps"])
+    {
+        for (std::size_t i = 0; i < steps.size(); ++i)
+        {
+            auto stepNode = steps[i];
+            juce::ValueTree step (IDs::STEP);
+
+            if (stepNode["index"])
+                step.setProperty (IDs::index, stepNode["index"].as<int>(), nullptr);
+            if (stepNode["active"])
+                step.setProperty (IDs::active, stepNode["active"].as<bool>(), nullptr);
+            if (stepNode["velocity"])
+                step.setProperty (IDs::velocity, stepNode["velocity"].as<int>(), nullptr);
+            if (stepNode["probability"])
+                step.setProperty (IDs::probability, stepNode["probability"].as<double>(), nullptr);
+            if (stepNode["note_length"])
+                step.setProperty (IDs::noteLength, stepNode["note_length"].as<double>(), nullptr);
+
+            row.appendChild (step, nullptr);
+        }
+    }
+
+    return row;
+}
+
 } // namespace dc

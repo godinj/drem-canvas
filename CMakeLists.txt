@@ -40,6 +40,7 @@ target_sources(DremCanvas PRIVATE
     src/engine/MidiEngine.cpp
     src/engine/AudioRecorder.cpp
     src/engine/BounceProcessor.cpp
+    src/engine/StepSequencerProcessor.cpp
 
     # Model
     src/model/Project.cpp
@@ -47,6 +48,7 @@ target_sources(DremCanvas PRIVATE
     src/model/AudioClip.cpp
     src/model/MidiClip.cpp
     src/model/TempoMap.cpp
+    src/model/StepSequencer.cpp
 
     # Plugins
     src/plugins/PluginManager.cpp
@@ -78,6 +80,12 @@ target_sources(DremCanvas PRIVATE
     src/gui/midieditor/PianoRollEditor.cpp
     src/gui/midieditor/PianoKeyboard.cpp
     src/gui/midieditor/NoteComponent.cpp
+
+    # GUI - Step Sequencer
+    src/gui/sequencer/StepSequencerView.cpp
+    src/gui/sequencer/StepGrid.cpp
+    src/gui/sequencer/StepButton.cpp
+    src/gui/sequencer/PatternSelector.cpp
 
     # GUI - Browser
     src/gui/browser/BrowserPanel.cpp

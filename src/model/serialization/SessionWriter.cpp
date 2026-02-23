@@ -40,6 +40,19 @@ bool SessionWriter::writeSession (const juce::ValueTree& projectState, const juc
 
     cleanupStaleTrackFiles (sessionDir, trackCount);
 
+    // Write sequencer.yaml if STEP_SEQUENCER child exists
+    auto sequencerState = projectState.getChildWithName (IDs::STEP_SEQUENCER);
+    if (sequencerState.isValid())
+    {
+        auto seqNode = YAMLSerializer::emitStepSequencer (sequencerState);
+        YAML::Emitter emitter;
+        emitter << seqNode;
+
+        if (! writeFileAtomically (sessionDir.getChildFile ("sequencer.yaml"),
+                                    juce::String (emitter.c_str())))
+            return false;
+    }
+
     // Write .gitignore if it doesn't already exist (preserve user customizations)
     auto gitignore = sessionDir.getChildFile (".gitignore");
     if (! gitignore.existsAsFile())

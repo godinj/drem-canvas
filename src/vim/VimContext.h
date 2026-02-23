@@ -7,7 +7,7 @@ namespace dc
 class VimContext
 {
 public:
-    enum Panel { Editor, Mixer };
+    enum Panel { Editor, Mixer, Sequencer };
 
     VimContext() = default;
 
@@ -19,6 +19,12 @@ public:
     // Clip selection
     int getSelectedClipIndex() const { return selectedClipIndex; }
     void setSelectedClipIndex (int index) { selectedClipIndex = index; }
+
+    // Sequencer cursor
+    int getSeqRow() const  { return seqRow; }
+    int getSeqStep() const { return seqStep; }
+    void setSeqRow (int r)  { seqRow = r; }
+    void setSeqStep (int s) { seqStep = s; }
 
     // Clipboard (single-clip — legacy, also set from first item of multi)
     void setClipboard (const juce::ValueTree& clip) { clipboard = clip.createCopy(); }
@@ -33,6 +39,8 @@ public:
 private:
     Panel activePanel = Editor;
     int selectedClipIndex = 0;
+    int seqRow  = 0;
+    int seqStep = 0;
     juce::ValueTree clipboard;
     juce::Array<juce::ValueTree> clipboardMulti;
     bool clipboardLinewise = false;

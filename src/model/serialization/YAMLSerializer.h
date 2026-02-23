@@ -20,6 +20,12 @@ public:
     // Parse a single track YAML into a TRACK ValueTree
     static juce::ValueTree parseTrack (const YAML::Node& node, const juce::File& sessionDir);
 
+    // Emit step sequencer as YAML
+    static YAML::Node emitStepSequencer (const juce::ValueTree& sequencerState);
+
+    // Parse step sequencer YAML into a STEP_SEQUENCER ValueTree
+    static juce::ValueTree parseStepSequencer (const YAML::Node& node);
+
 private:
     static YAML::Node emitAudioClip (const juce::ValueTree& clipState, const juce::File& sessionDir);
     static YAML::Node emitMidiClip (const juce::ValueTree& clipState);
@@ -32,6 +38,11 @@ private:
 
     static juce::String makeRelativePath (const juce::File& file, const juce::File& sessionDir);
     static juce::File resolveRelativePath (const juce::String& relativePath, const juce::File& sessionDir);
+
+    static YAML::Node emitStepPattern (const juce::ValueTree& patternState);
+    static YAML::Node emitStepRow (const juce::ValueTree& rowState);
+    static juce::ValueTree parseStepPattern (const YAML::Node& node);
+    static juce::ValueTree parseStepRow (const YAML::Node& node);
 };
 
 } // namespace dc

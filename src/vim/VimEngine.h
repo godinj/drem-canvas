@@ -4,6 +4,7 @@
 #include "model/Project.h"
 #include "model/Arrangement.h"
 #include "model/Track.h"
+#include "model/StepSequencer.h"
 #include "engine/TransportController.h"
 
 namespace dc
@@ -86,6 +87,22 @@ private:
 
     // Panel
     void cycleFocusPanel();
+
+    // Sequencer navigation
+    bool handleSequencerNormalKey (const juce::KeyPress& key);
+    void seqMoveLeft();
+    void seqMoveRight();
+    void seqMoveUp();
+    void seqMoveDown();
+    void seqJumpFirstStep();
+    void seqJumpLastStep();
+    void seqJumpFirstRow();
+    void seqJumpLastRow();
+    void seqToggleStep();
+    void seqAdjustVelocity (int delta);
+    void seqCycleVelocity();
+    void seqToggleRowMute();
+    void seqToggleRowSolo();
 
     // Stubs
     void openFocusedItem();

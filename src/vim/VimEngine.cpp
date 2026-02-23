@@ -34,6 +34,10 @@ bool VimEngine::handleInsertKey (const juce::KeyPress& key)
 
 bool VimEngine::handleNormalKey (const juce::KeyPress& key)
 {
+    // Dispatch to sequencer-specific handler when on Sequencer panel
+    if (context.getPanel() == VimContext::Sequencer)
+        return handleSequencerNormalKey (key);
+
     auto keyChar = key.getTextCharacter();
     auto modifiers = key.getModifiers();
 
@@ -928,6 +932,290 @@ juce::String VimEngine::getPendingDisplay() const
         display += juce::String::charToString (pendingKey);
 
     return display;
+}
+
+// ── Sequencer navigation ─────────────────────────────────────────────────────
+
+bool VimEngine::handleSequencerNormalKey (const juce::KeyPress& key)
+{
+    auto keyChar = key.getTextCharacter();
+    auto modifiers = key.getModifiers();
+
+    // Escape returns to normal mode
+    if (key == juce::KeyPress::escapeKey)
+    {
+        enterNormalMode();
+        return true;
+    }
+
+    // Undo/redo
+    if (keyChar == 'u') { project.getUndoSystem().undo(); return true; }
+    if (keyChar == 'r' && modifiers.isCtrlDown())
+    {
+        project.getUndoSystem().redo();
+        return true;
+    }
+
+    // Pending 'g' for gg
+    if (pendingKey == 'g')
+    {
+        if (keyChar == 'g'
+            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+        {
+            clearPending();
+            seqJumpFirstRow();
+            return true;
+        }
+        clearPending();
+    }
+
+    // Navigation
+    if (keyChar == 'h') { seqMoveLeft();  return true; }
+    if (keyChar == 'l') { seqMoveRight(); return true; }
+    if (keyChar == 'j') { seqMoveDown();  return true; }
+    if (keyChar == 'k') { seqMoveUp();    return true; }
+
+    // Jump keys
+    if (keyChar == '0') { seqJumpFirstStep(); return true; }
+    if (keyChar == '$') { seqJumpLastStep();  return true; }
+    if (keyChar == 'G') { seqJumpLastRow();   return true; }
+    if (keyChar == 'g')
+    {
+        pendingKey = 'g';
+        pendingTimestamp = juce::Time::currentTimeMillis();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // Toggle step
+    if (key == juce::KeyPress::spaceKey)
+    {
+        seqToggleStep();
+        return true;
+    }
+
+    // Velocity adjust
+    if (keyChar == '+' || keyChar == '=') { seqAdjustVelocity (10);  return true; }
+    if (keyChar == '-')                   { seqAdjustVelocity (-10); return true; }
+    if (keyChar == 'v')                   { seqCycleVelocity();      return true; }
+
+    // Row mute/solo
+    if (keyChar == 'M') { seqToggleRowMute(); return true; }
+    if (keyChar == 'S') { seqToggleRowSolo(); return true; }
+
+    // Panel cycling
+    if (key == juce::KeyPress::tabKey) { cycleFocusPanel(); return true; }
+
+    // Mode switch
+    if (keyChar == 'i') { enterInsertMode(); return true; }
+
+    // Transport (play/stop via Enter in sequencer)
+    if (key == juce::KeyPress::returnKey)
+    {
+        togglePlayStop();
+        return true;
+    }
+
+    return false;
+}
+
+void VimEngine::seqMoveLeft()
+{
+    int step = context.getSeqStep();
+    if (step > 0)
+    {
+        context.setSeqStep (step - 1);
+        listeners.call (&Listener::vimContextChanged);
+    }
+}
+
+void VimEngine::seqMoveRight()
+{
+    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    if (! seqState.isValid()) return;
+
+    StepSequencer seq (seqState);
+    int maxStep = 0;
+    auto pattern = seq.getActivePattern();
+    if (pattern.isValid())
+        maxStep = static_cast<int> (pattern.getProperty (IDs::numSteps, 16)) - 1;
+
+    int step = context.getSeqStep();
+    if (step < maxStep)
+    {
+        context.setSeqStep (step + 1);
+        listeners.call (&Listener::vimContextChanged);
+    }
+}
+
+void VimEngine::seqMoveUp()
+{
+    int row = context.getSeqRow();
+    if (row > 0)
+    {
+        context.setSeqRow (row - 1);
+        listeners.call (&Listener::vimContextChanged);
+    }
+}
+
+void VimEngine::seqMoveDown()
+{
+    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    if (! seqState.isValid()) return;
+
+    StepSequencer seq (seqState);
+    int maxRow = seq.getNumRows() - 1;
+
+    int row = context.getSeqRow();
+    if (row < maxRow)
+    {
+        context.setSeqRow (row + 1);
+        listeners.call (&Listener::vimContextChanged);
+    }
+}
+
+void VimEngine::seqJumpFirstStep()
+{
+    context.setSeqStep (0);
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::seqJumpLastStep()
+{
+    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    if (! seqState.isValid()) return;
+
+    StepSequencer seq (seqState);
+    auto pattern = seq.getActivePattern();
+    if (! pattern.isValid()) return;
+
+    int lastStep = static_cast<int> (pattern.getProperty (IDs::numSteps, 16)) - 1;
+    context.setSeqStep (std::max (0, lastStep));
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::seqJumpFirstRow()
+{
+    context.setSeqRow (0);
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::seqJumpLastRow()
+{
+    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    if (! seqState.isValid()) return;
+
+    StepSequencer seq (seqState);
+    int lastRow = seq.getNumRows() - 1;
+    context.setSeqRow (std::max (0, lastRow));
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::seqToggleStep()
+{
+    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    if (! seqState.isValid()) return;
+
+    StepSequencer seq (seqState);
+    auto row = seq.getRow (context.getSeqRow());
+    if (! row.isValid()) return;
+
+    auto step = StepSequencer::getStep (row, context.getSeqStep());
+    if (! step.isValid()) return;
+
+    ScopedTransaction txn (project.getUndoSystem(), "Toggle Step");
+    bool isActive = StepSequencer::isStepActive (step);
+    step.setProperty (IDs::active, ! isActive, &project.getUndoManager());
+
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::seqAdjustVelocity (int delta)
+{
+    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    if (! seqState.isValid()) return;
+
+    StepSequencer seq (seqState);
+    auto row = seq.getRow (context.getSeqRow());
+    if (! row.isValid()) return;
+
+    auto step = StepSequencer::getStep (row, context.getSeqStep());
+    if (! step.isValid()) return;
+
+    int vel = StepSequencer::getStepVelocity (step) + delta;
+    vel = juce::jlimit (1, 127, vel);
+
+    ScopedTransaction txn (project.getUndoSystem(), "Adjust Velocity");
+    step.setProperty (IDs::velocity, vel, &project.getUndoManager());
+
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::seqCycleVelocity()
+{
+    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    if (! seqState.isValid()) return;
+
+    StepSequencer seq (seqState);
+    auto row = seq.getRow (context.getSeqRow());
+    if (! row.isValid()) return;
+
+    auto step = StepSequencer::getStep (row, context.getSeqStep());
+    if (! step.isValid()) return;
+
+    // Cycle through preset velocities
+    const int presets[] = { 25, 50, 75, 100, 127 };
+    const int numPresets = 5;
+    int currentVel = StepSequencer::getStepVelocity (step);
+
+    int nextIdx = 0;
+    for (int i = 0; i < numPresets; ++i)
+    {
+        if (presets[i] > currentVel)
+        {
+            nextIdx = i;
+            break;
+        }
+        if (i == numPresets - 1)
+            nextIdx = 0; // wrap around
+    }
+
+    ScopedTransaction txn (project.getUndoSystem(), "Cycle Velocity");
+    step.setProperty (IDs::velocity, presets[nextIdx], &project.getUndoManager());
+
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::seqToggleRowMute()
+{
+    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    if (! seqState.isValid()) return;
+
+    StepSequencer seq (seqState);
+    auto row = seq.getRow (context.getSeqRow());
+    if (! row.isValid()) return;
+
+    ScopedTransaction txn (project.getUndoSystem(), "Toggle Row Mute");
+    bool muted = StepSequencer::isRowMuted (row);
+    row.setProperty (IDs::mute, ! muted, &project.getUndoManager());
+
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::seqToggleRowSolo()
+{
+    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    if (! seqState.isValid()) return;
+
+    StepSequencer seq (seqState);
+    auto row = seq.getRow (context.getSeqRow());
+    if (! row.isValid()) return;
+
+    ScopedTransaction txn (project.getUndoSystem(), "Toggle Row Solo");
+    bool soloed = StepSequencer::isRowSoloed (row);
+    row.setProperty (IDs::solo, ! soloed, &project.getUndoManager());
+
+    listeners.call (&Listener::vimContextChanged);
 }
 
 } // namespace dc

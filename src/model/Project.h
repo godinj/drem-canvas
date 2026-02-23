@@ -33,6 +33,25 @@ namespace IDs
     DECLARE_ID (timeSigDenominator)
     DECLARE_ID (sampleRate)
 
+    // Step sequencer
+    DECLARE_ID (STEP_SEQUENCER)
+    DECLARE_ID (STEP_PATTERN)
+    DECLARE_ID (STEP_ROW)
+    DECLARE_ID (STEP)
+    DECLARE_ID (numSteps)
+    DECLARE_ID (swing)
+    DECLARE_ID (activePatternBank)
+    DECLARE_ID (activePatternSlot)
+    DECLARE_ID (bank)
+    DECLARE_ID (slot)
+    DECLARE_ID (noteNumber)
+    DECLARE_ID (stepDivision)
+    DECLARE_ID (index)
+    DECLARE_ID (active)
+    DECLARE_ID (velocity)
+    DECLARE_ID (probability)
+    DECLARE_ID (noteLength)
+
     #undef DECLARE_ID
 }
 
