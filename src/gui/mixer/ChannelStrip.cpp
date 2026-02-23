@@ -101,16 +101,32 @@ ChannelStrip::~ChannelStrip()
     trackState.removeListener (this);
 }
 
+void ChannelStrip::setSelected (bool shouldBeSelected)
+{
+    if (selected != shouldBeSelected)
+    {
+        selected = shouldBeSelected;
+        repaint();
+    }
+}
+
 void ChannelStrip::paint (juce::Graphics& g)
 {
-    // Background fill
-    g.fillAll (juce::Colour (0xff2a2a3a));
+    // Background fill — slightly brighter when selected
+    g.fillAll (selected ? juce::Colour (0xff33334a) : juce::Colour (0xff2a2a3a));
 
     // Top colour bar from track colour
     const auto colourValue = trackState.getProperty (IDs::colour, static_cast<int> (0xff4a9eff));
     const auto trackColour = juce::Colour (static_cast<juce::uint32> (static_cast<int> (colourValue)));
     g.setColour (trackColour);
     g.fillRect (0, 0, getWidth(), 4);
+
+    // Selection border
+    if (selected)
+    {
+        g.setColour (juce::Colour (0xff50c878));
+        g.drawRect (getLocalBounds(), 2);
+    }
 }
 
 void ChannelStrip::resized()

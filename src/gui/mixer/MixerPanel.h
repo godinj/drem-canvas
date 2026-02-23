@@ -19,6 +19,9 @@ public:
 
     void rebuildStrips();
 
+    // Vim cursor selection — index into strips[], or strips.size() for master
+    void setSelectedStripIndex (int index);
+
     // Call this to wire meter sources from track processors
     std::function<void (int trackIndex, ChannelStrip& strip)> onWireMeter;
 
@@ -34,6 +37,8 @@ private:
     juce::OwnedArray<ChannelStrip> strips;
     std::unique_ptr<ChannelStrip> masterStrip;
     MeterComponent masterMeter;
+
+    int selectedStripIndex = -1;
 
     static constexpr int stripWidth = 80;
 

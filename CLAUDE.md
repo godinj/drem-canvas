@@ -1,116 +1,130 @@
-# Drem Canvas — feature/vim-commands
+# Drem Canvas — DAW Project
 
-## Mission
-
-Implement **Phase 5** from `PRD.md`: Vim Operators, Visual Mode, and Command Mode.
-
-## Build & Run
+## Build
 
 ```bash
 cmake --build build
+```
+
+If the build directory doesn't exist:
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+Run:
+
+```bash
 open "build/DremCanvas_artefacts/Release/Drem Canvas.app"
 ```
 
-If no `build/` dir: `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build`
-
 ## Architecture
 
-- **C++17**, **JUCE 8**, namespace `dc`
-- `src/vim/VimEngine.h/.cpp` — State machine, key dispatch (currently Normal/Insert only)
-- `src/vim/VimContext.h/.cpp` — Panel focus, clip selection, clipboard
-- `src/gui/vim/VimStatusBar.h/.cpp` — Mode indicator at bottom of window
-- `src/gui/MainComponent.h/.cpp` — VimEngine attached as KeyListener
+- **C++17** with **JUCE 8** framework, **yaml-cpp** for serialization
+- Namespace: `dc`
+- `src/engine/` — Real-time audio (never allocates or locks on audio thread)
+- `src/model/` — Data model using JUCE `ValueTree` (message thread only)
+- `src/gui/` — Presentational components observing model state
+- `src/vim/` — Vim modal navigation (KeyListener intercepting before child widgets)
+- `src/plugins/` — VST3/AU plugin hosting
+- `src/utils/` — Helpers (undo, audio file utils)
 
 ## Key Patterns
 
 - `ValueTree` is the single source of truth for all model state
+- GUI components observe ValueTree changes via `ValueTree::Listener`
+- Audio thread communicates with GUI via `std::atomic` and lock-free FIFOs
 - `VimEngine` is a `juce::KeyListener` attached to `MainComponent` — intercepts all keys in Normal mode, passes through in Insert mode
 - Track selection lives in `Arrangement`, clip selection in `VimContext`
 - `Project::getUndoManager()` provides the shared `juce::UndoManager`
 
 ## Playhead & Timeline Coordinate System
 
-All timeline positions follow one coordinate chain. See `main` branch CLAUDE.md for full details.
+All timeline positions (playhead, clips, markers) follow one coordinate transformation chain. Every component that draws on the timeline MUST use this same math to stay aligned.
 
+**Conversion chain:**
 ```
-SAMPLES ÷ sampleRate → SECONDS × pixelsPerSecond → TIMELINE PIXELS + headerWidth(150) - scrollOffset → SCREEN PIXELS
+SAMPLES  (TransportController::getPositionInSamples(), clip startPosition/length)
+   ÷ sampleRate
+SECONDS  (logical timeline position)
+   × pixelsPerSecond
+TIMELINE PIXELS  (absolute pixel offset from time=0)
+   + headerWidth (150px)
+   - scrollOffset (viewport.getViewPositionX())
+SCREEN PIXELS  (on-screen x coordinate)
 ```
 
-## What to Implement
+**Canonical formulas:**
+```cpp
+// Playhead screen position (ArrangementView::paint)
+float cursorX = float(posInSamples / sampleRate * pixelsPerSecond)
+              + 150.0f - float(viewport.getViewPositionX());
 
-### 1. Operator-Pending Mode
+// Clip bounds (TrackLane::resized)
+int x = roundToInt((startPosition / sampleRate) * pixelsPerSecond) + headerWidth;
+int w = roundToInt((length / sampleRate) * pixelsPerSecond);
 
-Extend `VimEngine` with an operator-pending state:
-- `d` + motion = delete (e.g., `d$` delete to end of track, `d3j` delete 3 tracks)
-- `y` + motion = yank/copy
-- `c` + motion = change (delete + enter insert mode)
-- Number prefixes: `3j` = move down 3 tracks, `5x` = delete 5 regions
-- Pending operator shown in VimStatusBar
+// TimeRuler tick position
+float x = float((time - scrollOffset / pixelsPerSecond) * pixelsPerSecond) + headerWidth;
 
-### 2. Visual Mode
+// Mouse click to time (TimeRuler seek)
+double timeInSeconds = (double(mouseX - headerWidth) + scrollOffset) / pixelsPerSecond;
+```
 
-Add `Visual` and `VisualLine` modes to `VimEngine::Mode`:
-- `v` from Normal enters Visual — extends selection across regions
-- `V` from Normal enters Visual-Line — selects entire tracks
-- `hjkl` extends the selection range
-- Operators (`d`, `y`, `c`) act on the visual selection then return to Normal
-- `Escape` cancels and returns to Normal
-- Visual selection must be rendered in `TrackLane` (highlight selected range)
+**Shared constants (must stay in sync across components):**
+- `headerWidth = 150` — defined in `TrackLane` and `TimeRuler` (track name column width)
+- `pixelsPerSecond = 100.0` — zoom level, stored in `ArrangementView` and propagated to `TrackLane`/`TimeRuler`
+- `sampleRate` — from `TransportController::getSampleRate()` or `Project::getSampleRate()`
 
-### 3. VimCommandLine (`src/vim/VimCommandLine.h/.cpp`)
-
-New component replacing the status bar when `:` is pressed:
-- Text input with `:` prompt
-- Tab-completion for commands, track names
-- Command history (up/down arrows)
-- `Enter` executes, `Escape` cancels
-- Core commands: `:w` (save), `:q` (quit), `:wq`, `:set tempo <bpm>`, `:track <name>`, `:bus <name>`, `:<number>` (jump to track)
-
-### 4. Search (`/`)
-
-- `/` opens search prompt in status bar area
-- Incremental search across regions, markers, track names
-- `n` / `N` for next/prev match
-- Match count shown in status bar
-
-### 5. Additional Motions
-
-- `w` / `b` — next/previous region boundary
-- `f{char}` — jump to marker starting with char
-- `m{char}` — set named marker at playhead
-- `'{char}` — jump to named marker
-- `.` — repeat last action
-
-### 6. Registers and Marks
-
-- Default register for yank/paste (already exists as clipboard in VimContext)
-- Named registers `"a`-`"z` for multiple clipboards
-- `"+` for system clipboard
-- Marks stored in VimContext
-
-## Key Files to Modify
-
-- `src/vim/VimEngine.h/.cpp` — Add modes, operator-pending state, number prefix accumulator
-- `src/vim/VimContext.h/.cpp` — Add registers, marks storage
-- `src/gui/vim/VimStatusBar.h/.cpp` — Show pending operator, visual mode indicator
-- `src/gui/arrangement/TrackLane.h/.cpp` — Visual mode selection rendering
-
-## Key Files to Create
-
-- `src/vim/VimCommandLine.h/.cpp` — Command-line widget and parser
-
-## Verification
-
-- `d3j` deletes 3 tracks worth of clips
-- `v` + `jjl` + `d` selects and deletes a range
-- `V` + `jj` + `y` yanks entire tracks
-- `:set tempo 140` changes tempo
-- `/kick` finds regions containing "kick"
-- `.` repeats the last delete/yank/paste
-- `"ay` yanks to register `a`, `"ap` pastes from it
+**Rules:**
+- All positions in the model (`startPosition`, `length`, `trimStart`, `trimEnd`) are in **samples**, never seconds or pixels
+- `TransportController` stores position as `std::atomic<int64_t>` samples — safe to read from any thread
+- Conversion to seconds/pixels happens only in GUI code at draw time
+- The playhead is drawn in `ArrangementView::paint()` as a red vertical line (not using the `Cursor` component)
+- `ArrangementView` repaints at 30Hz via `juce::Timer` to animate the playhead
+- When adding new timeline-aware components, always derive screen position using the full chain above — do not skip the scroll offset or header width
 
 ## Conventions
 
-- JUCE coding style (spaces around operators, camelCase methods, PascalCase classes)
-- All new `.cpp` files go in `CMakeLists.txt` `target_sources`
-- Always verify: `cmake --build build`
+- JUCE coding style: spaces around operators, braces on new line for classes/functions, `camelCase` methods, `PascalCase` classes
+- Header includes use `<JuceHeader.h>` plus project-relative paths (e.g., `"model/Project.h"`)
+- All new `.cpp` files must be added to `target_sources` in `CMakeLists.txt`
+- Always verify with `cmake --build build` after changes
+
+## Current State
+
+Phases 1-4 and 8-10 implemented:
+- Audio engine with multi-track playback and recording
+- Arrangement view with waveform display
+- Mixer with channel strips and metering
+- MIDI engine and piano roll editor
+- VST3/AU plugin hosting
+- Vim modal engine (Normal/Insert modes, hjkl, basic actions, visual cursor)
+- VimStatusBar with mode/context/cursor/playhead display
+- YAML session save/load
+
+See `PRD.md` for full specification.
+
+## Parallel Feature Branches
+
+Managed via `wt` (dotfiles worktree tool). Bare repo at `~/git/drem-canvas.git/` with nested worktrees. Each worktree has its own build directory.
+
+| Worktree | Branch | Scope |
+|----------|--------|-------|
+| `main/` | `master` | Integration branch |
+| `feature/vim-commands/` | `feature/vim-commands` | Phase 5: operators, visual mode, command line, search, registers |
+| `feature/advanced-editing/` | `feature/advanced-editing` | Phase 11: clip drag/trim/fades, crossfades, undo polish, tempo map |
+| `feature/git-integration/` | `feature/git-integration` | Phase 12: git commands, semantic diff, bounce/export, automation |
+| `feature/mixer-implementation/` | `feature/mixer-implementation` | Phase 6: vim mixer context, fader/pan modes, strip selection, master bus |
+
+Create new feature: `wt new feature/my-feature`
+Remove feature: `wt rm feature/my-feature`
+
+Merge workflow (from `main/`):
+```bash
+git merge feature/vim-commands
+git merge feature/mixer-implementation
+git merge feature/advanced-editing
+git merge feature/git-integration
+```
