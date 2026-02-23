@@ -36,6 +36,7 @@ private:
 
     juce::OwnedArray<ChannelStrip> strips;
     std::unique_ptr<ChannelStrip> masterStrip;
+    juce::ValueTree masterState;
     MeterComponent masterMeter;
 
     int selectedStripIndex = -1;

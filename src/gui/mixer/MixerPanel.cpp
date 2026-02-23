@@ -9,7 +9,7 @@ MixerPanel::MixerPanel (Project& proj, MixBusProcessor& bus, UndoSystem* us)
       undoSystem (us)
 {
     // Create master strip with a special "Master" ValueTree state
-    juce::ValueTree masterState (IDs::TRACK);
+    masterState = juce::ValueTree (IDs::TRACK);
     masterState.setProperty (IDs::name, "Master", nullptr);
     masterState.setProperty (IDs::volume, 1.0, nullptr);
     masterState.setProperty (IDs::pan, 0.0, nullptr);
@@ -20,11 +20,9 @@ MixerPanel::MixerPanel (Project& proj, MixBusProcessor& bus, UndoSystem* us)
     masterStrip = std::make_unique<ChannelStrip> (masterState);
     masterStrip->onStateChanged = [this]
     {
-        // Sync master gain from the master strip fader
-        // The fader range is 0..1.5, direct mapping to gain
-        const float vol = static_cast<float> (masterStrip->getMeter().getParentComponent() != nullptr
-                                                  ? masterBus.getMasterGain() : 1.0f);
-        juce::ignoreUnused (vol);
+        // Sync master gain from the master strip fader to the audio engine
+        const float vol = static_cast<float> (masterState.getProperty (IDs::volume, 1.0));
+        masterBus.setMasterGain (vol);
     };
     addAndMakeVisible (*masterStrip);
 

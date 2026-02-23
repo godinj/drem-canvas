@@ -230,6 +230,9 @@ void MainComponent::rebuildAudioGraph()
                 auto* proc = trackProcessors[trackIndex];
                 strip.getMeter().getLeftLevel  = [proc] { return proc->getPeakLevelLeft(); };
                 strip.getMeter().getRightLevel = [proc] { return proc->getPeakLevelRight(); };
+
+                // Wire fader/pan/mute changes to push directly to the track processor
+                strip.onStateChanged = [this] { syncTrackProcessorsFromModel(); };
             }
         };
         mixerPanel->rebuildStrips();
