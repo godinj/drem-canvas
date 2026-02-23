@@ -1,5 +1,7 @@
 build/
+build-debug/
 cmake-build-*/
+.cache/
 .DS_Store
 *.o
 *.d

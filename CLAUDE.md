@@ -2,15 +2,36 @@
 
 ## Build
 
+First-time setup (installs dependencies, builds Skia, configures CMake):
+
 ```bash
-cmake --build build
+scripts/bootstrap.sh
 ```
 
-If the build directory doesn't exist:
+Build using CMake presets:
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+cmake --build --preset release
+```
+
+If the build directory doesn't exist or you want to reconfigure:
+
+```bash
+cmake --preset release          # configure (Ninja + Release)
+cmake --build --preset release  # build
+```
+
+Debug build:
+
+```bash
+cmake --preset debug
+cmake --build --preset debug
+```
+
+Check dependency status:
+
+```bash
+scripts/check_deps.sh
 ```
 
 Run:
@@ -90,7 +111,16 @@ double timeInSeconds = (double(mouseX - headerWidth) + scrollOffset) / pixelsPer
 - JUCE coding style: spaces around operators, braces on new line for classes/functions, `camelCase` methods, `PascalCase` classes
 - Header includes use `<JuceHeader.h>` plus project-relative paths (e.g., `"model/Project.h"`)
 - All new `.cpp` files must be added to `target_sources` in `CMakeLists.txt`
-- Always verify with `cmake --build build` after changes
+- Always verify with `cmake --build --preset release` after changes
+
+## Verification
+
+1. `scripts/bootstrap.sh` succeeds when run twice (idempotent)
+2. Clean build: delete `build/`, run `cmake --preset release && cmake --build --preset release`
+3. `scripts/check_deps.sh` exits 0 with all `[OK]`
+4. In worktree context, `ls -la libs/skia` shows symlink to shared cache
+5. `libs/JUCE/CMakeLists.txt` exists
+6. App launches without crash: `open "build/DremCanvas_artefacts/Release/Drem Canvas.app"`
 
 ## Current State
 

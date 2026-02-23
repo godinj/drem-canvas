@@ -3,37 +3,92 @@ set -euo pipefail
 
 # Build Skia for macOS arm64 with Metal support
 # Output: libs/skia/{include,lib/libskia.a}
+#
+# Usage:
+#   scripts/build_skia.sh                    # build to libs/skia/
+#   scripts/build_skia.sh --output /path/to  # build to custom directory
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-SKIA_DIR="$PROJECT_ROOT/third_party/skia"
+
+# Parse arguments
 OUTPUT_DIR="$PROJECT_ROOT/libs/skia"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --output)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            echo "Usage: $0 [--output DIR]"
+            exit 1
+            ;;
+    esac
+done
+
+# Skip if already built
+if [ -f "$OUTPUT_DIR/lib/libskia.a" ]; then
+    echo "Skia already built at $OUTPUT_DIR/lib/libskia.a — skipping."
+    exit 0
+fi
+
+# Check prerequisites
+for cmd in python3 ninja git; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "Error: $cmd is required but not found."
+        exit 1
+    fi
+done
 
 # Pinned Skia milestone
 SKIA_BRANCH="chrome/m131"
 
-echo "=== Building Skia for macOS arm64 + Metal ==="
+# Determine source clone location
+# Use a sibling directory to the output: <parent>/skia-src/
+SKIA_DIR="$(dirname "$OUTPUT_DIR")/skia-src"
 
-# Clone if not present
+# Fall back to legacy third_party/skia/ if it already exists
+if [ -d "$PROJECT_ROOT/third_party/skia/.git" ]; then
+    SKIA_DIR="$PROJECT_ROOT/third_party/skia"
+    echo "Using existing Skia source at $SKIA_DIR"
+fi
+
+echo "=== Building Skia for macOS arm64 + Metal ==="
+echo "  Source:  $SKIA_DIR"
+echo "  Output:  $OUTPUT_DIR"
+echo ""
+
+# [1/5] Clone if not present
+echo "[1/5] Cloning Skia source..."
 if [ ! -d "$SKIA_DIR" ]; then
-    echo "Cloning Skia..."
-    mkdir -p "$PROJECT_ROOT/third_party"
+    mkdir -p "$(dirname "$SKIA_DIR")"
     git clone https://skia.googlesource.com/skia.git "$SKIA_DIR"
+else
+    echo "  Already cloned."
 fi
 
 cd "$SKIA_DIR"
 
-# Checkout pinned version
-echo "Checking out $SKIA_BRANCH..."
+# [2/5] Checkout pinned version
+echo "[2/5] Checking out $SKIA_BRANCH..."
 git fetch origin "$SKIA_BRANCH"
 git checkout FETCH_HEAD
 
-# Sync dependencies
-echo "Syncing dependencies..."
+# [3/5] Sync dependencies (this also fetches bin/gn)
+echo "[3/5] Syncing dependencies..."
 python3 tools/git-sync-deps
 
-# Generate build files
-echo "Generating build files with gn..."
+# Verify gn exists
+if [ ! -x "bin/gn" ]; then
+    echo "Error: bin/gn not found after tools/git-sync-deps."
+    echo "This tool is fetched by Skia's sync-deps script."
+    echo "Try re-running or check network connectivity."
+    exit 1
+fi
+
+# [4/5] Generate build files and build
+echo "[4/5] Generating build files with gn and building..."
 bin/gn gen out/Release --args='
   is_official_build=true
   is_debug=false
@@ -61,12 +116,10 @@ bin/gn gen out/Release --args='
   extra_cflags=["-mmacosx-version-min=13.0"]
 '
 
-# Build
-echo "Building with ninja..."
 ninja -C out/Release skia
 
-# Install to libs/skia
-echo "Installing to $OUTPUT_DIR..."
+# [5/5] Install to output directory
+echo "[5/5] Installing to $OUTPUT_DIR..."
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/lib"
 mkdir -p "$OUTPUT_DIR/include"
@@ -89,6 +142,7 @@ find src/gpu -name '*.h' -path '*/ganesh/*' | while read -r header; do
     cp "$header" "$dest"
 done
 
+echo ""
 echo "=== Skia build complete ==="
 echo "  Library: $OUTPUT_DIR/lib/libskia.a"
 echo "  Headers: $OUTPUT_DIR/include/"
