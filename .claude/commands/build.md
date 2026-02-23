@@ -1,0 +1,1 @@
+Build the project. If the `build/` directory doesn't exist, run `cmake -B build -DCMAKE_BUILD_TYPE=Release` first. Then run `cmake --build build`. If there are errors, summarize them concisely and suggest fixes. If the build succeeds, say so briefly.
