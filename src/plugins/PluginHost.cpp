@@ -1,4 +1,5 @@
 #include "PluginHost.h"
+#include "model/Project.h"
 
 namespace dc
 {
@@ -38,6 +39,17 @@ void PluginHost::restorePluginState (juce::AudioPluginInstance& plugin,
         plugin.setStateInformation (stateData.getData(),
                                     static_cast<int> (stateData.getSize()));
     }
+}
+
+juce::PluginDescription PluginHost::descriptionFromValueTree (const juce::ValueTree& pluginNode)
+{
+    juce::PluginDescription desc;
+    desc.name                = pluginNode.getProperty (IDs::pluginName, juce::String()).toString();
+    desc.pluginFormatName    = pluginNode.getProperty (IDs::pluginFormat, juce::String()).toString();
+    desc.manufacturerName    = pluginNode.getProperty (IDs::pluginManufacturer, juce::String()).toString();
+    desc.uniqueId            = pluginNode.getProperty (IDs::pluginUniqueId, 0);
+    desc.fileOrIdentifier    = pluginNode.getProperty (IDs::pluginFileOrIdentifier, juce::String()).toString();
+    return desc;
 }
 
 } // namespace dc

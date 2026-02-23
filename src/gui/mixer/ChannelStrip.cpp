@@ -5,7 +5,8 @@ namespace dc
 
 ChannelStrip::ChannelStrip (const juce::ValueTree& state, UndoSystem* us)
     : trackState (state),
-      undoSystem (us)
+      undoSystem (us),
+      pluginSlotList (state)
 {
     trackState.addListener (this);
 
@@ -94,6 +95,24 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state, UndoSystem* us)
 
     // Meter
     addAndMakeVisible (meter);
+
+    // Plugin slot list
+    pluginSlotList.onPluginClicked = [this] (int idx)
+    {
+        if (onPluginClicked)
+            onPluginClicked (idx);
+    };
+    pluginSlotList.onPluginBypassToggled = [this] (int idx)
+    {
+        if (onPluginBypassToggled)
+            onPluginBypassToggled (idx);
+    };
+    pluginSlotList.onPluginRemoveRequested = [this] (int idx)
+    {
+        if (onPluginRemoveRequested)
+            onPluginRemoveRequested (idx);
+    };
+    addAndMakeVisible (pluginSlotList);
 }
 
 ChannelStrip::~ChannelStrip()
@@ -138,6 +157,9 @@ void ChannelStrip::resized()
 
     // Name label at top
     nameLabel.setBounds (area.removeFromTop (20));
+
+    // Plugin slot list
+    pluginSlotList.setBounds (area.removeFromTop (PluginSlotList::preferredHeight));
 
     // Meter takes the main middle space
     auto meterArea = area.removeFromTop (area.getHeight() / 2);

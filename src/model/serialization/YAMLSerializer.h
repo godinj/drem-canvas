@@ -26,6 +26,10 @@ public:
     // Parse step sequencer YAML into a STEP_SEQUENCER ValueTree
     static juce::ValueTree parseStepSequencer (const YAML::Node& node);
 
+    // Emit/parse plugin chain
+    static YAML::Node emitPluginChain (const juce::ValueTree& trackState);
+    static void parsePluginChain (const YAML::Node& pluginsNode, juce::ValueTree& trackState);
+
 private:
     static YAML::Node emitAudioClip (const juce::ValueTree& clipState, const juce::File& sessionDir);
     static YAML::Node emitMidiClip (const juce::ValueTree& clipState);

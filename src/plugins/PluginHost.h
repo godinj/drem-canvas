@@ -20,6 +20,9 @@ public:
     static juce::String savePluginState (juce::AudioPluginInstance& plugin);
     static void restorePluginState (juce::AudioPluginInstance& plugin, const juce::String& base64State);
 
+    // Reconstruct PluginDescription from a PLUGIN ValueTree node
+    static juce::PluginDescription descriptionFromValueTree (const juce::ValueTree& pluginNode);
+
 private:
     PluginManager& pluginManager;
 

@@ -17,6 +17,9 @@
 #include "gui/sequencer/StepSequencerView.h"
 #include "gui/vim/VimStatusBar.h"
 #include "gui/common/DremLookAndFeel.h"
+#include "plugins/PluginManager.h"
+#include "plugins/PluginHost.h"
+#include "plugins/PluginWindowManager.h"
 
 namespace dc
 {
@@ -42,6 +45,14 @@ private:
     void saveSession();
     void loadSession();
 
+    // Plugin chain helpers
+    void connectTrackPluginChain (int trackIndex);
+    void disconnectTrackPluginChain (int trackIndex);
+    void openPluginEditor (int trackIndex, int pluginIndex);
+    void captureAllPluginStates();
+    void insertPluginOnTrack (int trackIndex, const juce::PluginDescription& desc);
+    void toggleBrowser();
+
     // ValueTree listener
     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
@@ -55,6 +66,17 @@ private:
 
     DremLookAndFeel lookAndFeel;
 
+    // Plugin infrastructure
+    PluginManager pluginManager;
+    PluginHost pluginHost { pluginManager };
+    PluginWindowManager pluginWindowManager;
+
+    struct PluginNodeInfo
+    {
+        juce::AudioProcessorGraph::Node::Ptr node;
+        juce::AudioPluginInstance* plugin = nullptr;  // non-owning; graph owns
+    };
+
     // Engine
     AudioEngine audioEngine;
     TransportController transportController;
@@ -63,6 +85,7 @@ private:
     juce::Array<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
     StepSequencerProcessor* sequencerProcessor = nullptr;      // non-owning; graph owns
     juce::AudioProcessorGraph::Node::Ptr sequencerNode;
+    juce::Array<juce::Array<PluginNodeInfo>> trackPluginChains;
 
     // Model
     Project project;
@@ -82,6 +105,11 @@ private:
     juce::TextButton addTrackButton { "Import Audio" };
 
     juce::File currentSessionDirectory;
+
+    // Browser panel
+    std::unique_ptr<juce::Component> browserPanel;
+    bool browserVisible = false;
+    juce::TextButton browserToggleButton { "Plugins" };
 
     std::unique_ptr<VimStatusBar> vimStatusBar;
 

@@ -13,7 +13,7 @@ namespace dc
 class VimEngine : public juce::KeyListener
 {
 public:
-    enum Mode { Normal, Insert };
+    enum Mode { Normal, Insert, Command };
     enum Operator { OpNone, OpDelete, OpYank, OpChange };
 
     struct MotionRange
@@ -47,12 +47,20 @@ public:
     bool hasPendingState() const;
     juce::String getPendingDisplay() const;
 
+    // Command mode
+    const juce::String& getCommandBuffer() const { return commandBuffer; }
+
+    // Plugin command callback (wired by MainComponent)
+    std::function<void (const juce::String&)> onPluginCommand;
+
     void addListener (Listener* l) { listeners.add (l); }
     void removeListener (Listener* l) { listeners.remove (l); }
 
 private:
     bool handleNormalKey (const juce::KeyPress& key);
     bool handleInsertKey (const juce::KeyPress& key);
+    bool handleCommandKey (const juce::KeyPress& key);
+    void executeCommand();
 
     // Navigation
     void moveSelectionUp();
@@ -139,6 +147,7 @@ private:
     VimContext& context;
 
     Mode mode = Normal;
+    juce::String commandBuffer;
     juce_wchar pendingKey = 0;
     juce::int64 pendingTimestamp = 0;
     static constexpr juce::int64 pendingTimeoutMs = 1000;

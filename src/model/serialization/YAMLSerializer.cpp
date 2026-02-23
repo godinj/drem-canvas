@@ -85,6 +85,11 @@ YAML::Node YAMLSerializer::emitTrack (const juce::ValueTree& trackState, const j
     }
     track["clips"] = clips;
 
+    // Plugin chain
+    auto pluginsNode = emitPluginChain (trackState);
+    if (pluginsNode.size() > 0)
+        track["plugins"] = pluginsNode;
+
     root["track"] = track;
     return root;
 }
@@ -193,7 +198,71 @@ juce::ValueTree YAMLSerializer::parseTrack (const YAML::Node& node, const juce::
         }
     }
 
+    if (auto plugins = track["plugins"])
+        parsePluginChain (plugins, trackState);
+
     return trackState;
+}
+
+// --- Plugin chain ---
+
+YAML::Node YAMLSerializer::emitPluginChain (const juce::ValueTree& trackState)
+{
+    YAML::Node plugins;
+    auto chain = trackState.getChildWithName (IDs::PLUGIN_CHAIN);
+
+    if (! chain.isValid())
+        return plugins;
+
+    for (int i = 0; i < chain.getNumChildren(); ++i)
+    {
+        auto pluginState = chain.getChild (i);
+        if (! pluginState.hasType (IDs::PLUGIN))
+            continue;
+
+        YAML::Node p;
+        p["name"]               = pluginState.getProperty (IDs::pluginName, juce::String()).toString().toStdString();
+        p["format"]             = pluginState.getProperty (IDs::pluginFormat, juce::String()).toString().toStdString();
+        p["manufacturer"]       = pluginState.getProperty (IDs::pluginManufacturer, juce::String()).toString().toStdString();
+        p["unique_id"]          = static_cast<int> (pluginState.getProperty (IDs::pluginUniqueId, 0));
+        p["file_or_identifier"] = pluginState.getProperty (IDs::pluginFileOrIdentifier, juce::String()).toString().toStdString();
+        p["state"]              = pluginState.getProperty (IDs::pluginState, juce::String()).toString().toStdString();
+        p["enabled"]            = static_cast<bool> (pluginState.getProperty (IDs::pluginEnabled, true));
+
+        plugins.push_back (p);
+    }
+
+    return plugins;
+}
+
+void YAMLSerializer::parsePluginChain (const YAML::Node& pluginsNode, juce::ValueTree& trackState)
+{
+    juce::ValueTree chain (IDs::PLUGIN_CHAIN);
+
+    for (std::size_t i = 0; i < pluginsNode.size(); ++i)
+    {
+        auto p = pluginsNode[i];
+        juce::ValueTree plugin (IDs::PLUGIN);
+
+        if (p["name"])
+            plugin.setProperty (IDs::pluginName, juce::String (p["name"].as<std::string>()), nullptr);
+        if (p["format"])
+            plugin.setProperty (IDs::pluginFormat, juce::String (p["format"].as<std::string>()), nullptr);
+        if (p["manufacturer"])
+            plugin.setProperty (IDs::pluginManufacturer, juce::String (p["manufacturer"].as<std::string>()), nullptr);
+        if (p["unique_id"])
+            plugin.setProperty (IDs::pluginUniqueId, p["unique_id"].as<int>(), nullptr);
+        if (p["file_or_identifier"])
+            plugin.setProperty (IDs::pluginFileOrIdentifier, juce::String (p["file_or_identifier"].as<std::string>()), nullptr);
+        if (p["state"])
+            plugin.setProperty (IDs::pluginState, juce::String (p["state"].as<std::string>()), nullptr);
+        if (p["enabled"])
+            plugin.setProperty (IDs::pluginEnabled, p["enabled"].as<bool>(), nullptr);
+
+        chain.appendChild (plugin, nullptr);
+    }
+
+    trackState.appendChild (chain, nullptr);
 }
 
 juce::ValueTree YAMLSerializer::parseAudioClip (const YAML::Node& node, const juce::File& sessionDir)

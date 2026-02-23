@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "MeterComponent.h"
+#include "PluginSlotList.h"
 #include "model/Project.h"
 #include "utils/UndoSystem.h"
 
@@ -25,6 +26,11 @@ public:
     // Callback when volume/pan/mute/solo changes
     std::function<void()> onStateChanged;
 
+    // Plugin callbacks (wired by MainComponent)
+    std::function<void (int pluginIndex)> onPluginClicked;
+    std::function<void (int pluginIndex)> onPluginBypassToggled;
+    std::function<void (int pluginIndex)> onPluginRemoveRequested;
+
 private:
     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
 
@@ -37,6 +43,7 @@ private:
     juce::TextButton soloButton { "S" };
     juce::Label nameLabel;
     MeterComponent meter;
+    PluginSlotList pluginSlotList;
 
     bool selected = false;
 

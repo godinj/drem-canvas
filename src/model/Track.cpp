@@ -91,17 +91,129 @@ juce::ValueTree Track::addAudioClip (const juce::File& sourceFile, int64_t start
 
 int Track::getNumClips() const
 {
-    return state.getNumChildren();
+    int count = 0;
+    for (int i = 0; i < state.getNumChildren(); ++i)
+    {
+        auto child = state.getChild (i);
+        if (child.hasType (IDs::AUDIO_CLIP) || child.hasType (IDs::MIDI_CLIP))
+            ++count;
+    }
+    return count;
 }
 
 juce::ValueTree Track::getClip (int index) const
 {
-    return state.getChild (index);
+    int count = 0;
+    for (int i = 0; i < state.getNumChildren(); ++i)
+    {
+        auto child = state.getChild (i);
+        if (child.hasType (IDs::AUDIO_CLIP) || child.hasType (IDs::MIDI_CLIP))
+        {
+            if (count == index)
+                return child;
+            ++count;
+        }
+    }
+    return {};
 }
 
 void Track::removeClip (int index, juce::UndoManager* um)
 {
-    state.removeChild (index, um);
+    int count = 0;
+    for (int i = 0; i < state.getNumChildren(); ++i)
+    {
+        auto child = state.getChild (i);
+        if (child.hasType (IDs::AUDIO_CLIP) || child.hasType (IDs::MIDI_CLIP))
+        {
+            if (count == index)
+            {
+                state.removeChild (i, um);
+                return;
+            }
+            ++count;
+        }
+    }
+}
+
+// ── Plugin chain management ─────────────────────────────────────────────────
+
+juce::ValueTree Track::getPluginChain()
+{
+    auto chain = state.getChildWithName (IDs::PLUGIN_CHAIN);
+    if (! chain.isValid())
+    {
+        chain = juce::ValueTree (IDs::PLUGIN_CHAIN);
+        state.appendChild (chain, nullptr);
+    }
+    return chain;
+}
+
+juce::ValueTree Track::addPlugin (const juce::String& name, const juce::String& format,
+                                   const juce::String& manufacturer, int uniqueId,
+                                   const juce::String& fileOrIdentifier,
+                                   juce::UndoManager* um)
+{
+    juce::ValueTree plugin (IDs::PLUGIN);
+    plugin.setProperty (IDs::pluginName, name, nullptr);
+    plugin.setProperty (IDs::pluginFormat, format, nullptr);
+    plugin.setProperty (IDs::pluginManufacturer, manufacturer, nullptr);
+    plugin.setProperty (IDs::pluginUniqueId, uniqueId, nullptr);
+    plugin.setProperty (IDs::pluginFileOrIdentifier, fileOrIdentifier, nullptr);
+    plugin.setProperty (IDs::pluginState, juce::String(), nullptr);
+    plugin.setProperty (IDs::pluginEnabled, true, nullptr);
+
+    getPluginChain().appendChild (plugin, um);
+    return plugin;
+}
+
+void Track::removePlugin (int index, juce::UndoManager* um)
+{
+    auto chain = getPluginChain();
+    if (index >= 0 && index < chain.getNumChildren())
+        chain.removeChild (index, um);
+}
+
+void Track::movePlugin (int fromIndex, int toIndex, juce::UndoManager* um)
+{
+    auto chain = getPluginChain();
+    if (fromIndex >= 0 && fromIndex < chain.getNumChildren()
+        && toIndex >= 0 && toIndex < chain.getNumChildren()
+        && fromIndex != toIndex)
+    {
+        chain.moveChild (fromIndex, toIndex, um);
+    }
+}
+
+int Track::getNumPlugins() const
+{
+    auto chain = state.getChildWithName (IDs::PLUGIN_CHAIN);
+    return chain.isValid() ? chain.getNumChildren() : 0;
+}
+
+juce::ValueTree Track::getPlugin (int index) const
+{
+    auto chain = state.getChildWithName (IDs::PLUGIN_CHAIN);
+    return chain.isValid() ? chain.getChild (index) : juce::ValueTree();
+}
+
+void Track::setPluginEnabled (int index, bool enabled, juce::UndoManager* um)
+{
+    auto plugin = getPlugin (index);
+    if (plugin.isValid())
+        plugin.setProperty (IDs::pluginEnabled, enabled, um);
+}
+
+bool Track::isPluginEnabled (int index) const
+{
+    auto plugin = getPlugin (index);
+    return plugin.isValid() ? static_cast<bool> (plugin.getProperty (IDs::pluginEnabled, true)) : false;
+}
+
+void Track::setPluginState (int index, const juce::String& base64State, juce::UndoManager* um)
+{
+    auto plugin = getPlugin (index);
+    if (plugin.isValid())
+        plugin.setProperty (IDs::pluginState, base64State, um);
 }
 
 } // namespace dc

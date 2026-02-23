@@ -38,6 +38,20 @@ public:
     juce::ValueTree getClip (int index) const;
     void removeClip (int index, juce::UndoManager* um = nullptr);
 
+    // Plugin chain management
+    juce::ValueTree getPluginChain();
+    juce::ValueTree addPlugin (const juce::String& name, const juce::String& format,
+                               const juce::String& manufacturer, int uniqueId,
+                               const juce::String& fileOrIdentifier,
+                               juce::UndoManager* um = nullptr);
+    void removePlugin (int index, juce::UndoManager* um = nullptr);
+    void movePlugin (int fromIndex, int toIndex, juce::UndoManager* um = nullptr);
+    int getNumPlugins() const;
+    juce::ValueTree getPlugin (int index) const;
+    void setPluginEnabled (int index, bool enabled, juce::UndoManager* um = nullptr);
+    bool isPluginEnabled (int index) const;
+    void setPluginState (int index, const juce::String& base64State, juce::UndoManager* um = nullptr);
+
     juce::ValueTree& getState() { return state; }
     const juce::ValueTree& getState() const { return state; }
 

@@ -3,6 +3,7 @@
 #include "model/AudioClip.h"
 #include "model/StepSequencer.h"
 #include "gui/mixer/ChannelStrip.h"
+#include "gui/browser/BrowserPanel.h"
 
 namespace dc
 {
@@ -69,12 +70,43 @@ MainComponent::MainComponent()
     addTrackButton.onClick = [this] { openFile(); };
     addAndMakeVisible (addTrackButton);
 
+    // Browser panel (hidden by default)
+    pluginManager.loadPluginList (pluginManager.getDefaultPluginListFile());
+    auto* browser = new BrowserPanel (pluginManager);
+    browser->onPluginSelected = [this] (const juce::PluginDescription& desc)
+    {
+        insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
+    };
+    browserPanel.reset (browser);
+    browserPanel->setVisible (false);
+    addChildComponent (*browserPanel);
+
+    browserToggleButton.onClick = [this] { toggleBrowser(); };
+    addAndMakeVisible (browserToggleButton);
+
     // Vim modal engine
     vimEngine = std::make_unique<VimEngine> (project, transportController, arrangement, vimContext);
     addKeyListener (vimEngine.get());
 
     vimEngine->addListener (arrangementView.get());
     vimEngine->addListener (this);
+
+    // Wire :plugin command
+    vimEngine->onPluginCommand = [this] (const juce::String& pluginName)
+    {
+        auto& knownPlugins = pluginManager.getKnownPlugins();
+        auto types = knownPlugins.getTypes();
+
+        // Fuzzy search: find first plugin whose name contains the search term (case-insensitive)
+        for (const auto& desc : types)
+        {
+            if (desc.name.containsIgnoreCase (pluginName))
+            {
+                insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
+                return;
+            }
+        }
+    };
 
     vimStatusBar = std::make_unique<VimStatusBar> (*vimEngine, vimContext, arrangement, transportController);
     addAndMakeVisible (*vimStatusBar);
@@ -109,6 +141,8 @@ MainComponent::~MainComponent()
     project.getState().getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
     project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
     setLookAndFeel (nullptr);
+    pluginWindowManager.closeAll();
+    trackPluginChains.clear();
     trackProcessors.clear();
     trackNodes.clear();
     sequencerProcessor = nullptr;
@@ -132,11 +166,16 @@ void MainComponent::resized()
     addTrackButton.setBounds (topBar.removeFromRight (120).reduced (4));
     loadSessionButton.setBounds (topBar.removeFromRight (120).reduced (4));
     saveSessionButton.setBounds (topBar.removeFromRight (120).reduced (4));
+    browserToggleButton.setBounds (topBar.removeFromRight (100).reduced (4));
     transportBar.setBounds (topBar);
 
     // Status bar at bottom
     if (vimStatusBar != nullptr)
         vimStatusBar->setBounds (area.removeFromBottom (VimStatusBar::preferredHeight));
+
+    // Browser panel on the right (when visible)
+    if (browserVisible && browserPanel != nullptr)
+        browserPanel->setBounds (area.removeFromRight (200));
 
     // Determine which bottom panel to show
     juce::Component* bottomPanel = nullptr;
@@ -206,6 +245,16 @@ void MainComponent::rebuildAudioGraph()
     // the audio thread dereferencing nodes we're about to remove.
     audioEngine.getGraph().suspendProcessing (true);
 
+    // Close plugin editor windows before removing nodes
+    pluginWindowManager.closeAll();
+
+    // Remove existing plugin chain nodes
+    for (auto& chain : trackPluginChains)
+        for (auto& info : chain)
+            if (info.node != nullptr)
+                audioEngine.removeProcessor (info.node->nodeID);
+    trackPluginChains.clear();
+
     // Remove existing track nodes
     for (auto& node : trackNodes)
         if (node != nullptr)
@@ -213,6 +262,13 @@ void MainComponent::rebuildAudioGraph()
 
     trackProcessors.clear();   // non-owning — graph deleted the processors above
     trackNodes.clear();
+
+    auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()
+                          ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentSampleRate()
+                          : 44100.0;
+    auto blockSize = audioEngine.getDeviceManager().getCurrentAudioDevice()
+                         ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentBufferSizeSamples()
+                         : 512;
 
     // Create a processor for each track
     for (int i = 0; i < project.getNumTracks(); ++i)
@@ -240,12 +296,35 @@ void MainComponent::rebuildAudioGraph()
         trackProcessors.add (processorPtr);
         trackNodes.add (node);
 
-        // Connect to mix bus (stereo)
-        if (mixBusNode != nullptr)
+        // Instantiate plugin chain from model
+        juce::Array<PluginNodeInfo> pluginChain;
+
+        for (int p = 0; p < track.getNumPlugins(); ++p)
         {
-            audioEngine.connectNodes (node->nodeID, 0, mixBusNode->nodeID, 0);
-            audioEngine.connectNodes (node->nodeID, 1, mixBusNode->nodeID, 1);
+            auto pluginState = track.getPlugin (p);
+            auto desc = PluginHost::descriptionFromValueTree (pluginState);
+
+            juce::String error;
+            auto instance = pluginManager.getFormatManager().createPluginInstance (
+                desc, sampleRate, blockSize, error);
+
+            if (instance != nullptr)
+            {
+                // Restore plugin state
+                juce::String base64State = pluginState.getProperty (IDs::pluginState, juce::String());
+                if (base64State.isNotEmpty())
+                    PluginHost::restorePluginState (*instance, base64State);
+
+                auto* pluginPtr = instance.get();
+                auto pluginNode = audioEngine.addProcessor (std::move (instance));
+                pluginChain.add ({ pluginNode, pluginPtr });
+            }
         }
+
+        trackPluginChains.add (pluginChain);
+
+        // Wire chain: TrackNode → Plugin1 → Plugin2 → ... → MixBus
+        connectTrackPluginChain (i);
     }
 
     audioEngine.getGraph().suspendProcessing (false);
@@ -266,6 +345,50 @@ void MainComponent::rebuildAudioGraph()
 
                 // Wire fader/pan/mute changes to push directly to the track processor
                 strip.onStateChanged = [this] { syncTrackProcessorsFromModel(); };
+
+                // Wire plugin callbacks
+                strip.onPluginClicked = [this, trackIndex] (int pluginIndex)
+                {
+                    openPluginEditor (trackIndex, pluginIndex);
+                };
+
+                strip.onPluginBypassToggled = [this, trackIndex] (int pluginIndex)
+                {
+                    auto trackState = project.getTrack (trackIndex);
+                    Track t (trackState);
+                    bool enabled = t.isPluginEnabled (pluginIndex);
+                    t.setPluginEnabled (pluginIndex, ! enabled, &project.getUndoManager());
+
+                    audioEngine.getGraph().suspendProcessing (true);
+                    disconnectTrackPluginChain (trackIndex);
+                    connectTrackPluginChain (trackIndex);
+                    audioEngine.getGraph().suspendProcessing (false);
+                };
+
+                strip.onPluginRemoveRequested = [this, trackIndex] (int pluginIndex)
+                {
+                    auto trackState = project.getTrack (trackIndex);
+                    Track t (trackState);
+
+                    // Close editor if open
+                    if (trackIndex < trackPluginChains.size()
+                        && pluginIndex < trackPluginChains[trackIndex].size())
+                    {
+                        auto& info = trackPluginChains[trackIndex].getReference (pluginIndex);
+                        pluginWindowManager.closeEditorForPlugin (info.plugin);
+
+                        // Remove from graph
+                        audioEngine.getGraph().suspendProcessing (true);
+                        disconnectTrackPluginChain (trackIndex);
+                        audioEngine.removeProcessor (info.node->nodeID);
+                        trackPluginChains.getReference (trackIndex).remove (pluginIndex);
+                        connectTrackPluginChain (trackIndex);
+                        audioEngine.getGraph().suspendProcessing (false);
+                    }
+
+                    // Remove from model
+                    t.removePlugin (pluginIndex, &project.getUndoManager());
+                };
             }
         };
         mixerPanel->rebuildStrips();
@@ -342,6 +465,9 @@ void MainComponent::syncSequencerFromModel()
 
 void MainComponent::saveSession()
 {
+    // Capture live plugin state before saving
+    captureAllPluginStates();
+
     auto chooser = std::make_shared<juce::FileChooser> (
         "Save Session Directory...",
         currentSessionDirectory.exists() ? currentSessionDirectory : juce::File::getSpecialLocation (juce::File::userHomeDirectory),
@@ -477,6 +603,154 @@ void MainComponent::updatePanelVisibility()
     if (sequencerView != nullptr)
         sequencerView->setVisible (showSequencer);
 
+    resized();
+}
+
+// ── Plugin chain wiring ──────────────────────────────────────────────────────
+
+void MainComponent::connectTrackPluginChain (int trackIndex)
+{
+    if (trackIndex < 0 || trackIndex >= trackNodes.size()
+        || trackIndex >= trackPluginChains.size() || mixBusNode == nullptr)
+        return;
+
+    auto trackNode = trackNodes[trackIndex];
+    auto& chain = trackPluginChains.getReference (trackIndex);
+    auto trackState = project.getTrack (trackIndex);
+    Track track (trackState);
+
+    // Build list of enabled plugin nodes
+    juce::Array<juce::AudioProcessorGraph::Node::Ptr> enabledNodes;
+    for (int p = 0; p < chain.size(); ++p)
+    {
+        if (track.isPluginEnabled (p))
+            enabledNodes.add (chain[p].node);
+    }
+
+    // Wire: TrackNode → Plugin1 → Plugin2 → ... → MixBus
+    auto prevNode = trackNode;
+
+    for (auto& pluginNode : enabledNodes)
+    {
+        audioEngine.connectNodes (prevNode->nodeID, 0, pluginNode->nodeID, 0);
+        audioEngine.connectNodes (prevNode->nodeID, 1, pluginNode->nodeID, 1);
+        prevNode = pluginNode;
+    }
+
+    // Final connection to mix bus
+    audioEngine.connectNodes (prevNode->nodeID, 0, mixBusNode->nodeID, 0);
+    audioEngine.connectNodes (prevNode->nodeID, 1, mixBusNode->nodeID, 1);
+}
+
+void MainComponent::disconnectTrackPluginChain (int trackIndex)
+{
+    if (trackIndex < 0 || trackIndex >= trackNodes.size()
+        || trackIndex >= trackPluginChains.size() || mixBusNode == nullptr)
+        return;
+
+    auto& graph = audioEngine.getGraph();
+    auto trackNode = trackNodes[trackIndex];
+    auto& chain = trackPluginChains.getReference (trackIndex);
+
+    // Remove all connections from the track node output
+    for (auto& conn : graph.getConnections())
+    {
+        if (conn.source.nodeID == trackNode->nodeID)
+            graph.removeConnection (conn);
+    }
+
+    // Remove all connections from plugin nodes in this chain
+    for (auto& info : chain)
+    {
+        if (info.node == nullptr) continue;
+        for (auto& conn : graph.getConnections())
+        {
+            if (conn.source.nodeID == info.node->nodeID)
+                graph.removeConnection (conn);
+        }
+    }
+}
+
+void MainComponent::openPluginEditor (int trackIndex, int pluginIndex)
+{
+    if (trackIndex < 0 || trackIndex >= trackPluginChains.size())
+        return;
+
+    auto& chain = trackPluginChains.getReference (trackIndex);
+    if (pluginIndex < 0 || pluginIndex >= chain.size())
+        return;
+
+    auto* plugin = chain[pluginIndex].plugin;
+    if (plugin != nullptr)
+        pluginWindowManager.showEditorForPlugin (*plugin);
+}
+
+void MainComponent::captureAllPluginStates()
+{
+    for (int i = 0; i < project.getNumTracks() && i < trackPluginChains.size(); ++i)
+    {
+        auto trackState = project.getTrack (i);
+        Track track (trackState);
+        auto& chain = trackPluginChains.getReference (i);
+
+        for (int p = 0; p < chain.size() && p < track.getNumPlugins(); ++p)
+        {
+            if (chain[p].plugin != nullptr)
+            {
+                auto base64State = PluginHost::savePluginState (*chain[p].plugin);
+                track.setPluginState (p, base64State);
+            }
+        }
+    }
+}
+
+void MainComponent::insertPluginOnTrack (int trackIndex, const juce::PluginDescription& desc)
+{
+    if (trackIndex < 0 || trackIndex >= project.getNumTracks())
+        return;
+
+    auto trackState = project.getTrack (trackIndex);
+    Track track (trackState);
+
+    // Add to model
+    track.addPlugin (desc.name, desc.pluginFormatName, desc.manufacturerName,
+                     desc.uniqueId, desc.fileOrIdentifier, &project.getUndoManager());
+
+    // Async instantiate and add to graph
+    auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()
+                          ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentSampleRate()
+                          : 44100.0;
+    auto blockSize = audioEngine.getDeviceManager().getCurrentAudioDevice()
+                         ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentBufferSizeSamples()
+                         : 512;
+
+    pluginHost.createPluginAsync (desc, sampleRate, blockSize,
+        [this, trackIndex] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& errorMessage)
+        {
+            juce::ignoreUnused (errorMessage);
+            if (instance == nullptr)
+                return;
+
+            auto* pluginPtr = instance.get();
+
+            audioEngine.getGraph().suspendProcessing (true);
+            disconnectTrackPluginChain (trackIndex);
+
+            auto pluginNode = audioEngine.addProcessor (std::move (instance));
+
+            if (trackIndex < trackPluginChains.size())
+                trackPluginChains.getReference (trackIndex).add ({ pluginNode, pluginPtr });
+
+            connectTrackPluginChain (trackIndex);
+            audioEngine.getGraph().suspendProcessing (false);
+        });
+}
+
+void MainComponent::toggleBrowser()
+{
+    browserVisible = ! browserVisible;
+    if (browserPanel != nullptr)
+        browserPanel->setVisible (browserVisible);
     resized();
 }
 

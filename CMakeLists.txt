@@ -75,6 +75,7 @@ target_sources(DremCanvas PRIVATE
     src/gui/mixer/MixerPanel.cpp
     src/gui/mixer/ChannelStrip.cpp
     src/gui/mixer/MeterComponent.cpp
+    src/gui/mixer/PluginSlotList.cpp
 
     # GUI - Piano Roll
     src/gui/midieditor/PianoRollEditor.cpp

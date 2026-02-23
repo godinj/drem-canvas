@@ -13,6 +13,9 @@ VimEngine::VimEngine (Project& p, TransportController& t,
 
 bool VimEngine::keyPressed (const juce::KeyPress& key, juce::Component*)
 {
+    if (mode == Command)
+        return handleCommandKey (key);
+
     if (mode == Normal)
         return handleNormalKey (key);
 
@@ -216,6 +219,16 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
 
     // Open item (stub)
     if (key == juce::KeyPress::returnKey) { openFocusedItem(); return true; }
+
+    // Command mode
+    if (keyChar == ':')
+    {
+        mode = Command;
+        commandBuffer.clear();
+        listeners.call (&Listener::vimModeChanged, Command);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
 
     return false;
 }
@@ -488,6 +501,62 @@ void VimEngine::toggleRecordArm()
     Track track = arrangement.getTrack (idx);
     track.setArmed (! track.isArmed(), &project.getUndoManager());
     listeners.call (&Listener::vimContextChanged);
+}
+
+// ── Command mode ────────────────────────────────────────────────────────
+
+bool VimEngine::handleCommandKey (const juce::KeyPress& key)
+{
+    if (key == juce::KeyPress::escapeKey)
+    {
+        commandBuffer.clear();
+        enterNormalMode();
+        return true;
+    }
+
+    if (key == juce::KeyPress::returnKey)
+    {
+        executeCommand();
+        commandBuffer.clear();
+        enterNormalMode();
+        return true;
+    }
+
+    if (key == juce::KeyPress::backspaceKey)
+    {
+        if (commandBuffer.isNotEmpty())
+            commandBuffer = commandBuffer.dropLastCharacters (1);
+
+        if (commandBuffer.isEmpty())
+        {
+            enterNormalMode();
+            return true;
+        }
+
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    auto c = key.getTextCharacter();
+    if (c >= 32)
+    {
+        commandBuffer += juce::String::charToString (c);
+        listeners.call (&Listener::vimContextChanged);
+    }
+
+    return true;
+}
+
+void VimEngine::executeCommand()
+{
+    auto cmd = commandBuffer.trim();
+
+    if (cmd.startsWith ("plugin ") || cmd.startsWith ("plug "))
+    {
+        auto pluginName = cmd.fromFirstOccurrenceOf (" ", false, false).trim();
+        if (pluginName.isNotEmpty() && onPluginCommand)
+            onPluginCommand (pluginName);
+    }
 }
 
 // ── Mode switching ──────────────────────────────────────────────────────────
