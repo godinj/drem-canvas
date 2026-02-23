@@ -1,4 +1,5 @@
 #include "Arrangement.h"
+#include "utils/UndoSystem.h"
 
 namespace dc
 {
@@ -51,6 +52,7 @@ void Arrangement::moveTrack (int fromIndex, int toIndex)
     if (fromIndex == toIndex)
         return;
 
+    ScopedTransaction txn (project.getUndoSystem(), "Move Track");
     auto trackToMove = tracksNode.getChild (fromIndex);
     tracksNode.removeChild (trackToMove, &project.getUndoManager());
     tracksNode.addChild (trackToMove, toIndex, &project.getUndoManager());

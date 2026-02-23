@@ -33,7 +33,8 @@ MainComponent::MainComponent()
     addAndMakeVisible (*arrangementView);
 
     mixerPanel = std::make_unique<MixerPanel> (project,
-        *dynamic_cast<MixBusProcessor*> (mixBusNode->getProcessor()));
+        *dynamic_cast<MixBusProcessor*> (mixBusNode->getProcessor()),
+        &project.getUndoSystem());
     addAndMakeVisible (*mixerPanel);
 
     addAndMakeVisible (layoutResizer);

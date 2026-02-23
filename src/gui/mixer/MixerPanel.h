@@ -11,7 +11,7 @@ class MixerPanel : public juce::Component,
                    private juce::ValueTree::Listener
 {
 public:
-    MixerPanel (Project& project, MixBusProcessor& masterBus);
+    MixerPanel (Project& project, MixBusProcessor& masterBus, UndoSystem* undoSystem = nullptr);
     ~MixerPanel() override;
 
     void paint (juce::Graphics& g) override;
@@ -29,6 +29,7 @@ private:
 
     Project& project;
     MixBusProcessor& masterBus;
+    UndoSystem* undoSystem = nullptr;
 
     juce::OwnedArray<ChannelStrip> strips;
     std::unique_ptr<ChannelStrip> masterStrip;

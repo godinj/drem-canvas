@@ -1,5 +1,6 @@
 #include "VimEngine.h"
 #include "model/AudioClip.h"
+#include "utils/UndoSystem.h"
 
 namespace dc
 {
@@ -188,10 +189,10 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     if (keyChar == 's') { splitRegionAtPlayhead(); return true; }
 
     // Undo/redo
-    if (keyChar == 'u') { project.getUndoManager().undo(); return true; }
+    if (keyChar == 'u') { project.getUndoSystem().undo(); return true; }
     if (keyChar == 'r' && modifiers.isCtrlDown())
     {
-        project.getUndoManager().redo();
+        project.getUndoSystem().redo();
         return true;
     }
 
@@ -335,6 +336,7 @@ void VimEngine::deleteSelectedRegions()
 
     if (clipIdx >= 0 && clipIdx < track.getNumClips())
     {
+        ScopedTransaction txn (project.getUndoSystem(), "Delete Clip");
         track.removeClip (clipIdx, &project.getUndoManager());
 
         if (clipIdx >= track.getNumClips() && track.getNumClips() > 0)
@@ -368,13 +370,16 @@ void VimEngine::pasteAfterPlayhead()
     if (trackIdx < 0 || trackIdx >= arrangement.getNumTracks())
         return;
 
+    ScopedTransaction txn (project.getUndoSystem(), "Paste Clip");
+    auto& um = project.getUndoManager();
+
     auto clipData = context.getClipboard().createCopy();
     clipData.setProperty (IDs::startPosition,
                           static_cast<juce::int64> (transport.getPositionInSamples()),
-                          nullptr);
+                          &um);
 
     Track track = arrangement.getTrack (trackIdx);
-    track.getState().appendChild (clipData, &project.getUndoManager());
+    track.getState().appendChild (clipData, &um);
     listeners.call (&Listener::vimContextChanged);
 }
 
@@ -387,16 +392,19 @@ void VimEngine::pasteBeforePlayhead()
     if (trackIdx < 0 || trackIdx >= arrangement.getNumTracks())
         return;
 
+    ScopedTransaction txn (project.getUndoSystem(), "Paste Clip");
+    auto& um = project.getUndoManager();
+
     auto clipData = context.getClipboard().createCopy();
     auto length = static_cast<int64_t> (clipData.getProperty (IDs::length, 0));
     auto pastePos = transport.getPositionInSamples() - length;
     if (pastePos < 0) pastePos = 0;
 
     clipData.setProperty (IDs::startPosition,
-                          static_cast<juce::int64> (pastePos), nullptr);
+                          static_cast<juce::int64> (pastePos), &um);
 
     Track track = arrangement.getTrack (trackIdx);
-    track.getState().appendChild (clipData, &project.getUndoManager());
+    track.getState().appendChild (clipData, &um);
     listeners.call (&Listener::vimContextChanged);
 }
 
@@ -421,6 +429,7 @@ void VimEngine::splitRegionAtPlayhead()
         return;
 
     auto splitOffset = playhead - clipStart;
+    ScopedTransaction txn (project.getUndoSystem(), "Split Clip");
     auto& um = project.getUndoManager();
 
     clipState.setProperty (IDs::length, static_cast<juce::int64> (splitOffset), &um);
@@ -447,6 +456,7 @@ void VimEngine::toggleMute()
     if (idx < 0 || idx >= arrangement.getNumTracks())
         return;
 
+    ScopedTransaction txn (project.getUndoSystem(), "Toggle Mute");
     Track track = arrangement.getTrack (idx);
     track.setMuted (! track.isMuted(), &project.getUndoManager());
     listeners.call (&Listener::vimContextChanged);
@@ -458,6 +468,7 @@ void VimEngine::toggleSolo()
     if (idx < 0 || idx >= arrangement.getNumTracks())
         return;
 
+    ScopedTransaction txn (project.getUndoSystem(), "Toggle Solo");
     Track track = arrangement.getTrack (idx);
     track.setSolo (! track.isSolo(), &project.getUndoManager());
     listeners.call (&Listener::vimContextChanged);
@@ -469,6 +480,7 @@ void VimEngine::toggleRecordArm()
     if (idx < 0 || idx >= arrangement.getNumTracks())
         return;
 
+    ScopedTransaction txn (project.getUndoSystem(), "Toggle Record Arm");
     Track track = arrangement.getTrack (idx);
     track.setArmed (! track.isArmed(), &project.getUndoManager());
     listeners.call (&Listener::vimContextChanged);

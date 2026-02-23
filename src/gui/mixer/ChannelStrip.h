@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include "MeterComponent.h"
 #include "model/Project.h"
+#include "utils/UndoSystem.h"
 
 namespace dc
 {
@@ -10,7 +11,7 @@ class ChannelStrip : public juce::Component,
                      private juce::ValueTree::Listener
 {
 public:
-    explicit ChannelStrip (const juce::ValueTree& trackState);
+    explicit ChannelStrip (const juce::ValueTree& trackState, UndoSystem* undoSystem = nullptr);
     ~ChannelStrip() override;
 
     void paint (juce::Graphics& g) override;
@@ -25,6 +26,7 @@ private:
     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
 
     juce::ValueTree trackState;
+    UndoSystem* undoSystem = nullptr;
 
     juce::Slider fader;
     juce::Slider panKnob;

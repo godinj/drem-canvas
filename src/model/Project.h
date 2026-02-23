@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "utils/UndoSystem.h"
 
 namespace dc
 {
@@ -58,6 +59,7 @@ public:
     const juce::ValueTree& getState() const { return state; }
 
     juce::UndoManager& getUndoManager() { return undoManager; }
+    UndoSystem& getUndoSystem() { return undoSystem; }
 
     // Project properties
     double getTempo() const;
@@ -68,6 +70,7 @@ public:
 private:
     juce::ValueTree state;
     juce::UndoManager undoManager;
+    UndoSystem undoSystem { undoManager };
 
     void createDefaultState();
 
