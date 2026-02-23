@@ -6,6 +6,7 @@
 #include "model/Track.h"
 #include "model/StepSequencer.h"
 #include "engine/TransportController.h"
+#include "graphics/core/Event.h"
 
 namespace dc
 {
@@ -38,6 +39,9 @@ public:
                Arrangement& arrangement, VimContext& context);
 
     bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override;
+
+    // New event path for graphics engine (converts to KeyPress internally)
+    bool handleKeyEvent (const gfx::KeyEvent& event);
 
     Mode getMode() const { return mode; }
     bool hasPendingKey() const { return pendingKey != 0; }

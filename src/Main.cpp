@@ -1,5 +1,11 @@
 #include <JuceHeader.h>
-#include "gui/MainWindow.h"
+#include "platform/NativeWindow.h"
+#include "platform/MetalView.h"
+#include "platform/EventBridge.h"
+#include "graphics/rendering/MetalBackend.h"
+#include "graphics/rendering/Renderer.h"
+#include "graphics/core/EventDispatch.h"
+#include "ui/AppController.h"
 
 class DremCanvasApplication : public juce::JUCEApplication
 {
@@ -10,12 +16,66 @@ public:
 
     void initialise (const juce::String& /*commandLine*/) override
     {
-        mainWindow = std::make_unique<dc::MainWindow> (getApplicationName());
+        // Create native Metal window (replaces JUCE MainWindow)
+        nativeWindow = std::make_unique<dc::platform::NativeWindow> ("Drem Canvas", 1280, 800);
+
+        // Create Skia Metal backend
+        metalBackend = std::make_unique<dc::gfx::MetalBackend> (*nativeWindow->getMetalView());
+
+        // Create renderer
+        renderer = std::make_unique<dc::gfx::Renderer> (*metalBackend);
+
+        // Create root widget (AppController)
+        appController = std::make_unique<dc::ui::AppController>();
+        appController->setRenderer (renderer.get());
+
+        // Set root widget bounds to window size
+        float w = static_cast<float> (nativeWindow->getWidth());
+        float h = static_cast<float> (nativeWindow->getHeight());
+        appController->setBounds (dc::gfx::Rect (0, 0, w, h));
+
+        // Create event dispatch with root widget
+        eventDispatch = std::make_unique<dc::gfx::EventDispatch> (*appController);
+
+        // Wire event bridge (connects MTKView events to EventDispatch)
+        eventBridge = std::make_unique<dc::platform::EventBridge> (
+            *nativeWindow->getMetalView(), *eventDispatch);
+
+        // Wire frame callback — Renderer drives the full frame loop
+        nativeWindow->getMetalView()->onFrame = [this]()
+        {
+            renderer->renderFrame (*appController);
+        };
+
+        // Handle window resize
+        nativeWindow->onResize = [this] (int newW, int newH)
+        {
+            appController->setBounds (dc::gfx::Rect (0, 0,
+                static_cast<float> (newW), static_cast<float> (newH)));
+            renderer->forceNextFrame();
+        };
+
+        // Handle window close
+        nativeWindow->onClose = [this]()
+        {
+            systemRequestedQuit();
+        };
+
+        // Initialize the audio engine and all UI
+        appController->initialise();
+
+        nativeWindow->show();
     }
 
     void shutdown() override
     {
-        mainWindow.reset();
+        // Tear down in reverse order
+        appController.reset();
+        eventBridge.reset();
+        eventDispatch.reset();
+        renderer.reset();
+        metalBackend.reset();
+        nativeWindow.reset();
     }
 
     void systemRequestedQuit() override
@@ -24,7 +84,12 @@ public:
     }
 
 private:
-    std::unique_ptr<dc::MainWindow> mainWindow;
+    std::unique_ptr<dc::platform::NativeWindow> nativeWindow;
+    std::unique_ptr<dc::gfx::MetalBackend> metalBackend;
+    std::unique_ptr<dc::gfx::Renderer> renderer;
+    std::unique_ptr<dc::gfx::EventDispatch> eventDispatch;
+    std::unique_ptr<dc::platform::EventBridge> eventBridge;
+    std::unique_ptr<dc::ui::AppController> appController;
 };
 
 START_JUCE_APPLICATION (DremCanvasApplication)

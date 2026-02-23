@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(DremCanvas VERSION 0.1.0 LANGUAGES C CXX)
+project(DremCanvas VERSION 0.1.0 LANGUAGES C CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,6 +18,25 @@ set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(yaml-cpp)
+
+# ─── Skia ─────────────────────────────────────────────────────
+set(SKIA_DIR "${CMAKE_SOURCE_DIR}/libs/skia")
+find_library(SKIA_LIB skia PATHS "${SKIA_DIR}/lib" NO_DEFAULT_PATH)
+if(NOT SKIA_LIB)
+    message(WARNING "Skia not found at ${SKIA_DIR}/lib — run scripts/build_skia.sh first")
+endif()
+
+# ─── libpng (required by Skia) ────────────────────────────────
+find_package(PNG REQUIRED)
+
+# ─── macOS Frameworks ─────────────────────────────────────────
+find_library(METAL_FRAMEWORK Metal)
+find_library(METALKIT_FRAMEWORK MetalKit)
+find_library(QUARTZCORE_FRAMEWORK QuartzCore)
+find_library(COCOA_FRAMEWORK Cocoa)
+find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
+find_library(CORETEXT_FRAMEWORK CoreText)
+find_library(COREGRAPHICS_FRAMEWORK CoreGraphics)
 
 juce_add_gui_app(DremCanvas
     PRODUCT_NAME "Drem Canvas"
@@ -57,51 +76,11 @@ target_sources(DremCanvas PRIVATE
     src/plugins/PluginHost.cpp
     src/plugins/PluginWindowManager.cpp
 
-    # GUI - Main
-    src/gui/MainWindow.cpp
-    src/gui/MainComponent.cpp
-
-    # GUI - Transport
-    src/gui/transport/TransportBar.cpp
-
-    # GUI - Arrangement
-    src/gui/arrangement/ArrangementView.cpp
-    src/gui/arrangement/TrackLane.cpp
-    src/gui/arrangement/WaveformView.cpp
-    src/gui/arrangement/TimeRuler.cpp
-    src/gui/arrangement/MidiClipView.cpp
-    src/gui/arrangement/Cursor.cpp
-    src/gui/arrangement/AutomationLane.cpp
-
-    # GUI - Mixer
-    src/gui/mixer/MixerPanel.cpp
-    src/gui/mixer/ChannelStrip.cpp
-    src/gui/mixer/MeterComponent.cpp
-    src/gui/mixer/PluginSlotList.cpp
-
-    # GUI - Piano Roll
-    src/gui/midieditor/PianoRollEditor.cpp
-    src/gui/midieditor/PianoKeyboard.cpp
-    src/gui/midieditor/NoteComponent.cpp
-
-    # GUI - Step Sequencer
-    src/gui/sequencer/StepSequencerView.cpp
-    src/gui/sequencer/StepGrid.cpp
-    src/gui/sequencer/StepButton.cpp
-    src/gui/sequencer/PatternSelector.cpp
-
-    # GUI - Browser
-    src/gui/browser/BrowserPanel.cpp
-
-    # GUI - Common
-    src/gui/common/DremLookAndFeel.cpp
+    # (GUI layer removed — replaced by graphics engine + ui/ widgets)
 
     # Vim
     src/vim/VimContext.cpp
     src/vim/VimEngine.cpp
-
-    # GUI - Vim
-    src/gui/vim/VimStatusBar.cpp
 
     # Utils
     src/utils/AudioFileUtils.cpp
@@ -116,9 +95,96 @@ target_sources(DremCanvas PRIVATE
     src/model/serialization/YAMLSerializer.cpp
     src/model/serialization/SessionWriter.cpp
     src/model/serialization/SessionReader.cpp
+
+    # ─── Graphics Engine (NEW) ────────────────────────────────
+
+    # Platform - macOS native layer
+    src/platform/NativeWindow.mm
+    src/platform/MetalView.mm
+    src/platform/EventBridge.mm
+
+    # Graphics - Core
+    src/graphics/core/Node.cpp
+    src/graphics/core/Widget.cpp
+    src/graphics/core/EventDispatch.cpp
+
+    # Graphics - Rendering
+    src/graphics/rendering/MetalBackend.mm
+    src/graphics/rendering/Canvas.cpp
+    src/graphics/rendering/Renderer.cpp
+
+    # Graphics - Theme
+    src/graphics/theme/FontManager.cpp
+
+    # Graphics - Rendering (continued)
+    src/graphics/rendering/WaveformCache.cpp
+    src/graphics/rendering/TextureCache.cpp
+
+    # Graphics - Widgets
+    src/graphics/widgets/ButtonWidget.cpp
+    src/graphics/widgets/LabelWidget.cpp
+    src/graphics/widgets/SliderWidget.cpp
+    src/graphics/widgets/ScrollViewWidget.cpp
+    src/graphics/widgets/ListBoxWidget.cpp
+    src/graphics/widgets/LayoutWidget.cpp
+
+    # UI - App
+    src/ui/AppController.cpp
+
+    # UI - Transport
+    src/ui/transport/TransportBarWidget.cpp
+
+    # UI - Vim
+    src/ui/vim/VimStatusBarWidget.cpp
+
+    # UI - Arrangement
+    src/ui/arrangement/TimeRulerWidget.cpp
+    src/ui/arrangement/WaveformWidget.cpp
+    src/ui/arrangement/TrackLaneWidget.cpp
+    src/ui/arrangement/MidiClipWidget.cpp
+    src/ui/arrangement/AutomationLaneWidget.cpp
+    src/ui/arrangement/ArrangementWidget.cpp
+
+    # UI - Mixer
+    src/ui/mixer/MeterWidget.cpp
+    src/ui/mixer/PluginSlotListWidget.cpp
+    src/ui/mixer/ChannelStripWidget.cpp
+    src/ui/mixer/MixerWidget.cpp
+
+    # UI - Step Sequencer
+    src/ui/sequencer/StepButtonWidget.cpp
+    src/ui/sequencer/StepGridWidget.cpp
+    src/ui/sequencer/PatternSelectorWidget.cpp
+    src/ui/sequencer/StepSequencerWidget.cpp
+
+    # UI - Piano Roll
+    src/ui/midieditor/PianoKeyboardWidget.cpp
+    src/ui/midieditor/NoteWidget.cpp
+    src/ui/midieditor/PianoRollWidget.cpp
+
+    # UI - Browser
+    src/ui/browser/BrowserWidget.cpp
+
+    # Platform - Dialogs
+    src/platform/NativeDialogs.mm
 )
 
-target_include_directories(DremCanvas PRIVATE src)
+target_include_directories(DremCanvas PRIVATE
+    src
+    "${SKIA_DIR}/include"
+    "${SKIA_DIR}"
+)
+
+# ObjC++ compile flags for .mm files
+set_source_files_properties(
+    src/platform/NativeWindow.mm
+    src/platform/MetalView.mm
+    src/platform/EventBridge.mm
+    src/platform/NativeDialogs.mm
+    src/graphics/rendering/MetalBackend.mm
+    PROPERTIES
+    COMPILE_FLAGS "-fobjc-arc"
+)
 
 target_compile_definitions(DremCanvas PRIVATE
     JUCE_WEB_BROWSER=0
@@ -128,6 +194,8 @@ target_compile_definitions(DremCanvas PRIVATE
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:DremCanvas,JUCE_PRODUCT_NAME>"
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:DremCanvas,JUCE_VERSION>"
+    SK_METAL=1
+    SK_GANESH=1
 )
 
 target_link_libraries(DremCanvas PRIVATE
@@ -143,4 +211,13 @@ target_link_libraries(DremCanvas PRIVATE
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
     yaml-cpp::yaml-cpp
+    ${SKIA_LIB}
+    PNG::PNG
+    ${METAL_FRAMEWORK}
+    ${METALKIT_FRAMEWORK}
+    ${QUARTZCORE_FRAMEWORK}
+    ${COCOA_FRAMEWORK}
+    ${COREFOUNDATION_FRAMEWORK}
+    ${CORETEXT_FRAMEWORK}
+    ${COREGRAPHICS_FRAMEWORK}
 )

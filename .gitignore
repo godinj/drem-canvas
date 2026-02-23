@@ -6,3 +6,7 @@ cmake-build-*/
 *.user
 .idea/
 .vscode/
+
+# Skia build output
+libs/skia/
+third_party/skia/

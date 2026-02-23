@@ -22,6 +22,40 @@ bool VimEngine::keyPressed (const juce::KeyPress& key, juce::Component*)
     return handleInsertKey (key);
 }
 
+bool VimEngine::handleKeyEvent (const gfx::KeyEvent& event)
+{
+    // Convert gfx::KeyEvent to juce::KeyPress for the shared dispatch logic
+    int juceKeyCode = 0;
+
+    // Map macOS virtual key codes to JUCE key codes for special keys
+    switch (event.keyCode)
+    {
+        case 0x35: juceKeyCode = juce::KeyPress::escapeKey;    break; // Escape
+        case 0x24: juceKeyCode = juce::KeyPress::returnKey;    break; // Return
+        case 0x30: juceKeyCode = juce::KeyPress::tabKey;       break; // Tab
+        case 0x31: juceKeyCode = juce::KeyPress::spaceKey;     break; // Space
+        case 0x33: juceKeyCode = juce::KeyPress::backspaceKey; break; // Backspace
+        case 0x7E: juceKeyCode = juce::KeyPress::upKey;        break; // Up
+        case 0x7D: juceKeyCode = juce::KeyPress::downKey;      break; // Down
+        case 0x7B: juceKeyCode = juce::KeyPress::leftKey;      break; // Left
+        case 0x7C: juceKeyCode = juce::KeyPress::rightKey;     break; // Right
+        default:
+            juceKeyCode = static_cast<int> (event.character);
+            break;
+    }
+
+    juce::ModifierKeys mods;
+    int modFlags = 0;
+    if (event.shift)   modFlags |= juce::ModifierKeys::shiftModifier;
+    if (event.control) modFlags |= juce::ModifierKeys::ctrlModifier;
+    if (event.alt)     modFlags |= juce::ModifierKeys::altModifier;
+    if (event.command) modFlags |= juce::ModifierKeys::commandModifier;
+    mods = juce::ModifierKeys (modFlags);
+
+    juce::KeyPress key (juceKeyCode, mods, static_cast<juce_wchar> (event.character));
+    return keyPressed (key, nullptr);
+}
+
 bool VimEngine::handleInsertKey (const juce::KeyPress& key)
 {
     if (key == juce::KeyPress::escapeKey)
