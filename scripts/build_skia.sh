@@ -87,13 +87,35 @@ if [ ! -x "bin/gn" ]; then
     exit 1
 fi
 
+# Detect libpng paths from pkg-config (Homebrew installs outside default paths)
+PNG_CFLAGS="$(pkg-config --cflags libpng 2>/dev/null || true)"
+PNG_LDFLAGS="$(pkg-config --libs-only-L libpng 2>/dev/null || true)"
+
+# Build extra_cflags array
+EXTRA_CFLAGS='["-mmacosx-version-min=13.0"'
+for flag in $PNG_CFLAGS; do
+    EXTRA_CFLAGS="$EXTRA_CFLAGS, \"$flag\""
+done
+EXTRA_CFLAGS="$EXTRA_CFLAGS]"
+
+EXTRA_LDFLAGS='[]'
+if [ -n "$PNG_LDFLAGS" ]; then
+    EXTRA_LDFLAGS='['
+    first=true
+    for flag in $PNG_LDFLAGS; do
+        if [ "$first" = true ]; then first=false; else EXTRA_LDFLAGS="$EXTRA_LDFLAGS, "; fi
+        EXTRA_LDFLAGS="$EXTRA_LDFLAGS\"$flag\""
+    done
+    EXTRA_LDFLAGS="$EXTRA_LDFLAGS]"
+fi
+
 # [4/5] Generate build files and build
 echo "[4/5] Generating build files with gn and building..."
-bin/gn gen out/Release --args='
+bin/gn gen out/Release --args="
   is_official_build=true
   is_debug=false
-  target_cpu="arm64"
-  target_os="mac"
+  target_cpu=\"arm64\"
+  target_os=\"mac\"
   skia_use_metal=true
   skia_enable_gpu=true
   skia_use_gl=false
@@ -113,8 +135,9 @@ bin/gn gen out/Release --args='
   skia_use_zlib=true
   skia_use_libjpeg_turbo_decode=false
   skia_use_libjpeg_turbo_encode=false
-  extra_cflags=["-mmacosx-version-min=13.0"]
-'
+  extra_cflags=$EXTRA_CFLAGS
+  extra_ldflags=$EXTRA_LDFLAGS
+"
 
 ninja -C out/Release skia
 
@@ -141,6 +164,14 @@ find src/gpu -name '*.h' -path '*/ganesh/*' | while read -r header; do
     mkdir -p "$(dirname "$dest")"
     cp "$header" "$dest"
 done
+
+# Copy modules/skcms headers (required by SkColorSpace.h)
+find modules/skcms -name '*.h' 2>/dev/null | while read -r header; do
+    dest="$OUTPUT_DIR/$header"
+    mkdir -p "$(dirname "$dest")"
+    cp "$header" "$dest"
+done
+
 
 echo ""
 echo "=== Skia build complete ==="

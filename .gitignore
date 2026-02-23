@@ -10,5 +10,5 @@ cmake-build-*/
 .vscode/
 
 # Skia build output
-libs/skia/
+libs/skia
 third_party/skia/
