@@ -14,6 +14,9 @@ cd "$PROJECT_ROOT"
 echo "=== Drem Canvas Bootstrap ==="
 echo ""
 
+# Detect OS
+OS="$(uname -s)"
+
 # ── 1. Check system prerequisites ──────────────────────────────────────────
 
 echo "[1/5] Checking system prerequisites..."
@@ -26,7 +29,6 @@ if command -v cmake &>/dev/null; then
     cmake_major="${cmake_ver%%.*}"
     cmake_minor="${cmake_ver#*.}"; cmake_minor="${cmake_minor%%.*}"
     if [ "$cmake_major" -lt 3 ] || { [ "$cmake_major" -eq 3 ] && [ "$cmake_minor" -lt 22 ]; }; then
-        # cmake major < 3, or cmake 3.x with minor < 22
         missing+=("cmake")
     fi
 else
@@ -37,24 +39,52 @@ command -v ninja &>/dev/null || missing+=("ninja")
 command -v python3 &>/dev/null || missing+=("python3")
 pkg-config --exists libpng 2>/dev/null || missing+=("libpng")
 
-if ! xcode-select -p &>/dev/null; then
-    echo "Error: Xcode command line tools not installed."
-    echo "  Run: xcode-select --install"
-    exit 1
-fi
+case "$OS" in
+    Darwin)
+        if ! xcode-select -p &>/dev/null; then
+            echo "Error: Xcode command line tools not installed."
+            echo "  Run: xcode-select --install"
+            exit 1
+        fi
 
-# Auto-install missing brew packages
-if [ ${#missing[@]} -gt 0 ]; then
-    if command -v brew &>/dev/null; then
-        echo "  Installing missing packages via Homebrew: ${missing[*]}"
-        brew install "${missing[@]}"
-    else
-        echo "Error: Missing prerequisites: ${missing[*]}"
-        echo "  Install Homebrew (https://brew.sh) or install manually:"
-        echo "    brew install ${missing[*]}"
+        # Auto-install missing brew packages
+        if [ ${#missing[@]} -gt 0 ]; then
+            if command -v brew &>/dev/null; then
+                echo "  Installing missing packages via Homebrew: ${missing[*]}"
+                brew install "${missing[@]}"
+            else
+                echo "Error: Missing prerequisites: ${missing[*]}"
+                echo "  Install Homebrew (https://brew.sh) or install manually:"
+                echo "    brew install ${missing[*]}"
+                exit 1
+            fi
+        fi
+        ;;
+    Linux)
+        # Additional Linux-specific checks
+        pkg-config --exists vulkan 2>/dev/null || missing+=("vulkan")
+        pkg-config --exists glfw3 2>/dev/null || missing+=("glfw3")
+        pkg-config --exists fontconfig 2>/dev/null || missing+=("fontconfig")
+        pkg-config --exists alsa 2>/dev/null || missing+=("alsa")
+
+        if [ ${#missing[@]} -gt 0 ]; then
+            echo "Error: Missing prerequisites: ${missing[*]}"
+            echo ""
+            echo "  Install on Debian/Ubuntu:"
+            echo "    sudo apt install cmake ninja-build python3 libpng-dev \\"
+            echo "        libvulkan-dev libglfw3-dev libfontconfig-dev libasound2-dev"
+            echo ""
+            echo "  Install on Fedora:"
+            echo "    sudo dnf install cmake ninja-build python3 libpng-devel \\"
+            echo "        vulkan-devel glfw-devel fontconfig-devel alsa-lib-devel"
+            exit 1
+        fi
+        ;;
+    *)
+        echo "Error: Unsupported OS: $OS"
         exit 1
-    fi
-fi
+        ;;
+esac
 
 echo "  All system prerequisites satisfied."
 
@@ -131,6 +161,15 @@ echo "[5/5] Bootstrap complete!"
 echo ""
 echo "  Next steps:"
 echo "    cmake --build --preset release"
-echo '    open "build/DremCanvas_artefacts/Release/Drem Canvas.app"'
+
+case "$OS" in
+    Darwin)
+        echo '    open "build/DremCanvas_artefacts/Release/Drem Canvas.app"'
+        ;;
+    Linux)
+        echo '    ./build/DremCanvas_artefacts/Release/DremCanvas'
+        ;;
+esac
+
 echo ""
 echo "  Check status anytime with: scripts/check_deps.sh"

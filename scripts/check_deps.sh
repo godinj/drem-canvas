@@ -7,6 +7,9 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# Detect OS
+OS="$(uname -s)"
+
 ok=0
 fail=0
 
@@ -48,9 +51,26 @@ check "python3" $?
 pkg-config --exists libpng 2>/dev/null
 check "libpng (pkg-config)" $?
 
-# Xcode command line tools
-xcode-select -p &>/dev/null
-check "xcode-select (CLI tools)" $?
+# Platform-specific checks
+case "$OS" in
+    Darwin)
+        xcode-select -p &>/dev/null
+        check "xcode-select (CLI tools)" $?
+        ;;
+    Linux)
+        pkg-config --exists vulkan 2>/dev/null
+        check "vulkan (pkg-config)" $?
+
+        pkg-config --exists glfw3 2>/dev/null
+        check "glfw3 (pkg-config)" $?
+
+        pkg-config --exists fontconfig 2>/dev/null
+        check "fontconfig (pkg-config)" $?
+
+        pkg-config --exists alsa 2>/dev/null
+        check "alsa (pkg-config)" $?
+        ;;
+esac
 
 # JUCE submodule
 if [ -f "$PROJECT_ROOT/libs/JUCE/CMakeLists.txt" ]; then

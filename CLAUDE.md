@@ -34,22 +34,49 @@ Check dependency status:
 scripts/check_deps.sh
 ```
 
-Run:
+Run (macOS):
 
 ```bash
 open "build/DremCanvas_artefacts/Release/Drem Canvas.app"
 ```
 
+Run (Linux):
+
+```bash
+./build/DremCanvas_artefacts/Release/DremCanvas
+```
+
+### Linux Dependencies
+
+Install before running `scripts/bootstrap.sh`:
+
+Debian/Ubuntu:
+```bash
+sudo apt install cmake ninja-build python3 libpng-dev \
+    libvulkan-dev libglfw3-dev libfontconfig-dev libasound2-dev
+```
+
+Fedora:
+```bash
+sudo dnf install cmake ninja-build python3 libpng-devel \
+    vulkan-devel glfw-devel fontconfig-devel alsa-lib-devel
+```
+
 ## Architecture
 
 - **C++17** with **JUCE 8** framework, **yaml-cpp** for serialization
+- **GPU rendering**: Skia + Metal (macOS) / Skia + Vulkan (Linux)
+- **Windowing**: Native Cocoa/MTKView (macOS) / GLFW 3 (Linux)
 - Namespace: `dc`
 - `src/engine/` — Real-time audio (never allocates or locks on audio thread)
 - `src/model/` — Data model using JUCE `ValueTree` (message thread only)
 - `src/gui/` — Presentational components observing model state
 - `src/vim/` — Vim modal navigation (KeyListener intercepting before child widgets)
-- `src/plugins/` — VST3/AU plugin hosting
+- `src/plugins/` — VST3/AU plugin hosting (AU on macOS only)
 - `src/utils/` — Helpers (undo, audio file utils)
+- `src/platform/` — macOS native layer (`.mm` files)
+- `src/platform/linux/` — Linux platform layer (GLFW, Vulkan, zenity dialogs)
+- `src/graphics/rendering/GpuBackend.h` — Abstract GPU interface (MetalBackend / VulkanBackend)
 
 ## Key Patterns
 
@@ -120,7 +147,8 @@ double timeInSeconds = (double(mouseX - headerWidth) + scrollOffset) / pixelsPer
 3. `scripts/check_deps.sh` exits 0 with all `[OK]`
 4. In worktree context, `ls -la libs/skia` shows symlink to shared cache
 5. `libs/JUCE/CMakeLists.txt` exists
-6. App launches without crash: `open "build/DremCanvas_artefacts/Release/Drem Canvas.app"`
+6. macOS: App launches without crash: `open "build/DremCanvas_artefacts/Release/Drem Canvas.app"`
+7. Linux: App launches without crash: `./build/DremCanvas_artefacts/Release/DremCanvas`
 
 ## Current State
 

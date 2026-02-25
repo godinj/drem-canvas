@@ -359,8 +359,8 @@ void VimEngine::jumpToSessionEnd()
         for (int c = 0; c < track.getNumClips(); ++c)
         {
             auto clipState = track.getClip (c);
-            auto start = static_cast<int64_t> (clipState.getProperty (IDs::startPosition, 0));
-            auto length = static_cast<int64_t> (clipState.getProperty (IDs::length, 0));
+            auto start = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+            auto length = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
             maxEnd = std::max (maxEnd, start + length);
         }
     }
@@ -447,7 +447,7 @@ void VimEngine::pasteBeforePlayhead()
     auto& um = project.getUndoManager();
 
     auto clipData = context.getClipboard().createCopy();
-    auto length = static_cast<int64_t> (clipData.getProperty (IDs::length, 0));
+    auto length = static_cast<int64_t> (static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
     auto pastePos = transport.getPositionInSamples() - length;
     if (pastePos < 0) pastePos = 0;
 
@@ -472,8 +472,8 @@ void VimEngine::splitRegionAtPlayhead()
         return;
 
     auto clipState = track.getClip (clipIdx);
-    auto clipStart  = static_cast<int64_t> (clipState.getProperty (IDs::startPosition, 0));
-    auto clipLength = static_cast<int64_t> (clipState.getProperty (IDs::length, 0));
+    auto clipStart  = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+    auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
     auto playhead   = transport.getPositionInSamples();
 
     if (playhead <= clipStart || playhead >= clipStart + clipLength)

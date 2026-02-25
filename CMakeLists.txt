@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.22)
-project(DremCanvas VERSION 0.1.0 LANGUAGES C CXX OBJCXX)
+
+if(APPLE)
+    project(DremCanvas VERSION 0.1.0 LANGUAGES C CXX OBJCXX)
+else()
+    project(DremCanvas VERSION 0.1.0 LANGUAGES C CXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,14 +34,22 @@ endif()
 # ─── libpng (required by Skia) ────────────────────────────────
 find_package(PNG REQUIRED)
 
-# ─── macOS Frameworks ─────────────────────────────────────────
-find_library(METAL_FRAMEWORK Metal)
-find_library(METALKIT_FRAMEWORK MetalKit)
-find_library(QUARTZCORE_FRAMEWORK QuartzCore)
-find_library(COCOA_FRAMEWORK Cocoa)
-find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
-find_library(CORETEXT_FRAMEWORK CoreText)
-find_library(COREGRAPHICS_FRAMEWORK CoreGraphics)
+# ─── Platform-specific dependencies ──────────────────────────
+if(APPLE)
+    find_library(METAL_FRAMEWORK Metal)
+    find_library(METALKIT_FRAMEWORK MetalKit)
+    find_library(QUARTZCORE_FRAMEWORK QuartzCore)
+    find_library(COCOA_FRAMEWORK Cocoa)
+    find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
+    find_library(CORETEXT_FRAMEWORK CoreText)
+    find_library(COREGRAPHICS_FRAMEWORK CoreGraphics)
+elseif(UNIX AND NOT APPLE)
+    find_package(Vulkan REQUIRED)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GLFW REQUIRED glfw3)
+    pkg_check_modules(FONTCONFIG REQUIRED fontconfig)
+    find_package(Threads REQUIRED)
+endif()
 
 juce_add_gui_app(DremCanvas
     PRODUCT_NAME "Drem Canvas"
@@ -48,6 +61,7 @@ juce_add_gui_app(DremCanvas
 
 juce_generate_juce_header(DremCanvas)
 
+# ─── Common sources ──────────────────────────────────────────
 target_sources(DremCanvas PRIVATE
     # Application entry point
     src/Main.cpp
@@ -76,8 +90,6 @@ target_sources(DremCanvas PRIVATE
     src/plugins/PluginHost.cpp
     src/plugins/PluginWindowManager.cpp
 
-    # (GUI layer removed — replaced by graphics engine + ui/ widgets)
-
     # Vim
     src/vim/VimContext.cpp
     src/vim/VimEngine.cpp
@@ -96,12 +108,7 @@ target_sources(DremCanvas PRIVATE
     src/model/serialization/SessionWriter.cpp
     src/model/serialization/SessionReader.cpp
 
-    # ─── Graphics Engine (NEW) ────────────────────────────────
-
-    # Platform - macOS native layer
-    src/platform/NativeWindow.mm
-    src/platform/MetalView.mm
-    src/platform/EventBridge.mm
+    # ─── Graphics Engine ───────────────────────────────────────
 
     # Graphics - Core
     src/graphics/core/Node.cpp
@@ -109,7 +116,6 @@ target_sources(DremCanvas PRIVATE
     src/graphics/core/EventDispatch.cpp
 
     # Graphics - Rendering
-    src/graphics/rendering/MetalBackend.mm
     src/graphics/rendering/Canvas.cpp
     src/graphics/rendering/Renderer.cpp
 
@@ -164,10 +170,24 @@ target_sources(DremCanvas PRIVATE
 
     # UI - Browser
     src/ui/browser/BrowserWidget.cpp
-
-    # Platform - Dialogs
-    src/platform/NativeDialogs.mm
 )
+
+# ─── Platform-specific sources ────────────────────────────────
+if(APPLE)
+    target_sources(DremCanvas PRIVATE
+        src/platform/NativeWindow.mm
+        src/platform/MetalView.mm
+        src/platform/EventBridge.mm
+        src/platform/NativeDialogs.mm
+        src/graphics/rendering/MetalBackend.mm
+    )
+elseif(UNIX AND NOT APPLE)
+    target_sources(DremCanvas PRIVATE
+        src/platform/linux/GlfwWindow.cpp
+        src/platform/linux/VulkanBackend.cpp
+        src/platform/linux/NativeDialogs.cpp
+    )
+endif()
 
 target_include_directories(DremCanvas PRIVATE
     src
@@ -175,29 +195,53 @@ target_include_directories(DremCanvas PRIVATE
     "${SKIA_DIR}"
 )
 
-# ObjC++ compile flags for .mm files
-set_source_files_properties(
-    src/platform/NativeWindow.mm
-    src/platform/MetalView.mm
-    src/platform/EventBridge.mm
-    src/platform/NativeDialogs.mm
-    src/graphics/rendering/MetalBackend.mm
-    PROPERTIES
-    COMPILE_FLAGS "-fobjc-arc"
-)
+# ─── Platform-specific include directories ────────────────────
+if(UNIX AND NOT APPLE)
+    target_include_directories(DremCanvas PRIVATE
+        ${GLFW_INCLUDE_DIRS}
+        ${FONTCONFIG_INCLUDE_DIRS}
+    )
+endif()
 
+# ObjC++ compile flags for .mm files (Apple only)
+if(APPLE)
+    set_source_files_properties(
+        src/platform/NativeWindow.mm
+        src/platform/MetalView.mm
+        src/platform/EventBridge.mm
+        src/platform/NativeDialogs.mm
+        src/graphics/rendering/MetalBackend.mm
+        PROPERTIES
+        COMPILE_FLAGS "-fobjc-arc"
+    )
+endif()
+
+# ─── Compile definitions ─────────────────────────────────────
 target_compile_definitions(DremCanvas PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_PLUGINHOST_VST3=1
-    JUCE_PLUGINHOST_AU=1
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:DremCanvas,JUCE_PRODUCT_NAME>"
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:DremCanvas,JUCE_VERSION>"
-    SK_METAL=1
     SK_GANESH=1
 )
 
+if(APPLE)
+    target_compile_definitions(DremCanvas PRIVATE
+        SK_METAL=1
+        JUCE_PLUGINHOST_AU=1
+    )
+elseif(UNIX AND NOT APPLE)
+    target_compile_definitions(DremCanvas PRIVATE
+        SK_VULKAN=1
+        JUCE_PLUGINHOST_AU=0
+        JUCE_ALSA=1
+        JUCE_JACK=0
+    )
+endif()
+
+# ─── Link libraries ──────────────────────────────────────────
 target_link_libraries(DremCanvas PRIVATE
     juce::juce_audio_basics
     juce::juce_audio_devices
@@ -213,11 +257,23 @@ target_link_libraries(DremCanvas PRIVATE
     yaml-cpp::yaml-cpp
     ${SKIA_LIB}
     PNG::PNG
-    ${METAL_FRAMEWORK}
-    ${METALKIT_FRAMEWORK}
-    ${QUARTZCORE_FRAMEWORK}
-    ${COCOA_FRAMEWORK}
-    ${COREFOUNDATION_FRAMEWORK}
-    ${CORETEXT_FRAMEWORK}
-    ${COREGRAPHICS_FRAMEWORK}
 )
+
+if(APPLE)
+    target_link_libraries(DremCanvas PRIVATE
+        ${METAL_FRAMEWORK}
+        ${METALKIT_FRAMEWORK}
+        ${QUARTZCORE_FRAMEWORK}
+        ${COCOA_FRAMEWORK}
+        ${COREFOUNDATION_FRAMEWORK}
+        ${CORETEXT_FRAMEWORK}
+        ${COREGRAPHICS_FRAMEWORK}
+    )
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(DremCanvas PRIVATE
+        Vulkan::Vulkan
+        ${GLFW_LIBRARIES}
+        ${FONTCONFIG_LIBRARIES}
+        Threads::Threads
+    )
+endif()

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Build Skia for macOS arm64 with Metal support
+# Build Skia with GPU support (Metal on macOS, Vulkan on Linux)
 # Output: libs/skia/{include,lib/libskia.a}
 #
 # Usage:
@@ -41,6 +41,9 @@ for cmd in python3 ninja git; do
     fi
 done
 
+# Detect OS
+OS="$(uname -s)"
+
 # Pinned Skia milestone
 SKIA_BRANCH="chrome/m131"
 
@@ -54,7 +57,18 @@ if [ -d "$PROJECT_ROOT/third_party/skia/.git" ]; then
     echo "Using existing Skia source at $SKIA_DIR"
 fi
 
-echo "=== Building Skia for macOS arm64 + Metal ==="
+case "$OS" in
+    Darwin)
+        echo "=== Building Skia for macOS arm64 + Metal ==="
+        ;;
+    Linux)
+        echo "=== Building Skia for Linux $(uname -m) + Vulkan ==="
+        ;;
+    *)
+        echo "Error: Unsupported OS: $OS"
+        exit 1
+        ;;
+esac
 echo "  Source:  $SKIA_DIR"
 echo "  Output:  $OUTPUT_DIR"
 echo ""
@@ -91,35 +105,83 @@ fi
 PNG_CFLAGS="$(pkg-config --cflags libpng 2>/dev/null || true)"
 PNG_LDFLAGS="$(pkg-config --libs-only-L libpng 2>/dev/null || true)"
 
-# Build extra_cflags array
-EXTRA_CFLAGS='["-mmacosx-version-min=13.0"'
-for flag in $PNG_CFLAGS; do
-    EXTRA_CFLAGS="$EXTRA_CFLAGS, \"$flag\""
-done
-EXTRA_CFLAGS="$EXTRA_CFLAGS]"
+# ─── Platform-specific GN args ───────────────────────────────────────────────
 
-EXTRA_LDFLAGS='[]'
-if [ -n "$PNG_LDFLAGS" ]; then
-    EXTRA_LDFLAGS='['
-    first=true
-    for flag in $PNG_LDFLAGS; do
-        if [ "$first" = true ]; then first=false; else EXTRA_LDFLAGS="$EXTRA_LDFLAGS, "; fi
-        EXTRA_LDFLAGS="$EXTRA_LDFLAGS\"$flag\""
-    done
-    EXTRA_LDFLAGS="$EXTRA_LDFLAGS]"
-fi
+case "$OS" in
+    Darwin)
+        TARGET_CPU="arm64"
+        TARGET_OS="mac"
+
+        EXTRA_CFLAGS='["-mmacosx-version-min=13.0"'
+        for flag in $PNG_CFLAGS; do
+            EXTRA_CFLAGS="$EXTRA_CFLAGS, \"$flag\""
+        done
+        EXTRA_CFLAGS="$EXTRA_CFLAGS]"
+
+        EXTRA_LDFLAGS='[]'
+        if [ -n "$PNG_LDFLAGS" ]; then
+            EXTRA_LDFLAGS='['
+            first=true
+            for flag in $PNG_LDFLAGS; do
+                if [ "$first" = true ]; then first=false; else EXTRA_LDFLAGS="$EXTRA_LDFLAGS, "; fi
+                EXTRA_LDFLAGS="$EXTRA_LDFLAGS\"$flag\""
+            done
+            EXTRA_LDFLAGS="$EXTRA_LDFLAGS]"
+        fi
+
+        PLATFORM_ARGS="
+          target_os=\"mac\"
+          target_cpu=\"$TARGET_CPU\"
+          skia_use_metal=true
+          skia_use_vulkan=false
+          skia_use_fontconfig=false
+          extra_cflags=$EXTRA_CFLAGS
+          extra_ldflags=$EXTRA_LDFLAGS
+        "
+        ;;
+    Linux)
+        # Detect CPU architecture
+        case "$(uname -m)" in
+            x86_64)  TARGET_CPU="x64" ;;
+            aarch64) TARGET_CPU="arm64" ;;
+            *)       TARGET_CPU="x64" ;;
+        esac
+
+        EXTRA_CFLAGS='['
+        first=true
+        for flag in $PNG_CFLAGS; do
+            if [ "$first" = true ]; then first=false; else EXTRA_CFLAGS="$EXTRA_CFLAGS, "; fi
+            EXTRA_CFLAGS="$EXTRA_CFLAGS\"$flag\""
+        done
+        EXTRA_CFLAGS="$EXTRA_CFLAGS]"
+
+        EXTRA_LDFLAGS='['
+        first=true
+        for flag in $PNG_LDFLAGS; do
+            if [ "$first" = true ]; then first=false; else EXTRA_LDFLAGS="$EXTRA_LDFLAGS, "; fi
+            EXTRA_LDFLAGS="$EXTRA_LDFLAGS\"$flag\""
+        done
+        EXTRA_LDFLAGS="$EXTRA_LDFLAGS]"
+
+        PLATFORM_ARGS="
+          target_os=\"linux\"
+          target_cpu=\"$TARGET_CPU\"
+          skia_use_metal=false
+          skia_use_vulkan=true
+          skia_use_fontconfig=true
+          extra_cflags=$EXTRA_CFLAGS
+          extra_ldflags=$EXTRA_LDFLAGS
+        "
+        ;;
+esac
 
 # [4/5] Generate build files and build
 echo "[4/5] Generating build files with gn and building..."
 bin/gn gen out/Release --args="
   is_official_build=true
   is_debug=false
-  target_cpu=\"arm64\"
-  target_os=\"mac\"
-  skia_use_metal=true
   skia_enable_gpu=true
   skia_use_gl=false
-  skia_use_vulkan=false
   skia_use_dawn=false
   skia_enable_skottie=false
   skia_enable_pdf=false
@@ -135,8 +197,7 @@ bin/gn gen out/Release --args="
   skia_use_zlib=true
   skia_use_libjpeg_turbo_decode=false
   skia_use_libjpeg_turbo_encode=false
-  extra_cflags=$EXTRA_CFLAGS
-  extra_ldflags=$EXTRA_LDFLAGS
+  $PLATFORM_ARGS
 "
 
 ninja -C out/Release skia
@@ -158,12 +219,21 @@ find include -name '*.h' | while read -r header; do
     cp "$header" "$dest"
 done
 
-# Copy gpu/ganesh headers needed for Metal backend
+# Copy gpu/ganesh headers needed for Metal/Vulkan backend
 find src/gpu -name '*.h' -path '*/ganesh/*' | while read -r header; do
     dest="$OUTPUT_DIR/$header"
     mkdir -p "$(dirname "$dest")"
     cp "$header" "$dest"
 done
+
+# Copy Vulkan-specific Skia headers (Linux)
+if [ "$OS" = "Linux" ]; then
+    find src/gpu -name '*.h' -path '*/vk/*' 2>/dev/null | while read -r header; do
+        dest="$OUTPUT_DIR/$header"
+        mkdir -p "$(dirname "$dest")"
+        cp "$header" "$dest"
+    done
+fi
 
 # Copy modules/skcms headers (required by SkColorSpace.h)
 find modules/skcms -name '*.h' 2>/dev/null | while read -r header; do
