@@ -8,7 +8,7 @@ namespace dc
 namespace gfx
 {
 
-Renderer::Renderer (MetalBackend& b)
+Renderer::Renderer (GpuBackend& b)
     : backend (b)
 {
 }

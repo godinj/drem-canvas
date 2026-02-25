@@ -5,7 +5,7 @@ namespace dc
 namespace gfx
 {
 
-TextureCache::TextureCache (MetalBackend& b)
+TextureCache::TextureCache (GpuBackend& b)
     : backend (b)
 {
 }

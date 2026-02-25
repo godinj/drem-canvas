@@ -3,7 +3,7 @@
 #include "graphics/core/Node.h"
 #include "graphics/core/Widget.h"
 #include "Canvas.h"
-#include "MetalBackend.h"
+#include "GpuBackend.h"
 #include <vector>
 
 namespace dc
@@ -14,7 +14,7 @@ namespace gfx
 class Renderer
 {
 public:
-    explicit Renderer (MetalBackend& backend);
+    explicit Renderer (GpuBackend& backend);
 
     // Called from MTKView's drawInMTKView: callback
     void renderFrame (Widget& rootWidget);
@@ -23,7 +23,7 @@ public:
     void addAnimatingWidget (Widget* w);
     void removeAnimatingWidget (Widget* w);
 
-    MetalBackend& getBackend() { return backend; }
+    GpuBackend& getBackend() { return backend; }
 
     // Frame stats
     double getLastFrameTimeMs() const { return lastFrameTimeMs; }
@@ -41,7 +41,7 @@ private:
     bool isTreeDirty (const Node& node) const;
     bool hasActiveAnimations() const;
 
-    MetalBackend& backend;
+    GpuBackend& backend;
     std::vector<Widget*> animatingWidgets;
     double lastFrameTimeMs = 0.0;
     int frameCount = 0;

@@ -1,8 +1,6 @@
 #pragma once
 
-#include "include/core/SkSurface.h"
-#include "include/core/SkCanvas.h"
-#include "include/gpu/ganesh/GrDirectContext.h"
+#include "GpuBackend.h"
 
 namespace dc
 {
@@ -12,26 +10,22 @@ namespace platform { class MetalView; }
 namespace gfx
 {
 
-class MetalBackend
+class MetalBackend : public GpuBackend
 {
 public:
     explicit MetalBackend (platform::MetalView& metalView);
-    ~MetalBackend();
+    ~MetalBackend() override;
 
-    // Call at start of each frame — wraps current drawable into SkSurface
-    sk_sp<SkSurface> beginFrame();
+    sk_sp<SkSurface> beginFrame() override;
+    void endFrame (sk_sp<SkSurface>& surface) override;
 
-    // Call at end of frame — flushes Skia and presents drawable
-    void endFrame (sk_sp<SkSurface>& surface);
+    GrDirectContext* getContext() const override { return grContext.get(); }
 
-    GrDirectContext* getContext() const { return grContext.get(); }
+    int getWidth() const override;
+    int getHeight() const override;
+    float getScale() const override;
 
-    int getWidth() const;
-    int getHeight() const;
-    float getScale() const;
-
-    // Create offscreen surface for texture caching
-    sk_sp<SkSurface> createOffscreenSurface (int width, int height);
+    sk_sp<SkSurface> createOffscreenSurface (int width, int height) override;
 
 private:
     platform::MetalView& metalView;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "graphics/core/Node.h"
-#include "MetalBackend.h"
+#include "GpuBackend.h"
 
 namespace dc
 {
@@ -11,7 +11,7 @@ namespace gfx
 class TextureCache
 {
 public:
-    explicit TextureCache (MetalBackend& backend);
+    explicit TextureCache (GpuBackend& backend);
 
     // Enable caching for a node
     void enableCaching (Node& node);
@@ -33,7 +33,7 @@ public:
     size_t getMemoryUsageBytes() const { return memoryUsageBytes; }
 
 private:
-    MetalBackend& backend;
+    GpuBackend& backend;
     int cachedCount = 0;
     size_t memoryUsageBytes = 0;
 };
