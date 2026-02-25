@@ -4,6 +4,7 @@
 
 #include <vulkan/vulkan.h>
 #include <vector>
+#include "include/gpu/vk/VulkanExtensions.h"
 
 struct GLFWwindow;
 
@@ -63,7 +64,11 @@ private:
     VkSemaphore renderFinishedSemaphore = VK_NULL_HANDLE;
     VkFence frameFence = VK_NULL_HANDLE;
 
+    // Device features (kept alive for Skia backend context)
+    VkPhysicalDeviceFeatures deviceFeatures{};
+
     // Skia
+    skgpu::VulkanExtensions vkExtensions;
     sk_sp<GrDirectContext> grContext;
 };
 

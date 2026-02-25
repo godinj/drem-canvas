@@ -11,6 +11,7 @@
 #include "include/gpu/ganesh/vk/GrVkTypes.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/gpu/vk/VulkanBackendContext.h"
+#include "include/gpu/vk/VulkanExtensions.h"
 #include "include/gpu/vk/VulkanTypes.h"
 
 #include <stdexcept>
@@ -124,12 +125,16 @@ void VulkanBackend::initVulkan()
 
     const char* deviceExtensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
+    // Query and enable device features so Skia knows what the GPU supports
+    vkGetPhysicalDeviceFeatures (physicalDevice, &deviceFeatures);
+
     VkDeviceCreateInfo deviceInfo{};
     deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     deviceInfo.queueCreateInfoCount = 1;
     deviceInfo.pQueueCreateInfos = &queueCreateInfo;
     deviceInfo.enabledExtensionCount = 1;
     deviceInfo.ppEnabledExtensionNames = deviceExtensions;
+    deviceInfo.pEnabledFeatures = &deviceFeatures;
 
     if (vkCreateDevice (physicalDevice, &deviceInfo, nullptr, &device) != VK_SUCCESS)
         throw std::runtime_error ("Failed to create logical device");
@@ -148,6 +153,18 @@ void VulkanBackend::initVulkan()
     vkCreateFence (device, &fenceInfo, nullptr, &frameFence);
 
     // ── Skia GrDirectContext ─────────────────────────────────────────────────
+    auto getProc = [](const char* name, VkInstance inst, VkDevice dev) -> PFN_vkVoidFunction
+    {
+        if (dev != VK_NULL_HANDLE)
+            return vkGetDeviceProcAddr (dev, name);
+        return vkGetInstanceProcAddr (inst, name);
+    };
+
+    // Tell Skia which extensions are enabled
+    vkExtensions.init (getProc, instance, physicalDevice,
+                       glfwExtCount, glfwExtensions,
+                       1, deviceExtensions);
+
     skgpu::VulkanBackendContext backendCtx{};
     backendCtx.fInstance = instance;
     backendCtx.fPhysicalDevice = physicalDevice;
@@ -155,13 +172,9 @@ void VulkanBackend::initVulkan()
     backendCtx.fQueue = graphicsQueue;
     backendCtx.fGraphicsQueueIndex = graphicsQueueIndex;
     backendCtx.fMaxAPIVersion = VK_API_VERSION_1_1;
-    backendCtx.fVkExtensions = nullptr;
-    backendCtx.fGetProc = [](const char* name, VkInstance inst, VkDevice dev) -> PFN_vkVoidFunction
-    {
-        if (dev != VK_NULL_HANDLE)
-            return vkGetDeviceProcAddr (dev, name);
-        return vkGetInstanceProcAddr (inst, name);
-    };
+    backendCtx.fVkExtensions = &vkExtensions;
+    backendCtx.fDeviceFeatures = &deviceFeatures;
+    backendCtx.fGetProc = getProc;
 
     grContext = GrDirectContexts::MakeVulkan (backendCtx);
     if (!grContext)
@@ -202,7 +215,9 @@ void VulkanBackend::createSwapchain()
     swapInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     swapInfo.imageExtent = extent;
     swapInfo.imageArrayLayers = 1;
-    swapInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    swapInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                        | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                        | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     swapInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     swapInfo.preTransform = caps.currentTransform;
     swapInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -246,17 +261,18 @@ void VulkanBackend::resize (int newWidth, int newHeight, float newScale)
 
 sk_sp<SkSurface> VulkanBackend::beginFrame()
 {
-    vkWaitForFences (device, 1, &frameFence, VK_TRUE, UINT64_MAX);
-    vkResetFences (device, 1, &frameFence);
-
+    // Acquire next swapchain image, using fence for CPU-side sync
     VkResult result = vkAcquireNextImageKHR (device, swapchain, UINT64_MAX,
-                                              imageAvailableSemaphore, VK_NULL_HANDLE,
+                                              VK_NULL_HANDLE, frameFence,
                                               &currentImageIndex);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         createSwapchain();
         return nullptr;
     }
+
+    vkWaitForFences (device, 1, &frameFence, VK_TRUE, UINT64_MAX);
+    vkResetFences (device, 1, &frameFence);
 
     // Get framebuffer dimensions
     int fbWidth, fbHeight;
@@ -268,22 +284,22 @@ sk_sp<SkSurface> VulkanBackend::beginFrame()
     imageInfo.fImageTiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.fImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.fFormat = swapchainFormat;
-    imageInfo.fImageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageInfo.fImageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                               | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                               | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     imageInfo.fSampleCount = 1;
     imageInfo.fLevelCount = 1;
     imageInfo.fCurrentQueueFamily = graphicsQueueIndex;
 
     auto backendRT = GrBackendRenderTargets::MakeVk (fbWidth, fbHeight, imageInfo);
 
-    auto surface = SkSurfaces::WrapBackendRenderTarget (
+    return SkSurfaces::WrapBackendRenderTarget (
         grContext.get(),
         backendRT,
         kTopLeft_GrSurfaceOrigin,
         kBGRA_8888_SkColorType,
         nullptr,
         nullptr);
-
-    return surface;
 }
 
 void VulkanBackend::endFrame (sk_sp<SkSurface>& surface)
@@ -291,15 +307,15 @@ void VulkanBackend::endFrame (sk_sp<SkSurface>& surface)
     if (!surface)
         return;
 
-    // Flush Skia rendering
-    grContext->flushAndSubmit (surface.get(), GrSyncCpu::kNo);
+    // Flush Skia rendering and wait for GPU to finish
+    grContext->flushAndSubmit (surface.get(), GrSyncCpu::kYes);
     surface.reset();
 
-    // Present
+    // Present — no wait semaphores needed since GPU work is already complete
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
+    presentInfo.waitSemaphoreCount = 0;
+    presentInfo.pWaitSemaphores = nullptr;
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &swapchain;
     presentInfo.pImageIndices = &currentImageIndex;

@@ -23,7 +23,18 @@ class DremCanvasApplication : public juce::JUCEApplication
 public:
     const juce::String getApplicationName() override    { return JUCE_APPLICATION_NAME_STRING; }
     const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; }
-    bool moreThanOneInstanceAllowed() override           { return false; }
+
+    // JUCE's X11-based instance detection is unreliable on Wayland —
+    // it falsely detects a running instance and silently exits.
+    // Disable it on Linux; GLFW manages the actual window.
+    bool moreThanOneInstanceAllowed() override
+    {
+#if defined(__linux__)
+        return true;
+#else
+        return false;
+#endif
+    }
 
     void initialise (const juce::String& /*commandLine*/) override
     {
