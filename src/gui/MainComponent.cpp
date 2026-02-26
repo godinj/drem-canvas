@@ -646,25 +646,32 @@ void MainComponent::loadSession()
             if (dir == juce::File() || ! dir.isDirectory())
                 return;
 
-            // Remove listeners from old nodes before replacing state
-            project.getState().getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
-            project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
+            // Save ref to old state so we can detach widget listeners after replacement
+            auto oldState = project.getState();
+            oldState.getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
+            oldState.getChildWithName (IDs::TRACKS).removeListener (this);
+            oldState.getChildWithName (IDs::TRACKS).removeListener (arrangementView.get());
+            oldState.getChildWithName (IDs::TRACKS).removeListener (mixerPanel.get());
 
             if (project.loadSessionFromDirectory (dir))
             {
                 currentSessionDirectory = dir;
 
-                // Re-add listeners on the new nodes
+                // Re-add listeners on the new state tree
                 project.getState().getChildWithName (IDs::TRACKS).addListener (this);
                 project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+                project.getState().getChildWithName (IDs::TRACKS).addListener (arrangementView.get());
+                project.getState().getChildWithName (IDs::TRACKS).addListener (mixerPanel.get());
                 rebuildAudioGraph();
                 syncSequencerFromModel();
             }
             else
             {
-                // Restore listeners on old (unchanged) nodes
-                project.getState().getChildWithName (IDs::TRACKS).addListener (this);
-                project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+                // Restore listeners on old (unchanged) state
+                oldState.getChildWithName (IDs::TRACKS).addListener (this);
+                oldState.getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+                oldState.getChildWithName (IDs::TRACKS).addListener (arrangementView.get());
+                oldState.getChildWithName (IDs::TRACKS).addListener (mixerPanel.get());
 
                 juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
                     "Load Error", "Failed to load session from:\n" + dir.getFullPathName());

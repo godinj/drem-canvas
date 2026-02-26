@@ -14,12 +14,19 @@ void NativeDialogs::showOpenPanel (const std::string& title,
     {
         NSOpenPanel* panel = [NSOpenPanel openPanel];
         [panel setTitle:[NSString stringWithUTF8String:title.c_str()]];
-        [panel setCanChooseFiles:YES];
-        [panel setCanChooseDirectories:NO];
         [panel setAllowsMultipleSelection:NO];
 
-        if (!fileTypes.empty())
+        if (fileTypes.empty())
         {
+            // No file types = directory selection mode (e.g. session load)
+            [panel setCanChooseFiles:NO];
+            [panel setCanChooseDirectories:YES];
+        }
+        else
+        {
+            [panel setCanChooseFiles:YES];
+            [panel setCanChooseDirectories:NO];
+
             NSMutableArray* types = [NSMutableArray array];
             for (const auto& type : fileTypes)
                 [types addObject:[NSString stringWithUTF8String:type.c_str()]];

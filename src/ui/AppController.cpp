@@ -1027,21 +1027,32 @@ void AppController::loadSession()
             if (! dir.isDirectory())
                 return;
 
-            project.getState().getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
-            project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
+            // Save ref to old state so we can detach listeners after replacement
+            auto oldState = project.getState();
+            oldState.getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
+            oldState.getChildWithName (IDs::TRACKS).removeListener (this);
+            oldState.removeListener (arrangementWidget.get());
+            oldState.removeListener (mixerWidget.get());
+            oldState.removeListener (sequencerWidget.get());
 
             if (project.loadSessionFromDirectory (dir))
             {
                 currentSessionDirectory = dir;
                 project.getState().getChildWithName (IDs::TRACKS).addListener (this);
                 project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+                project.getState().addListener (arrangementWidget.get());
+                project.getState().addListener (mixerWidget.get());
+                project.getState().addListener (sequencerWidget.get());
                 rebuildAudioGraph();
                 syncSequencerFromModel();
             }
             else
             {
-                project.getState().getChildWithName (IDs::TRACKS).addListener (this);
-                project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+                oldState.getChildWithName (IDs::TRACKS).addListener (this);
+                oldState.getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+                oldState.addListener (arrangementWidget.get());
+                oldState.addListener (mixerWidget.get());
+                oldState.addListener (sequencerWidget.get());
 
                 platform::NativeDialogs::showAlert ("Load Error",
                     "Failed to load session from:\n" + path);

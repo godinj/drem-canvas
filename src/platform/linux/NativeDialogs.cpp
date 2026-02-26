@@ -57,7 +57,12 @@ void NativeDialogs::showOpenPanel (const std::string& title,
     std::ostringstream cmd;
     cmd << "zenity --file-selection --title='" << shellEscape (title) << "'";
 
-    if (!fileTypes.empty())
+    if (fileTypes.empty())
+    {
+        // No file types = directory selection mode (e.g. session load)
+        cmd << " --directory";
+    }
+    else
     {
         cmd << " --file-filter='Supported files |";
         for (const auto& ext : fileTypes)
