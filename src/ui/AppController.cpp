@@ -387,6 +387,12 @@ void AppController::registerAllActions()
         { VimContext::Editor }
     });
 
+    actionRegistry.registerAction ({
+        "edit.duplicate", "Duplicate Selected Clip", "Edit", "D",
+        [this]() { vimEngine->duplicateSelectedClip(); },
+        { VimContext::Editor }
+    });
+
     // ─── File ────────────────────────────────────────────────
     actionRegistry.registerAction ({
         "file.save", "Save Session", "File", "",

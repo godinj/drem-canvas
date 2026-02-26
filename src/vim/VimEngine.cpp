@@ -226,6 +226,18 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
         return true;
     }
 
+    if (keyChar == 'D')
+    {
+        int count = getEffectiveCount();
+        resetCounts();
+        cancelOperator();
+
+        for (int i = 0; i < count; ++i)
+            duplicateSelectedClip();
+
+        return true;
+    }
+
     // Phase 7: Non-count actions — cancel any pending state
     if (isOperatorPending())
     {
@@ -504,6 +516,34 @@ void VimEngine::splitRegionAtPlayhead()
             + static_cast<juce::int64> (splitOffset), &um);
 
     track.getState().appendChild (newClip, &um);
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::duplicateSelectedClip()
+{
+    int trackIdx = arrangement.getSelectedTrackIndex();
+    if (trackIdx < 0 || trackIdx >= arrangement.getNumTracks())
+        return;
+
+    Track track = arrangement.getTrack (trackIdx);
+    int clipIdx = context.getSelectedClipIndex();
+
+    if (clipIdx < 0 || clipIdx >= track.getNumClips())
+        return;
+
+    auto clipState = track.getClip (clipIdx);
+    auto startPos = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+    auto length   = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+
+    ScopedTransaction txn (project.getUndoSystem(), "Duplicate Clip");
+    auto& um = project.getUndoManager();
+
+    auto newClip = clipState.createCopy();
+    newClip.setProperty (IDs::startPosition, static_cast<juce::int64> (startPos + length), &um);
+
+    track.getState().appendChild (newClip, &um);
+
+    context.setSelectedClipIndex (track.getNumClips() - 1);
     listeners.call (&Listener::vimContextChanged);
 }
 

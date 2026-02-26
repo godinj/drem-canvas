@@ -89,6 +89,7 @@ public:
     void pasteAfterPlayhead();
     void pasteBeforePlayhead();
     void splitRegionAtPlayhead();
+    void duplicateSelectedClip();
 
     // Track state
     void toggleMute();
