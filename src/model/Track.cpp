@@ -89,6 +89,16 @@ juce::ValueTree Track::addAudioClip (const juce::File& sourceFile, int64_t start
     return clip;
 }
 
+juce::ValueTree Track::addMidiClip (int64_t startPosition, int64_t length)
+{
+    juce::ValueTree clip (IDs::MIDI_CLIP);
+    clip.setProperty (IDs::startPosition, static_cast<juce::int64> (startPosition), nullptr);
+    clip.setProperty (IDs::length, static_cast<juce::int64> (length), nullptr);
+
+    state.appendChild (clip, nullptr);
+    return clip;
+}
+
 int Track::getNumClips() const
 {
     int count = 0;

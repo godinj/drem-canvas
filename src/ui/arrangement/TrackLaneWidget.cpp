@@ -2,6 +2,7 @@
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/FontManager.h"
 #include "model/Track.h"
+#include "model/Project.h"
 
 namespace dc
 {
@@ -74,8 +75,6 @@ void TrackLaneWidget::resized()
 void TrackLaneWidget::setPixelsPerSecond (double pps)
 {
     pixelsPerSecond = pps;
-    for (auto& cv : clipViews)
-        cv->setPixelsPerSecond (pps);
     resized();
     repaint();
 }
@@ -83,8 +82,6 @@ void TrackLaneWidget::setPixelsPerSecond (double pps)
 void TrackLaneWidget::setSampleRate (double sr)
 {
     sampleRate = sr;
-    for (auto& cv : clipViews)
-        cv->setSampleRate (sr);
     resized();
     repaint();
 }
@@ -120,34 +117,47 @@ void TrackLaneWidget::rebuildClipViews()
     for (int i = 0; i < trackState.getNumChildren(); ++i)
     {
         auto child = trackState.getChild (i);
-        if (child.getType().toString() != "AUDIO_CLIP")
+        bool isAudio = child.hasType (IDs::AUDIO_CLIP);
+        bool isMidi  = child.hasType (IDs::MIDI_CLIP);
+
+        if (! isAudio && ! isMidi)
             continue;
 
-        auto startPos = static_cast<int64_t> (static_cast<juce::int64> (child.getProperty ("startPosition", 0)));
-        auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (child.getProperty ("length", 0)));
+        auto startPos = static_cast<int64_t> (static_cast<juce::int64> (child.getProperty (IDs::startPosition, 0)));
+        auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (child.getProperty (IDs::length, 0)));
 
         float x = static_cast<float> ((static_cast<double> (startPos) / sampleRate) * pixelsPerSecond) + headerWidth;
         float w = static_cast<float> ((static_cast<double> (clipLength) / sampleRate) * pixelsPerSecond);
 
-        // Create waveform cache and load audio data
-        auto cache = std::make_unique<gfx::WaveformCache>();
-        juce::String sourceFilePath = child.getProperty ("sourceFile", "");
-        if (sourceFilePath.isNotEmpty())
+        std::unique_ptr<gfx::Widget> widget;
+
+        if (isAudio)
         {
-            juce::File sourceFile (sourceFilePath);
-            if (sourceFile.existsAsFile())
-                cache->loadFromFile (sourceFile, formatManager);
+            // Create waveform cache and load audio data
+            auto cache = std::make_unique<gfx::WaveformCache>();
+            juce::String sourceFilePath = child.getProperty ("sourceFile", "");
+            if (sourceFilePath.isNotEmpty())
+            {
+                juce::File sourceFile (sourceFilePath);
+                if (sourceFile.existsAsFile())
+                    cache->loadFromFile (sourceFile, formatManager);
+            }
+
+            auto waveformWidget = std::make_unique<WaveformWidget>();
+            waveformWidget->setWaveformCache (cache.get());
+            waveformWidget->setPixelsPerSecond (pixelsPerSecond);
+            waveformWidget->setSampleRate (sampleRate);
+            waveformCaches.push_back (std::move (cache));
+            widget = std::move (waveformWidget);
+        }
+        else
+        {
+            widget = std::make_unique<MidiClipWidget> (child);
         }
 
-        auto waveformWidget = std::make_unique<WaveformWidget>();
-        waveformWidget->setWaveformCache (cache.get());
-        waveformWidget->setPixelsPerSecond (pixelsPerSecond);
-        waveformWidget->setSampleRate (sampleRate);
-        waveformWidget->setBounds (x, 0, w, h);
-        addChild (waveformWidget.get());
-
-        waveformCaches.push_back (std::move (cache));
-        clipViews.push_back (std::move (waveformWidget));
+        widget->setBounds (x, 0, w, h);
+        addChild (widget.get());
+        clipViews.push_back (std::move (widget));
     }
 }
 

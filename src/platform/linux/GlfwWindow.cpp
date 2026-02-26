@@ -174,46 +174,60 @@ void GlfwWindow::keyCallback (GLFWwindow* w, int key, int /*scancode*/, int acti
 {
     auto* self = static_cast<GlfwWindow*> (glfwGetWindowUserPointer (w));
 
-    if (action == GLFW_REPEAT || action == GLFW_PRESS)
+    if (action == GLFW_PRESS || action == GLFW_REPEAT)
     {
-        gfx::KeyEvent event;
-        event.keyCode = glfwKeyToMacKeyCode (key);
-        event.shift = (mods & GLFW_MOD_SHIFT) != 0;
-        event.control = (mods & GLFW_MOD_CONTROL) != 0;
-        event.alt = (mods & GLFW_MOD_ALT) != 0;
-        event.command = (mods & GLFW_MOD_SUPER) != 0;
-        event.isRepeat = (action == GLFW_REPEAT);
+        uint16_t macKeyCode = glfwKeyToMacKeyCode (key);
 
-        // On X11, GLFW fires keyCallback BEFORE charCallback, so
-        // pendingChar may hold a stale value from the previous key.
-        // Derive characters directly from GLFW key codes for letters
-        // and digits to avoid ordering issues.
+        // On X11, GLFW fires keyCallback BEFORE charCallback, so we
+        // derive characters directly from GLFW key codes for letters,
+        // digits, and space to avoid ordering issues.
+        char32_t ch = 0;
+        bool charKnown = false;
+
         if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z)
         {
-            event.character = static_cast<char32_t> (key - GLFW_KEY_A + (event.shift ? 'A' : 'a'));
-            event.unmodifiedCharacter = static_cast<char32_t> (key - GLFW_KEY_A + 'a');
+            bool shift = (mods & GLFW_MOD_SHIFT) != 0;
+            ch = static_cast<char32_t> (key - GLFW_KEY_A + (shift ? 'A' : 'a'));
+            charKnown = true;
         }
-        else if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9 && ! event.shift)
+        else if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9 && ! (mods & GLFW_MOD_SHIFT))
         {
-            event.character = static_cast<char32_t> ('0' + (key - GLFW_KEY_0));
-            event.unmodifiedCharacter = event.character;
+            ch = static_cast<char32_t> ('0' + (key - GLFW_KEY_0));
+            charKnown = true;
         }
         else if (key == GLFW_KEY_SPACE)
         {
-            event.character = ' ';
-            event.unmodifiedCharacter = ' ';
+            ch = ' ';
+            charKnown = true;
+        }
+
+        if (charKnown || macKeyCode != 0)
+        {
+            // Known character or special key — dispatch immediately
+            self->pendingKeyDown = false;
+
+            gfx::KeyEvent event;
+            event.keyCode = macKeyCode;
+            event.character = ch;
+            event.unmodifiedCharacter = ch;
+            event.shift = (mods & GLFW_MOD_SHIFT) != 0;
+            event.control = (mods & GLFW_MOD_CONTROL) != 0;
+            event.alt = (mods & GLFW_MOD_ALT) != 0;
+            event.command = (mods & GLFW_MOD_SUPER) != 0;
+            event.isRepeat = (action == GLFW_REPEAT);
+
+            if (self->onKeyDown)
+                self->onKeyDown (event);
         }
         else
         {
-            // Symbols, shifted digits — fall back to pendingChar
-            event.character = self->pendingChar;
-            event.unmodifiedCharacter = self->pendingChar;
+            // Printable key with unknown character (symbols, shifted digits) —
+            // defer to charCallback which will provide the actual character.
+            self->pendingKeyDown = true;
+            self->pendingKeyCode = macKeyCode;
+            self->pendingMods = mods;
+            self->pendingIsRepeat = (action == GLFW_REPEAT);
         }
-
-        self->pendingChar = 0;
-
-        if (self->onKeyDown)
-            self->onKeyDown (event);
     }
     else if (action == GLFW_RELEASE)
     {
@@ -232,8 +246,26 @@ void GlfwWindow::keyCallback (GLFWwindow* w, int key, int /*scancode*/, int acti
 void GlfwWindow::charCallback (GLFWwindow* w, unsigned int codepoint)
 {
     auto* self = static_cast<GlfwWindow*> (glfwGetWindowUserPointer (w));
-    // GLFW delivers char before key — stash for keyCallback to pick up
-    self->pendingChar = static_cast<char32_t> (codepoint);
+    auto ch = static_cast<char32_t> (codepoint);
+
+    if (self->pendingKeyDown)
+    {
+        // Combine stashed key info with the character and dispatch
+        gfx::KeyEvent event;
+        event.keyCode = self->pendingKeyCode;
+        event.character = ch;
+        event.unmodifiedCharacter = ch;
+        event.shift = (self->pendingMods & GLFW_MOD_SHIFT) != 0;
+        event.control = (self->pendingMods & GLFW_MOD_CONTROL) != 0;
+        event.alt = (self->pendingMods & GLFW_MOD_ALT) != 0;
+        event.command = (self->pendingMods & GLFW_MOD_SUPER) != 0;
+        event.isRepeat = self->pendingIsRepeat;
+
+        self->pendingKeyDown = false;
+
+        if (self->onKeyDown)
+            self->onKeyDown (event);
+    }
 }
 
 // ─── Key code translation ────────────────────────────────────────────────────

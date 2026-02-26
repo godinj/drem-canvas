@@ -34,6 +34,7 @@ public:
 
     // Clip management
     juce::ValueTree addAudioClip (const juce::File& sourceFile, int64_t startPosition, int64_t length);
+    juce::ValueTree addMidiClip (int64_t startPosition, int64_t length);
     int getNumClips() const;
     juce::ValueTree getClip (int index) const;
     void removeClip (int index, juce::UndoManager* um = nullptr);

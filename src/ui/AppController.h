@@ -9,6 +9,7 @@
 #include "engine/MixBusProcessor.h"
 #include "engine/TrackProcessor.h"
 #include "engine/StepSequencerProcessor.h"
+#include "engine/MidiClipProcessor.h"
 #include "model/Project.h"
 #include "model/Arrangement.h"
 #include "model/TempoMap.h"
@@ -66,6 +67,7 @@ private:
     void rebuildAudioGraph();
     void syncTrackProcessorsFromModel();
     void syncSequencerFromModel();
+    void syncMidiClipFromModel (int trackIndex);
 
     // Plugin chain helpers
     struct PluginNodeInfo
@@ -85,6 +87,7 @@ private:
     void loadSession();
     void openFile();
     void addTrackFromFile (const juce::File& file);
+    void addMidiTrack (const juce::String& name);
     void showAudioSettings();
 
     // Panel visibility
@@ -106,6 +109,7 @@ private:
     TransportController transportController;
     juce::AudioProcessorGraph::Node::Ptr mixBusNode;
     juce::Array<TrackProcessor*> trackProcessors;
+    juce::Array<MidiClipProcessor*> midiClipProcessors;
     juce::Array<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
     juce::Array<juce::Array<PluginNodeInfo>> trackPluginChains;
     StepSequencerProcessor* sequencerProcessor = nullptr;

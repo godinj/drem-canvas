@@ -44,7 +44,7 @@ private:
 
     juce::AudioFormatManager formatManager;
     std::vector<std::unique_ptr<gfx::WaveformCache>> waveformCaches;
-    std::vector<std::unique_ptr<WaveformWidget>> clipViews;
+    std::vector<std::unique_ptr<gfx::Widget>> clipViews;
 };
 
 } // namespace ui

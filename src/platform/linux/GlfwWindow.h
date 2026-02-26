@@ -65,8 +65,12 @@ private:
     double lastMouseX = 0.0;
     double lastMouseY = 0.0;
 
-    // Pending character from charCallback for next keyCallback
-    char32_t pendingChar = 0;
+    // On GLFW/Linux, keyCallback fires BEFORE charCallback.
+    // For printable keys we stash key info and dispatch from charCallback.
+    bool pendingKeyDown = false;
+    uint16_t pendingKeyCode = 0;
+    int pendingMods = 0;
+    bool pendingIsRepeat = false;
 };
 
 } // namespace platform

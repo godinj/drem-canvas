@@ -1,6 +1,7 @@
 #include "MainComponent.h"
 #include "model/Track.h"
 #include "model/AudioClip.h"
+#include "model/MidiClip.h"
 #include "model/StepSequencer.h"
 #include "gui/mixer/ChannelStrip.h"
 #include "gui/browser/BrowserPanel.h"
@@ -144,6 +145,7 @@ MainComponent::~MainComponent()
     pluginWindowManager.closeAll();
     trackPluginChains.clear();
     trackProcessors.clear();
+    midiClipProcessors.clear();
     trackNodes.clear();
     sequencerProcessor = nullptr;
     sequencerNode = nullptr;
@@ -261,6 +263,7 @@ void MainComponent::rebuildAudioGraph()
             audioEngine.removeProcessor (node->nodeID);
 
     trackProcessors.clear();   // non-owning — graph deleted the processors above
+    midiClipProcessors.clear();
     trackNodes.clear();
 
     auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()
@@ -276,25 +279,54 @@ void MainComponent::rebuildAudioGraph()
         auto trackState = project.getTrack (i);
         Track track (trackState);
 
-        auto processor = std::make_unique<TrackProcessor> (transportController);
-        auto* processorPtr = processor.get();
-
-        // Load the first clip's audio file
-        if (track.getNumClips() > 0)
+        // Detect MIDI tracks: any child is a MIDI_CLIP
+        bool isMidiTrack = false;
+        for (int c = 0; c < track.getNumClips(); ++c)
         {
-            AudioClip clip (track.getClip (0));
-            processorPtr->loadFile (clip.getSourceFile());
+            if (track.getClip (c).hasType (IDs::MIDI_CLIP))
+            {
+                isMidiTrack = true;
+                break;
+            }
         }
 
-        // Sync gain/pan/mute from model
-        processorPtr->setGain (track.getVolume());
-        processorPtr->setPan (track.getPan());
-        processorPtr->setMuted (track.isMuted());
+        if (isMidiTrack)
+        {
+            auto processor = std::make_unique<MidiClipProcessor> (transportController);
+            auto* processorPtr = processor.get();
 
-        // Add to graph — graph takes sole ownership
-        auto node = audioEngine.addProcessor (std::move (processor));
-        trackProcessors.add (processorPtr);
-        trackNodes.add (node);
+            processorPtr->setGain (track.getVolume());
+            processorPtr->setPan (track.getPan());
+            processorPtr->setMuted (track.isMuted());
+            processorPtr->setTempo (project.getTempo());
+
+            auto node = audioEngine.addProcessor (std::move (processor));
+            trackProcessors.add (nullptr);           // no TrackProcessor for MIDI tracks
+            midiClipProcessors.add (processorPtr);
+            trackNodes.add (node);
+        }
+        else
+        {
+            auto processor = std::make_unique<TrackProcessor> (transportController);
+            auto* processorPtr = processor.get();
+
+            // Load the first clip's audio file
+            if (track.getNumClips() > 0)
+            {
+                AudioClip clip (track.getClip (0));
+                processorPtr->loadFile (clip.getSourceFile());
+            }
+
+            // Sync gain/pan/mute from model
+            processorPtr->setGain (track.getVolume());
+            processorPtr->setPan (track.getPan());
+            processorPtr->setMuted (track.isMuted());
+
+            auto node = audioEngine.addProcessor (std::move (processor));
+            trackProcessors.add (processorPtr);
+            midiClipProcessors.add (nullptr);        // no MidiClipProcessor for audio tracks
+            trackNodes.add (node);
+        }
 
         // Instantiate plugin chain from model
         juce::Array<PluginNodeInfo> pluginChain;
@@ -325,6 +357,10 @@ void MainComponent::rebuildAudioGraph()
 
         // Wire chain: TrackNode → Plugin1 → Plugin2 → ... → MixBus
         connectTrackPluginChain (i);
+
+        // Push initial MIDI clip data if this is a MIDI track
+        if (midiClipProcessors[i] != nullptr)
+            syncMidiClipFromModel (i);
     }
 
     audioEngine.getGraph().suspendProcessing (false);
@@ -340,8 +376,18 @@ void MainComponent::rebuildAudioGraph()
             if (trackIndex < trackProcessors.size())
             {
                 auto* proc = trackProcessors[trackIndex];
-                strip.getMeter().getLeftLevel  = [proc] { return proc->getPeakLevelLeft(); };
-                strip.getMeter().getRightLevel = [proc] { return proc->getPeakLevelRight(); };
+                auto* midiProc = (trackIndex < midiClipProcessors.size()) ? midiClipProcessors[trackIndex] : nullptr;
+
+                if (proc != nullptr)
+                {
+                    strip.getMeter().getLeftLevel  = [proc] { return proc->getPeakLevelLeft(); };
+                    strip.getMeter().getRightLevel = [proc] { return proc->getPeakLevelRight(); };
+                }
+                else if (midiProc != nullptr)
+                {
+                    strip.getMeter().getLeftLevel  = [midiProc] { return midiProc->getPeakLevelLeft(); };
+                    strip.getMeter().getRightLevel = [midiProc] { return midiProc->getPeakLevelRight(); };
+                }
 
                 // Wire fader/pan/mute changes to push directly to the track processor
                 strip.onStateChanged = [this] { syncTrackProcessorsFromModel(); };
@@ -401,11 +447,22 @@ void MainComponent::syncTrackProcessorsFromModel()
     {
         auto trackState = project.getTrack (i);
         Track track (trackState);
-        auto* processor = trackProcessors[i];
 
-        processor->setGain (track.getVolume());
-        processor->setPan (track.getPan());
-        processor->setMuted (track.isMuted());
+        if (auto* processor = trackProcessors[i])
+        {
+            processor->setGain (track.getVolume());
+            processor->setPan (track.getPan());
+            processor->setMuted (track.isMuted());
+        }
+        else if (i < midiClipProcessors.size())
+        {
+            if (auto* midiProc = midiClipProcessors[i])
+            {
+                midiProc->setGain (track.getVolume());
+                midiProc->setPan (track.getPan());
+                midiProc->setMuted (track.isMuted());
+            }
+        }
     }
 }
 
@@ -461,6 +518,87 @@ void MainComponent::syncSequencerFromModel()
     }
 
     sequencerProcessor->updatePatternSnapshot (snapshot);
+}
+
+void MainComponent::syncMidiClipFromModel (int trackIndex)
+{
+    if (trackIndex < 0 || trackIndex >= midiClipProcessors.size())
+        return;
+
+    auto* midiProc = midiClipProcessors[trackIndex];
+    if (midiProc == nullptr)
+        return;
+
+    auto trackState = project.getTrack (trackIndex);
+    Track track (trackState);
+
+    double currentTempo = project.getTempo();
+    double sr = project.getSampleRate();
+
+    MidiClipProcessor::MidiTrackSnapshot snapshot;
+    snapshot.numEvents = 0;
+
+    for (int c = 0; c < track.getNumClips(); ++c)
+    {
+        auto clipState = track.getClip (c);
+        if (! clipState.hasType (IDs::MIDI_CLIP))
+            continue;
+
+        MidiClip clip (clipState);
+        int64_t clipStartSample = clip.getStartPosition();
+        auto seq = clip.getMidiSequence();
+
+        // Match note-on/off pairs and convert to absolute sample positions
+        seq.updateMatchedPairs();
+
+        for (int e = 0; e < seq.getNumEvents(); ++e)
+        {
+            const auto* event = seq.getEventPointer (e);
+            const auto& msg = event->message;
+
+            if (! msg.isNoteOn())
+                continue;
+
+            if (snapshot.numEvents >= MidiClipProcessor::MidiTrackSnapshot::maxEvents)
+                break;
+
+            // Timestamps are in beats
+            double onBeat = msg.getTimeStamp();
+            int64_t onSample = clipStartSample
+                + static_cast<int64_t> (onBeat * 60.0 / currentTempo * sr);
+
+            int64_t offSample = onSample;
+            if (event->noteOffObject != nullptr)
+            {
+                double offBeat = event->noteOffObject->message.getTimeStamp();
+                offSample = clipStartSample
+                    + static_cast<int64_t> (offBeat * 60.0 / currentTempo * sr);
+            }
+            else
+            {
+                // Default note length: 1/4 beat
+                offSample = onSample + static_cast<int64_t> (0.25 * 60.0 / currentTempo * sr);
+            }
+
+            auto& evt = snapshot.events[snapshot.numEvents++];
+            evt.noteNumber = msg.getNoteNumber();
+            evt.channel    = msg.getChannel();
+            evt.velocity   = msg.getVelocity();
+            evt.onSample   = onSample;
+            evt.offSample  = offSample;
+        }
+    }
+
+    // Sort by onSample for efficient scanning in processBlock
+    std::sort (snapshot.events.begin(),
+               snapshot.events.begin() + snapshot.numEvents,
+               [] (const MidiClipProcessor::MidiNoteEvent& a,
+                   const MidiClipProcessor::MidiNoteEvent& b)
+               {
+                   return a.onSample < b.onSample;
+               });
+
+    midiProc->updateSnapshot (snapshot);
 }
 
 void MainComponent::saveSession()
@@ -542,11 +680,34 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
             syncTrackProcessorsFromModel();
     }
 
-    // Tempo change — sync to sequencer processor
+    // Tempo change — sync to sequencer and MIDI clip processors
     if (tree.hasType (IDs::PROJECT) && property == IDs::tempo)
     {
         if (sequencerProcessor != nullptr)
             sequencerProcessor->setTempo (project.getTempo());
+
+        // Re-sync all MIDI tracks (beat→sample conversion depends on tempo)
+        for (int i = 0; i < midiClipProcessors.size(); ++i)
+        {
+            if (midiClipProcessors[i] != nullptr)
+            {
+                midiClipProcessors[i]->setTempo (project.getTempo());
+                syncMidiClipFromModel (i);
+            }
+        }
+    }
+
+    // MIDI clip property changed (e.g. midiData, startPosition, length)
+    if (tree.hasType (IDs::MIDI_CLIP))
+    {
+        auto trackState = tree.getParent();
+        if (trackState.hasType (IDs::TRACK))
+        {
+            auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+            int trackIndex = tracksNode.indexOf (trackState);
+            if (trackIndex >= 0)
+                syncMidiClipFromModel (trackIndex);
+        }
     }
 
     // Any step sequencer property change
@@ -557,20 +718,38 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
     }
 }
 
-void MainComponent::valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree&)
+void MainComponent::valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree& child)
 {
     if (parent.hasType (IDs::TRACKS))
         rebuildAudioGraph();
+
+    // MIDI clip added to a track
+    if (parent.hasType (IDs::TRACK) && child.hasType (IDs::MIDI_CLIP))
+    {
+        auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+        int trackIndex = tracksNode.indexOf (parent);
+        if (trackIndex >= 0)
+            syncMidiClipFromModel (trackIndex);
+    }
 
     if (parent.hasType (IDs::STEP_SEQUENCER) || parent.hasType (IDs::STEP_PATTERN)
         || parent.hasType (IDs::STEP_ROW))
         syncSequencerFromModel();
 }
 
-void MainComponent::valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree&, int)
+void MainComponent::valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree& child, int)
 {
     if (parent.hasType (IDs::TRACKS))
         rebuildAudioGraph();
+
+    // MIDI clip removed from a track
+    if (parent.hasType (IDs::TRACK) && child.hasType (IDs::MIDI_CLIP))
+    {
+        auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+        int trackIndex = tracksNode.indexOf (parent);
+        if (trackIndex >= 0)
+            syncMidiClipFromModel (trackIndex);
+    }
 
     if (parent.hasType (IDs::STEP_SEQUENCER) || parent.hasType (IDs::STEP_PATTERN)
         || parent.hasType (IDs::STEP_ROW))
@@ -627,7 +806,7 @@ void MainComponent::connectTrackPluginChain (int trackIndex)
             enabledNodes.add (chain[p].node);
     }
 
-    // Wire: TrackNode → Plugin1 → Plugin2 → ... → MixBus
+    // Wire: TrackNode → Plugin1 → Plugin2 → ... → MixBus (audio)
     auto prevNode = trackNode;
 
     for (auto& pluginNode : enabledNodes)
@@ -640,6 +819,17 @@ void MainComponent::connectTrackPluginChain (int trackIndex)
     // Final connection to mix bus
     audioEngine.connectNodes (prevNode->nodeID, 0, mixBusNode->nodeID, 0);
     audioEngine.connectNodes (prevNode->nodeID, 1, mixBusNode->nodeID, 1);
+
+    // Wire MIDI through the plugin chain (for MIDI tracks with instrument plugins)
+    auto prevNodeForMidi = trackNode;
+    for (auto& pluginNode : enabledNodes)
+    {
+        audioEngine.connectNodes (prevNodeForMidi->nodeID,
+            juce::AudioProcessorGraph::midiChannelIndex,
+            pluginNode->nodeID,
+            juce::AudioProcessorGraph::midiChannelIndex);
+        prevNodeForMidi = pluginNode;
+    }
 }
 
 void MainComponent::disconnectTrackPluginChain (int trackIndex)

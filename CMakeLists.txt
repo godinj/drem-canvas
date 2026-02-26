@@ -76,6 +76,7 @@ target_sources(DremCanvas PRIVATE
     src/engine/AudioRecorder.cpp
     src/engine/BounceProcessor.cpp
     src/engine/StepSequencerProcessor.cpp
+    src/engine/MidiClipProcessor.cpp
 
     # Model
     src/model/Project.cpp

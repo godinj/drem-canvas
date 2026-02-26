@@ -599,6 +599,14 @@ void VimEngine::executeCommand()
         if (pluginName.isNotEmpty() && onPluginCommand)
             onPluginCommand (pluginName);
     }
+    else if (cmd == "midi" || cmd.startsWith ("midi "))
+    {
+        auto trackName = cmd.fromFirstOccurrenceOf (" ", false, false).trim();
+        if (trackName.isEmpty())
+            trackName = "MIDI";
+        if (onCreateMidiTrack)
+            onCreateMidiTrack (trackName);
+    }
 }
 
 // ── Mode switching ──────────────────────────────────────────────────────────

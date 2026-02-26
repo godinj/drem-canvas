@@ -5,6 +5,7 @@
 #include "engine/MixBusProcessor.h"
 #include "engine/TrackProcessor.h"
 #include "engine/StepSequencerProcessor.h"
+#include "engine/MidiClipProcessor.h"
 #include "model/Project.h"
 #include "model/Arrangement.h"
 #include "model/StepSequencer.h"
@@ -42,6 +43,7 @@ private:
     void rebuildAudioGraph();
     void syncTrackProcessorsFromModel();
     void syncSequencerFromModel();
+    void syncMidiClipFromModel (int trackIndex);
     void saveSession();
     void loadSession();
 
@@ -82,6 +84,7 @@ private:
     TransportController transportController;
     juce::AudioProcessorGraph::Node::Ptr mixBusNode;
     juce::Array<TrackProcessor*> trackProcessors;              // non-owning; graph owns the processors
+    juce::Array<MidiClipProcessor*> midiClipProcessors;      // non-owning; graph owns (nullptr for audio tracks)
     juce::Array<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
     StepSequencerProcessor* sequencerProcessor = nullptr;      // non-owning; graph owns
     juce::AudioProcessorGraph::Node::Ptr sequencerNode;

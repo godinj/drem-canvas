@@ -60,6 +60,9 @@ public:
     // Command palette callback
     std::function<void()> onCommandPalette;
 
+    // MIDI track creation callback
+    std::function<void (const juce::String&)> onCreateMidiTrack;
+
     void addListener (Listener* l) { listeners.add (l); }
     void removeListener (Listener* l) { listeners.remove (l); }
 
