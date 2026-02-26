@@ -321,6 +321,16 @@ void AppController::registerAllActions()
         [this]() { openFile(); }, {}
     });
 
+    actionRegistry.registerAction ({
+        "track.add_midi", "Create MIDI Track", "Track", ":midi",
+        [this]() { addMidiTrack ("MIDI"); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "track.add_plugin", "Add Plugin to Track", "Track", ":plugin",
+        [this]() { if (! browserVisible) toggleBrowser(); }, {}
+    });
+
     // ─── Edit ────────────────────────────────────────────────
     actionRegistry.registerAction ({
         "edit.undo", "Undo", "Edit", "u",
