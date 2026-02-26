@@ -8,9 +8,20 @@ namespace dc
 
 static bool isEscapeOrCtrlC (const juce::KeyPress& key)
 {
-    return key == juce::KeyPress::escapeKey
-        || (key.getTextCharacter() == 3  // Ctrl-C == ASCII ETX
-            && key.getModifiers().isCtrlDown());
+    if (key == juce::KeyPress::escapeKey)
+        return true;
+
+    if (key.getModifiers().isCtrlDown())
+    {
+        auto c = key.getTextCharacter();
+        auto code = key.getKeyCode();
+        // Ctrl-C: character may be ETX (3), 'c', 'C', or keyCode 'c'/'C'
+        if (c == 3 || c == 'c' || c == 'C'
+            || code == 'c' || code == 'C')
+            return true;
+    }
+
+    return false;
 }
 
 VimEngine::VimEngine (Project& p, TransportController& t,
@@ -800,16 +811,15 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
         return true;
     }
 
-    // Transport
-    if (key == juce::KeyPress::spaceKey)
+    // Transport — Space is play/stop (consistent with other modes)
+    if (key == juce::KeyPress::spaceKey) { togglePlayStop(); return true; }
+
+    // Enter toggles note at cursor
+    if (key == juce::KeyPress::returnKey)
     {
-        // If no pending action, use space for adding note at cursor
-        // But we use Space for add-note and Return for play/stop in piano roll
         if (onPianoRollAddNote) onPianoRollAddNote();
         return true;
     }
-
-    if (key == juce::KeyPress::returnKey) { togglePlayStop(); return true; }
 
     // Panel cycling
     if (key == juce::KeyPress::tabKey) { cycleFocusPanel(); return true; }
