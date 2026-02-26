@@ -178,13 +178,37 @@ void GlfwWindow::keyCallback (GLFWwindow* w, int key, int /*scancode*/, int acti
     {
         gfx::KeyEvent event;
         event.keyCode = glfwKeyToMacKeyCode (key);
-        event.character = self->pendingChar;
-        event.unmodifiedCharacter = self->pendingChar;
         event.shift = (mods & GLFW_MOD_SHIFT) != 0;
         event.control = (mods & GLFW_MOD_CONTROL) != 0;
         event.alt = (mods & GLFW_MOD_ALT) != 0;
         event.command = (mods & GLFW_MOD_SUPER) != 0;
         event.isRepeat = (action == GLFW_REPEAT);
+
+        // On X11, GLFW fires keyCallback BEFORE charCallback, so
+        // pendingChar may hold a stale value from the previous key.
+        // Derive characters directly from GLFW key codes for letters
+        // and digits to avoid ordering issues.
+        if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z)
+        {
+            event.character = static_cast<char32_t> (key - GLFW_KEY_A + (event.shift ? 'A' : 'a'));
+            event.unmodifiedCharacter = static_cast<char32_t> (key - GLFW_KEY_A + 'a');
+        }
+        else if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9 && ! event.shift)
+        {
+            event.character = static_cast<char32_t> ('0' + (key - GLFW_KEY_0));
+            event.unmodifiedCharacter = event.character;
+        }
+        else if (key == GLFW_KEY_SPACE)
+        {
+            event.character = ' ';
+            event.unmodifiedCharacter = ' ';
+        }
+        else
+        {
+            // Symbols, shifted digits — fall back to pendingChar
+            event.character = self->pendingChar;
+            event.unmodifiedCharacter = self->pendingChar;
+        }
 
         self->pendingChar = 0;
 
