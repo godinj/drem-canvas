@@ -2,6 +2,7 @@
 
 #include "graphics/core/Widget.h"
 #include "graphics/theme/Theme.h"
+#include "graphics/rendering/WaveformCache.h"
 #include "WaveformWidget.h"
 #include "MidiClipWidget.h"
 #include <JuceHeader.h>
@@ -41,6 +42,8 @@ private:
 
     static constexpr float headerWidth = 150.0f;
 
+    juce::AudioFormatManager formatManager;
+    std::vector<std::unique_ptr<gfx::WaveformCache>> waveformCaches;
     std::vector<std::unique_ptr<WaveformWidget>> clipViews;
 };
 

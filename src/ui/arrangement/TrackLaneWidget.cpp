@@ -11,6 +11,7 @@ namespace ui
 TrackLaneWidget::TrackLaneWidget (const juce::ValueTree& state)
     : trackState (state)
 {
+    formatManager.registerBasicFormats();
 }
 
 void TrackLaneWidget::paint (gfx::Canvas& canvas)
@@ -112,6 +113,7 @@ void TrackLaneWidget::rebuildClipViews()
     for (auto& cv : clipViews)
         removeChild (cv.get());
     clipViews.clear();
+    waveformCaches.clear();
 
     float h = getHeight();
 
@@ -127,11 +129,24 @@ void TrackLaneWidget::rebuildClipViews()
         float x = static_cast<float> ((static_cast<double> (startPos) / sampleRate) * pixelsPerSecond) + headerWidth;
         float w = static_cast<float> ((static_cast<double> (clipLength) / sampleRate) * pixelsPerSecond);
 
+        // Create waveform cache and load audio data
+        auto cache = std::make_unique<gfx::WaveformCache>();
+        juce::String sourceFilePath = child.getProperty ("sourceFile", "");
+        if (sourceFilePath.isNotEmpty())
+        {
+            juce::File sourceFile (sourceFilePath);
+            if (sourceFile.existsAsFile())
+                cache->loadFromFile (sourceFile, formatManager);
+        }
+
         auto waveformWidget = std::make_unique<WaveformWidget>();
+        waveformWidget->setWaveformCache (cache.get());
         waveformWidget->setPixelsPerSecond (pixelsPerSecond);
         waveformWidget->setSampleRate (sampleRate);
         waveformWidget->setBounds (x, 0, w, h);
         addChild (waveformWidget.get());
+
+        waveformCaches.push_back (std::move (cache));
         clipViews.push_back (std::move (waveformWidget));
     }
 }
