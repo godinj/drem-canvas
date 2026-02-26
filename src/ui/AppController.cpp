@@ -195,8 +195,23 @@ void AppController::initialise()
                     / pianoRollWidget->getGridDivision();
         double length = 1.0 / pianoRollWidget->getGridDivision();
 
-        ScopedTransaction txn (project.getUndoSystem(), "Add Note");
         MidiClip clip (clipState);
+
+        // Toggle: remove existing note at cursor, or add a new one
+        for (int i = 0; i < clipState.getNumChildren(); ++i)
+        {
+            auto child = clipState.getChild (i);
+            if (child.hasType ("NOTE")
+                && (int) child.getProperty ("noteNumber") == noteNumber
+                && std::abs ((double) child.getProperty ("startBeat") - beat) < 0.001)
+            {
+                ScopedTransaction txn (project.getUndoSystem(), "Remove Note");
+                clip.removeNote (i, &project.getUndoManager());
+                return;
+            }
+        }
+
+        ScopedTransaction txn (project.getUndoSystem(), "Add Note");
         clip.addNote (noteNumber, beat, length, 100, &project.getUndoManager());
     };
 

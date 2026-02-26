@@ -6,6 +6,13 @@
 namespace dc
 {
 
+static bool isEscapeOrCtrlC (const juce::KeyPress& key)
+{
+    return key == juce::KeyPress::escapeKey
+        || (key.getTextCharacter() == 3  // Ctrl-C == ASCII ETX
+            && key.getModifiers().isCtrlDown());
+}
+
 VimEngine::VimEngine (Project& p, TransportController& t,
                       Arrangement& a, VimContext& c)
     : project (p), transport (t), arrangement (a), context (c)
@@ -67,7 +74,7 @@ bool VimEngine::handleKeyEvent (const gfx::KeyEvent& event)
 
 bool VimEngine::handleInsertKey (const juce::KeyPress& key)
 {
-    if (key == juce::KeyPress::escapeKey)
+    if (isEscapeOrCtrlC (key))
     {
         enterNormalMode();
         return true;
@@ -132,8 +139,8 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
         clearPending();
     }
 
-    // Phase 2: Escape cancels operator + counts + pending
-    if (key == juce::KeyPress::escapeKey)
+    // Phase 2: Escape / Ctrl-C cancels operator + counts + pending
+    if (isEscapeOrCtrlC (key))
     {
         cancelOperator();
         clearPending();
@@ -593,7 +600,7 @@ void VimEngine::toggleRecordArm()
 
 bool VimEngine::handleCommandKey (const juce::KeyPress& key)
 {
-    if (key == juce::KeyPress::escapeKey)
+    if (isEscapeOrCtrlC (key))
     {
         commandBuffer.clear();
         enterNormalMode();
@@ -728,8 +735,8 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     auto keyChar = key.getTextCharacter();
     auto modifiers = key.getModifiers();
 
-    // Escape closes piano roll
-    if (key == juce::KeyPress::escapeKey)
+    // Escape / Ctrl-C closes piano roll
+    if (isEscapeOrCtrlC (key))
     {
         closePianoRoll();
         return true;
@@ -1360,8 +1367,8 @@ bool VimEngine::handleSequencerNormalKey (const juce::KeyPress& key)
     auto keyChar = key.getTextCharacter();
     auto modifiers = key.getModifiers();
 
-    // Escape returns to normal mode
-    if (key == juce::KeyPress::escapeKey)
+    // Escape / Ctrl-C returns to normal mode
+    if (isEscapeOrCtrlC (key))
     {
         enterNormalMode();
         return true;
