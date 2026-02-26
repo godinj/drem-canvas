@@ -92,6 +92,13 @@ void TrackLaneWidget::setSampleRate (double sr)
     repaint();
 }
 
+void TrackLaneWidget::setTempo (double bpm)
+{
+    tempo = bpm;
+    resized();
+    repaint();
+}
+
 void TrackLaneWidget::setSelected (bool sel)
 {
     if (selected != sel)
@@ -158,7 +165,12 @@ void TrackLaneWidget::rebuildClipViews()
         }
         else
         {
-            widget = std::make_unique<MidiClipWidget> (child);
+            auto midiWidget = std::make_unique<MidiClipWidget> (child);
+            // Convert clip length from samples to beats
+            double clipSeconds = static_cast<double> (clipLength) / sampleRate;
+            double clipBeats = clipSeconds * tempo / 60.0;
+            midiWidget->setClipLengthInBeats (clipBeats);
+            widget = std::move (midiWidget);
         }
 
         widget->setBounds (x, 0, w, h);

@@ -26,17 +26,19 @@ void PianoRollRulerWidget::paint (gfx::Canvas& canvas)
     float beatsPerBar = static_cast<float> (timeSigNumerator);
     float totalBeats = (w + scrollOffset) / pixelsPerBeat;
 
+    // beatOffset converts clip-local beats to absolute beats
     for (float beat = 0.0f; beat < totalBeats; beat += 1.0f)
     {
         float x = beat * pixelsPerBeat - scrollOffset;
         if (x < 0 || x > w)
             continue;
 
-        bool isBar = (std::fmod (beat, beatsPerBar) < 0.001f);
+        double absoluteBeat = beat + beatOffset;
+        bool isBar = (std::fmod (absoluteBeat, static_cast<double> (beatsPerBar)) < 0.001);
 
         if (isBar)
         {
-            int barNum = static_cast<int> (beat / beatsPerBar) + 1;
+            int barNum = static_cast<int> (absoluteBeat / beatsPerBar) + 1;
             canvas.fillRect (Rect (x, 0, 1.0f, h), Color::fromARGB (0xff505068));
             canvas.drawText (std::to_string (barNum),
                              x + 3.0f, h - 6.0f, font, theme.brightText);

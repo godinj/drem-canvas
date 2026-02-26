@@ -88,6 +88,8 @@ PianoRollWidget::PianoRollWidget (Project& p, TransportController& t)
     {
         deselectAll();
     };
+
+    setAnimating (true);
 }
 
 void PianoRollWidget::paint (gfx::Canvas& canvas)
@@ -220,7 +222,21 @@ void PianoRollWidget::loadClip (const juce::ValueTree& state)
     noteClipboard.clear();
 
     if (clipState.isValid())
+    {
         clipState.addListener (this);
+
+        // Compute beat offset so ruler bar numbers match the arrangement
+        int64_t clipStart = static_cast<int64_t> (
+            static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+        double sr = project.getSampleRate();
+        double tempo = project.getTempo();
+        double clipStartBeats = (static_cast<double> (clipStart) / sr) * tempo / 60.0;
+        ruler.setBeatOffset (clipStartBeats);
+    }
+    else
+    {
+        ruler.setBeatOffset (0.0);
+    }
 
     rebuildNotes();
 }

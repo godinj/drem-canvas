@@ -9,7 +9,8 @@ namespace dc
 namespace ui
 {
 
-TimeRulerWidget::TimeRulerWidget()
+TimeRulerWidget::TimeRulerWidget (const TempoMap& tempo)
+    : tempoMap (tempo)
 {
 }
 
@@ -25,45 +26,50 @@ void TimeRulerWidget::paint (gfx::Canvas& canvas)
     // Background
     canvas.fillRect (Rect (0, 0, w, h), Color::fromARGB (0xff252535));
 
+    double bpm = tempoMap.getTempo();
+    int beatsPerBar = tempoMap.getTimeSigNumerator();
+    double secondsPerBeat = 60.0 / bpm;
+    double secondsPerBar = secondsPerBeat * beatsPerBar;
+    double pixelsPerBar = secondsPerBar * pixelsPerSecond;
+
+    // Determine bar interval based on zoom level (skip bars when zoomed out)
+    int barInterval = 1;
+    if (pixelsPerBar < 20.0) barInterval = 16;
+    else if (pixelsPerBar < 40.0) barInterval = 8;
+    else if (pixelsPerBar < 80.0) barInterval = 4;
+    else if (pixelsPerBar < 160.0) barInterval = 2;
+
     double startTime = scrollOffset / pixelsPerSecond;
+    int startBar = std::max (1, static_cast<int> (std::floor (startTime / secondsPerBar)) + 1);
 
-    // Determine tick interval based on zoom level
-    double interval;
-    if (pixelsPerSecond >= 200.0) interval = 1.0;
-    else if (pixelsPerSecond >= 50.0) interval = 5.0;
-    else if (pixelsPerSecond >= 20.0) interval = 10.0;
-    else if (pixelsPerSecond >= 5.0) interval = 30.0;
-    else interval = 60.0;
+    // Align to bar interval
+    startBar = ((startBar - 1) / barInterval) * barInterval + 1;
 
-    double firstTick = std::floor (startTime / interval) * interval;
-
-    for (double t = firstTick; ; t += interval)
+    for (int bar = startBar; ; bar += barInterval)
     {
-        float x = static_cast<float> ((t - startTime) * pixelsPerSecond) + headerWidth;
+        double barTime = (bar - 1) * secondsPerBar;
+        float x = static_cast<float> ((barTime - startTime) * pixelsPerSecond) + headerWidth;
         if (x > w) break;
-        if (x < headerWidth) continue;
 
-        // Major tick
-        canvas.drawLine (x, 0, x, h, Color::fromARGB (0xff555565), 1.0f);
-
-        // Time label
-        int totalSeconds = static_cast<int> (t);
-        int minutes = totalSeconds / 60;
-        int seconds = totalSeconds % 60;
-        char buf[16];
-        snprintf (buf, sizeof (buf), "%d:%02d", minutes, seconds);
-        canvas.drawText (std::string (buf), x + 3.0f, h - 4.0f, font, theme.dimText);
-
-        // Minor ticks
-        if (interval <= 10.0)
+        if (x >= headerWidth)
         {
-            int numMinor = (interval <= 1.0) ? 4 : 5;
-            double minorInterval = interval / numMinor;
-            for (int m = 1; m < numMinor; ++m)
+            // Major tick at bar line
+            canvas.drawLine (x, 0, x, h, Color::fromARGB (0xff555565), 1.0f);
+
+            // Bar number label
+            std::string label = std::to_string (bar);
+            canvas.drawText (label, x + 3.0f, h - 4.0f, font, theme.dimText);
+        }
+
+        // Draw beat ticks within the bar (only when zoomed in enough)
+        if (barInterval == 1 && pixelsPerBar >= 80.0)
+        {
+            for (int beat = 1; beat < beatsPerBar; ++beat)
             {
-                float mx = static_cast<float> ((t + m * minorInterval - startTime) * pixelsPerSecond) + headerWidth;
-                if (mx >= headerWidth && mx <= w)
-                    canvas.drawLine (mx, h * 0.5f, mx, h, Color::fromARGB (0xff404050), 1.0f);
+                double beatTime = barTime + beat * secondsPerBeat;
+                float bx = static_cast<float> ((beatTime - startTime) * pixelsPerSecond) + headerWidth;
+                if (bx >= headerWidth && bx <= w)
+                    canvas.drawLine (bx, h * 0.5f, bx, h, Color::fromARGB (0xff404050), 1.0f);
             }
         }
     }

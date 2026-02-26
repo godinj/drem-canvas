@@ -271,7 +271,8 @@ void AppController::initialise()
     // ─── Create UI widgets ───────────────────────────────
 
     // Transport bar
-    transportBar = std::make_unique<TransportBarWidget> (transportController);
+    transportBar = std::make_unique<TransportBarWidget> (transportController, tempoMap);
+
     addChild (transportBar.get());
 
     transportBar->onSaveSession   = [this]() { saveSession(); };
@@ -287,7 +288,8 @@ void AppController::initialise()
 
     // Arrangement
     arrangementWidget = std::make_unique<ArrangementWidget> (project, transportController,
-                                                               arrangement, vimContext);
+                                                               arrangement, vimContext,
+                                                               tempoMap);
     addChild (arrangementWidget.get());
     vimEngine->addListener (arrangementWidget.get());
 

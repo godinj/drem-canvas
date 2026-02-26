@@ -25,6 +25,7 @@ public:
 
     void setPixelsPerSecond (double pps);
     void setSampleRate (double sr);
+    void setTempo (double bpm);
     void setSelected (bool sel);
     void setSelectedClipIndex (int idx);
 
@@ -37,6 +38,7 @@ private:
     juce::ValueTree trackState;
     double pixelsPerSecond = 100.0;
     double sampleRate = 44100.0;
+    double tempo = 120.0;
     bool selected = false;
     int selectedClipIndex = -1;
 

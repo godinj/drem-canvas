@@ -9,8 +9,10 @@ namespace ui
 {
 
 ArrangementWidget::ArrangementWidget (Project& proj, TransportController& transport,
-                                      Arrangement& arr, VimContext& vc)
-    : project (proj), transportController (transport), arrangement (arr), vimContext (vc)
+                                      Arrangement& arr, VimContext& vc,
+                                      const TempoMap& tempo)
+    : project (proj), transportController (transport), arrangement (arr), vimContext (vc),
+      tempoMap (tempo), timeRuler (tempo)
 {
     addChild (&timeRuler);
     addChild (&scrollView);
@@ -119,6 +121,7 @@ void ArrangementWidget::rebuildTrackLanes()
         auto lane = std::make_unique<TrackLaneWidget> (trackState);
         lane->setPixelsPerSecond (pixelsPerSecond);
         lane->setSampleRate (sr);
+        lane->setTempo (tempoMap.getTempo());
         trackContainer.addChild (lane.get());
         trackLanes.push_back (std::move (lane));
     }

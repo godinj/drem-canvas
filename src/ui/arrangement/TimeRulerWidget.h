@@ -2,6 +2,7 @@
 
 #include "graphics/core/Widget.h"
 #include "graphics/theme/Theme.h"
+#include "model/TempoMap.h"
 #include <functional>
 
 namespace dc
@@ -12,7 +13,7 @@ namespace ui
 class TimeRulerWidget : public gfx::Widget
 {
 public:
-    TimeRulerWidget();
+    explicit TimeRulerWidget (const TempoMap& tempoMap);
 
     void paint (gfx::Canvas& canvas) override;
     void mouseDown (const gfx::MouseEvent& e) override;
@@ -29,6 +30,7 @@ public:
 private:
     void seekFromX (float mouseX);
 
+    const TempoMap& tempoMap;
     double pixelsPerSecond = 100.0;
     double scrollOffset = 0.0;
     static constexpr float headerWidth = 150.0f;
