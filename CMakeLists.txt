@@ -93,6 +93,7 @@ target_sources(DremCanvas PRIVATE
     # Vim
     src/vim/VimContext.cpp
     src/vim/VimEngine.cpp
+    src/vim/ActionRegistry.cpp
 
     # Utils
     src/utils/AudioFileUtils.cpp
@@ -170,6 +171,9 @@ target_sources(DremCanvas PRIVATE
 
     # UI - Browser
     src/ui/browser/BrowserWidget.cpp
+
+    # UI - Command Palette
+    src/ui/palette/CommandPaletteWidget.cpp
 )
 
 # ─── Platform-specific sources ────────────────────────────────

@@ -13,6 +13,14 @@ VimEngine::VimEngine (Project& p, TransportController& t,
 
 bool VimEngine::keyPressed (const juce::KeyPress& key, juce::Component*)
 {
+    // Ctrl+P opens command palette from any mode
+    if (key.getModifiers().isCtrlDown() && key.getTextCharacter() == 'p')
+    {
+        if (onCommandPalette)
+            onCommandPalette();
+        return true;
+    }
+
     if (mode == Command)
         return handleCommandKey (key);
 

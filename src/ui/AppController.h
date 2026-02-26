@@ -25,6 +25,8 @@
 #include "ui/sequencer/StepSequencerWidget.h"
 #include "ui/midieditor/PianoRollWidget.h"
 #include "ui/browser/BrowserWidget.h"
+#include "ui/palette/CommandPaletteWidget.h"
+#include "vim/ActionRegistry.h"
 
 namespace dc
 {
@@ -39,6 +41,7 @@ public:
     ~AppController() override;
 
     void paint (gfx::Canvas& canvas) override;
+    void paintOverChildren (gfx::Canvas& canvas) override;
     void resized() override;
     bool keyDown (const gfx::KeyEvent& e) override;
 
@@ -88,6 +91,11 @@ private:
     void updatePanelVisibility();
     void toggleBrowser();
 
+    // Command palette
+    void registerAllActions();
+    void showCommandPalette();
+    void dismissCommandPalette();
+
     // ─── Plugin infrastructure ───────────────────────────
     PluginManager pluginManager;
     PluginHost pluginHost { pluginManager };
@@ -109,6 +117,7 @@ private:
     TempoMap tempoMap;
     VimContext vimContext;
     std::unique_ptr<VimEngine> vimEngine;
+    ActionRegistry actionRegistry;
 
     juce::File currentSessionDirectory;
 
@@ -120,6 +129,7 @@ private:
     std::unique_ptr<StepSequencerWidget> sequencerWidget;
     std::unique_ptr<PianoRollWidget> pianoRollWidget;
     std::unique_ptr<BrowserWidget> browserWidget;
+    std::unique_ptr<CommandPaletteWidget> commandPalette;
 
     bool browserVisible = false;
 

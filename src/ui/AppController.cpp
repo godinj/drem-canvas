@@ -4,6 +4,7 @@
 #include "model/AudioClip.h"
 #include "model/StepSequencer.h"
 #include "platform/NativeDialogs.h"
+#include "utils/UndoSystem.h"
 
 namespace dc
 {
@@ -133,6 +134,19 @@ void AppController::initialise()
         insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
     };
 
+    // Command palette (added last so it renders on top)
+    commandPalette = std::make_unique<CommandPaletteWidget> (actionRegistry);
+    commandPalette->setVisible (false);
+    addChild (commandPalette.get());
+
+    commandPalette->onDismiss = [this]() { dismissCommandPalette(); };
+
+    // Wire command palette trigger
+    vimEngine->onCommandPalette = [this]() { showCommandPalette(); };
+
+    // Register all actions in the palette
+    registerAllActions();
+
     // Register animating widgets
     if (renderer)
     {
@@ -221,6 +235,13 @@ void AppController::resized()
         if (showSequencer)
             sequencerWidget->setBounds (centerX, centerY + arrangementH, centerW, bottomH);
     }
+
+    // Command palette overlay (centered, top portion)
+    if (commandPalette)
+    {
+        float paletteY = h * 0.12f;
+        commandPalette->setBounds (0, paletteY, w, h - paletteY);
+    }
 }
 
 bool AppController::keyDown (const gfx::KeyEvent& e)
@@ -230,6 +251,277 @@ bool AppController::keyDown (const gfx::KeyEvent& e)
         return true;
 
     return false;
+}
+
+// ─── Command palette ─────────────────────────────────────────
+
+void AppController::paintOverChildren (gfx::Canvas& canvas)
+{
+    if (commandPalette && commandPalette->isShowing())
+    {
+        canvas.fillRect (gfx::Rect (0, 0, getWidth(), getHeight()),
+                         gfx::Color (0, 0, 0, 128));
+    }
+}
+
+void AppController::showCommandPalette()
+{
+    if (! commandPalette)
+        return;
+
+    commandPalette->show (vimContext.getPanel());
+    gfx::Widget::setCurrentFocus (commandPalette.get());
+}
+
+void AppController::dismissCommandPalette()
+{
+    gfx::Widget::setCurrentFocus (nullptr);
+}
+
+void AppController::registerAllActions()
+{
+    // ─── Transport ───────────────────────────────────────────
+    actionRegistry.registerAction ({
+        "transport.play_stop", "Play / Stop", "Transport", "Space",
+        [this]() { vimEngine->togglePlayStop(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "transport.jump_start", "Jump to Start", "Transport", "0",
+        [this]() { vimEngine->jumpToSessionStart(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "transport.jump_end", "Jump to End", "Transport", "$",
+        [this]() { vimEngine->jumpToSessionEnd(); }, {}
+    });
+
+    // ─── Track ───────────────────────────────────────────────
+    actionRegistry.registerAction ({
+        "track.toggle_mute", "Toggle Mute", "Track", "M",
+        [this]() { vimEngine->toggleMute(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "track.toggle_solo", "Toggle Solo", "Track", "S",
+        [this]() { vimEngine->toggleSolo(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "track.toggle_record_arm", "Toggle Record Arm", "Track", "r",
+        [this]() { vimEngine->toggleRecordArm(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "track.add_from_file", "Import Audio File", "Track", "",
+        [this]() { openFile(); }, {}
+    });
+
+    // ─── Edit ────────────────────────────────────────────────
+    actionRegistry.registerAction ({
+        "edit.undo", "Undo", "Edit", "u",
+        [this]() { project.getUndoSystem().undo(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "edit.redo", "Redo", "Edit", "Ctrl+R",
+        [this]() { project.getUndoSystem().redo(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "edit.delete", "Delete Selected Clip", "Edit", "x",
+        [this]() { vimEngine->deleteSelectedRegions(); },
+        { VimContext::Editor }
+    });
+
+    actionRegistry.registerAction ({
+        "edit.yank", "Yank (Copy) Selected Clip", "Edit", "yy",
+        [this]() { vimEngine->yankSelectedRegions(); },
+        { VimContext::Editor }
+    });
+
+    actionRegistry.registerAction ({
+        "edit.paste_after", "Paste After Playhead", "Edit", "p",
+        [this]() { vimEngine->pasteAfterPlayhead(); },
+        { VimContext::Editor }
+    });
+
+    actionRegistry.registerAction ({
+        "edit.paste_before", "Paste Before Playhead", "Edit", "P",
+        [this]() { vimEngine->pasteBeforePlayhead(); },
+        { VimContext::Editor }
+    });
+
+    actionRegistry.registerAction ({
+        "edit.split", "Split Clip at Playhead", "Edit", "s",
+        [this]() { vimEngine->splitRegionAtPlayhead(); },
+        { VimContext::Editor }
+    });
+
+    // ─── File ────────────────────────────────────────────────
+    actionRegistry.registerAction ({
+        "file.save", "Save Session", "File", "",
+        [this]() { saveSession(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "file.load", "Load Session", "File", "",
+        [this]() { loadSession(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "file.import_audio", "Import Audio", "File", "",
+        [this]() { openFile(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "file.audio_settings", "Audio Settings", "File", "",
+        [this]() { showAudioSettings(); }, {}
+    });
+
+    // ─── Navigation ──────────────────────────────────────────
+    actionRegistry.registerAction ({
+        "nav.up", "Move Up", "Navigation", "k",
+        [this]() { vimEngine->moveSelectionUp(); },
+        { VimContext::Editor }
+    });
+
+    actionRegistry.registerAction ({
+        "nav.down", "Move Down", "Navigation", "j",
+        [this]() { vimEngine->moveSelectionDown(); },
+        { VimContext::Editor }
+    });
+
+    actionRegistry.registerAction ({
+        "nav.left", "Move Left", "Navigation", "h",
+        [this]() { vimEngine->moveSelectionLeft(); },
+        { VimContext::Editor }
+    });
+
+    actionRegistry.registerAction ({
+        "nav.right", "Move Right", "Navigation", "l",
+        [this]() { vimEngine->moveSelectionRight(); },
+        { VimContext::Editor }
+    });
+
+    actionRegistry.registerAction ({
+        "nav.first_track", "Jump to First Track", "Navigation", "gg",
+        [this]() { vimEngine->jumpToFirstTrack(); },
+        { VimContext::Editor }
+    });
+
+    actionRegistry.registerAction ({
+        "nav.last_track", "Jump to Last Track", "Navigation", "G",
+        [this]() { vimEngine->jumpToLastTrack(); },
+        { VimContext::Editor }
+    });
+
+    actionRegistry.registerAction ({
+        "nav.cycle_panel", "Cycle Panel", "Navigation", "Tab",
+        [this]() { vimEngine->cycleFocusPanel(); }, {}
+    });
+
+    // ─── Mode ────────────────────────────────────────────────
+    actionRegistry.registerAction ({
+        "mode.insert", "Enter Insert Mode", "Mode", "i",
+        [this]() { vimEngine->enterInsertMode(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "mode.normal", "Enter Normal Mode", "Mode", "Esc",
+        [this]() { vimEngine->enterNormalMode(); }, {}
+    });
+
+    // ─── View ────────────────────────────────────────────────
+    actionRegistry.registerAction ({
+        "view.toggle_browser", "Toggle Browser", "View", "",
+        [this]() { toggleBrowser(); }, {}
+    });
+
+    // ─── Sequencer ───────────────────────────────────────────
+    actionRegistry.registerAction ({
+        "seq.move_left", "Sequencer Move Left", "Sequencer", "h",
+        [this]() { vimEngine->seqMoveLeft(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.move_right", "Sequencer Move Right", "Sequencer", "l",
+        [this]() { vimEngine->seqMoveRight(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.move_up", "Sequencer Move Up", "Sequencer", "k",
+        [this]() { vimEngine->seqMoveUp(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.move_down", "Sequencer Move Down", "Sequencer", "j",
+        [this]() { vimEngine->seqMoveDown(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.toggle_step", "Toggle Step", "Sequencer", "Space",
+        [this]() { vimEngine->seqToggleStep(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.cycle_velocity", "Cycle Velocity", "Sequencer", "v",
+        [this]() { vimEngine->seqCycleVelocity(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.velocity_up", "Increase Velocity", "Sequencer", "+",
+        [this]() { vimEngine->seqAdjustVelocity (10); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.velocity_down", "Decrease Velocity", "Sequencer", "-",
+        [this]() { vimEngine->seqAdjustVelocity (-10); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.toggle_row_mute", "Toggle Row Mute", "Sequencer", "M",
+        [this]() { vimEngine->seqToggleRowMute(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.toggle_row_solo", "Toggle Row Solo", "Sequencer", "S",
+        [this]() { vimEngine->seqToggleRowSolo(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.jump_first_step", "Jump to First Step", "Sequencer", "0",
+        [this]() { vimEngine->seqJumpFirstStep(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.jump_last_step", "Jump to Last Step", "Sequencer", "$",
+        [this]() { vimEngine->seqJumpLastStep(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.jump_first_row", "Jump to First Row", "Sequencer", "gg",
+        [this]() { vimEngine->seqJumpFirstRow(); },
+        { VimContext::Sequencer }
+    });
+
+    actionRegistry.registerAction ({
+        "seq.jump_last_row", "Jump to Last Row", "Sequencer", "G",
+        [this]() { vimEngine->seqJumpLastRow(); },
+        { VimContext::Sequencer }
+    });
 }
 
 // ─── Audio graph ─────────────────────────────────────────────

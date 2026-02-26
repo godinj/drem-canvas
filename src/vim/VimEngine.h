@@ -57,14 +57,13 @@ public:
     // Plugin command callback (wired by MainComponent)
     std::function<void (const juce::String&)> onPluginCommand;
 
+    // Command palette callback
+    std::function<void()> onCommandPalette;
+
     void addListener (Listener* l) { listeners.add (l); }
     void removeListener (Listener* l) { listeners.remove (l); }
 
-private:
-    bool handleNormalKey (const juce::KeyPress& key);
-    bool handleInsertKey (const juce::KeyPress& key);
-    bool handleCommandKey (const juce::KeyPress& key);
-    void executeCommand();
+    // ─── Public action methods (for ActionRegistry) ──────────
 
     // Navigation
     void moveSelectionUp();
@@ -100,8 +99,7 @@ private:
     // Panel
     void cycleFocusPanel();
 
-    // Sequencer navigation
-    bool handleSequencerNormalKey (const juce::KeyPress& key);
+    // Sequencer actions
     void seqMoveLeft();
     void seqMoveRight();
     void seqMoveUp();
@@ -115,6 +113,14 @@ private:
     void seqCycleVelocity();
     void seqToggleRowMute();
     void seqToggleRowSolo();
+
+private:
+    bool handleNormalKey (const juce::KeyPress& key);
+    bool handleInsertKey (const juce::KeyPress& key);
+    bool handleCommandKey (const juce::KeyPress& key);
+    void executeCommand();
+
+    bool handleSequencerNormalKey (const juce::KeyPress& key);
 
     // Stubs
     void openFocusedItem();
