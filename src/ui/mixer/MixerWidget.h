@@ -29,6 +29,9 @@ public:
     void setSelectedStripIndex (int index);
     void setMixerFocus (VimContext::MixerFocus focus);
 
+    // Callback: (trackIndex, pluginIndex) when a plugin slot is clicked
+    std::function<void (int, int)> onPluginClicked;
+
     // ValueTree::Listener
     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
     void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;

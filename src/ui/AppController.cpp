@@ -118,6 +118,11 @@ void AppController::initialise()
     mixerWidget = std::make_unique<MixerWidget> (project);
     addChild (mixerWidget.get());
 
+    mixerWidget->onPluginClicked = [this] (int trackIndex, int pluginIndex)
+    {
+        openPluginEditor (trackIndex, pluginIndex);
+    };
+
     // Step sequencer (hidden initially)
     sequencerWidget = std::make_unique<StepSequencerWidget> (project);
     sequencerWidget->setVisible (false);
@@ -329,6 +334,16 @@ void AppController::registerAllActions()
     actionRegistry.registerAction ({
         "track.add_plugin", "Add Plugin to Track", "Track", ":plugin",
         [this]() { if (! browserVisible) toggleBrowser(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "track.open_plugin", "Open Plugin Editor", "Track", "",
+        [this]()
+        {
+            int trackIdx = arrangement.getSelectedTrackIndex();
+            if (trackIdx >= 0)
+                openPluginEditor (trackIdx, 0);
+        }, {}
     });
 
     // ─── Edit ────────────────────────────────────────────────

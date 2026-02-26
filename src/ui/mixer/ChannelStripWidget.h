@@ -31,6 +31,7 @@ public:
     MeterWidget& getMeter() { return meter; }
     gfx::SliderWidget& getFader() { return fader; }
     gfx::SliderWidget& getPanKnob() { return panKnob; }
+    PluginSlotListWidget& getPluginSlots() { return pluginSlots; }
 
     std::function<void (double)> onVolumeChange;
     std::function<void (double)> onPanChange;

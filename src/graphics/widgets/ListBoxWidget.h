@@ -19,6 +19,7 @@ public:
     void paint (Canvas& canvas) override;
 
     void mouseDown (const MouseEvent& e) override;
+    void mouseDoubleClick (const MouseEvent& e) override;
     void mouseWheel (const WheelEvent& e) override;
 
     // Data model

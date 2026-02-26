@@ -110,7 +110,6 @@ void GlfwWindow::mouseButtonCallback (GLFWwindow* w, int button, int action, int
     event.x = static_cast<float> (xpos);
     event.y = static_cast<float> (ypos);
     event.rightButton = (button == GLFW_MOUSE_BUTTON_RIGHT);
-    event.clickCount = 1;
     event.shift = (mods & GLFW_MOD_SHIFT) != 0;
     event.control = (mods & GLFW_MOD_CONTROL) != 0;
     event.alt = (mods & GLFW_MOD_ALT) != 0;
@@ -118,6 +117,29 @@ void GlfwWindow::mouseButtonCallback (GLFWwindow* w, int button, int action, int
 
     if (action == GLFW_PRESS)
     {
+        // Detect double-click: same button, within time and distance thresholds
+        double now = glfwGetTime();
+        double dx = xpos - self->lastClickX;
+        double dy = ypos - self->lastClickY;
+        double dist = dx * dx + dy * dy;
+
+        if (button == self->lastClickButton
+            && (now - self->lastClickTime) < doubleClickMaxSeconds
+            && dist < doubleClickMaxDistance * doubleClickMaxDistance)
+        {
+            self->currentClickCount++;
+        }
+        else
+        {
+            self->currentClickCount = 1;
+        }
+
+        self->lastClickTime = now;
+        self->lastClickX = xpos;
+        self->lastClickY = ypos;
+        self->lastClickButton = button;
+
+        event.clickCount = self->currentClickCount;
         self->mousePressed = true;
         self->lastMouseX = xpos;
         self->lastMouseY = ypos;
@@ -126,6 +148,7 @@ void GlfwWindow::mouseButtonCallback (GLFWwindow* w, int button, int action, int
     }
     else if (action == GLFW_RELEASE)
     {
+        event.clickCount = self->currentClickCount;
         self->mousePressed = false;
         if (self->onMouseUp)
             self->onMouseUp (event);

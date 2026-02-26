@@ -65,6 +65,15 @@ private:
     double lastMouseX = 0.0;
     double lastMouseY = 0.0;
 
+    // Double-click detection
+    double lastClickTime = 0.0;
+    double lastClickX = 0.0;
+    double lastClickY = 0.0;
+    int lastClickButton = -1;
+    int currentClickCount = 0;
+    static constexpr double doubleClickMaxSeconds = 0.4;
+    static constexpr double doubleClickMaxDistance = 5.0;
+
     // On GLFW/Linux, keyCallback fires BEFORE charCallback.
     // For printable keys we stash key info and dispatch from charCallback.
     bool pendingKeyDown = false;

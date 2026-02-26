@@ -1,6 +1,7 @@
 #include "MixerWidget.h"
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/Theme.h"
+#include "model/Track.h"
 #include "vim/VimContext.h"
 
 namespace dc
@@ -64,6 +65,27 @@ void MixerWidget::rebuildStrips()
     {
         auto trackState = project.getTrack (i);
         auto strip = std::make_unique<ChannelStripWidget> (trackState);
+
+        // Populate plugin slots from model
+        Track track (trackState);
+        std::vector<PluginSlotListWidget::PluginSlot> slots;
+        for (int p = 0; p < track.getNumPlugins(); ++p)
+        {
+            auto pluginState = track.getPlugin (p);
+            juce::String name = pluginState.getProperty (IDs::pluginName, "Plugin");
+            bool enabled = track.isPluginEnabled (p);
+            slots.push_back ({ name.toStdString(), ! enabled });
+        }
+        strip->getPluginSlots().setSlots (slots);
+
+        // Wire plugin slot click to open editor
+        int trackIndex = i;
+        strip->getPluginSlots().onSlotClicked = [this, trackIndex] (int pluginIndex)
+        {
+            if (onPluginClicked)
+                onPluginClicked (trackIndex, pluginIndex);
+        };
+
         stripContainer.addChild (strip.get());
         strips.push_back (std::move (strip));
     }

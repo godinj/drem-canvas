@@ -53,10 +53,17 @@ void ListBoxWidget::mouseDown (const MouseEvent& e)
 {
     int index = static_cast<int> ((e.y + scrollOffset) / rowHeight);
     if (index >= 0 && index < static_cast<int> (items.size()))
+        setSelectedIndex (index);
+}
+
+void ListBoxWidget::mouseDoubleClick (const MouseEvent& e)
+{
+    int index = static_cast<int> ((e.y + scrollOffset) / rowHeight);
+    if (index >= 0 && index < static_cast<int> (items.size()))
     {
         setSelectedIndex (index);
 
-        if (e.clickCount >= 2 && onDoubleClick)
+        if (onDoubleClick)
             onDoubleClick (index);
     }
 }
