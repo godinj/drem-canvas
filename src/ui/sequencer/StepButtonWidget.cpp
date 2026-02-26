@@ -44,9 +44,9 @@ void StepButtonWidget::paint (gfx::Canvas& canvas)
     if (playbackHighlighted)
         canvas.fillRoundedRect (r, 2.0f, Color (255, 255, 255, 60));
 
-    // Cursor border (cyan)
+    // Cursor border (green selection)
     if (cursorHighlighted)
-        canvas.strokeRect (Rect (0, 0, w, h), theme.cursor, 2.0f);
+        canvas.strokeRect (Rect (0, 0, w, h), theme.selection, 2.0f);
 
     // Beat separator on left edge
     if (beatSeparator)

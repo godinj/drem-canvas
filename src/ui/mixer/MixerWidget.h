@@ -4,6 +4,7 @@
 #include "graphics/widgets/ScrollViewWidget.h"
 #include "ChannelStripWidget.h"
 #include "model/Project.h"
+#include "vim/VimContext.h"
 #include <JuceHeader.h>
 #include <vector>
 #include <memory>
@@ -20,9 +21,13 @@ public:
     ~MixerWidget() override;
 
     void paint (gfx::Canvas& canvas) override;
+    void paintOverChildren (gfx::Canvas& canvas) override;
     void resized() override;
 
     void rebuildStrips();
+    void setActiveContext (bool active);
+    void setSelectedStripIndex (int index);
+    void setMixerFocus (VimContext::MixerFocus focus);
 
     // ValueTree::Listener
     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
@@ -35,6 +40,8 @@ private:
     gfx::Widget stripContainer;
     std::vector<std::unique_ptr<ChannelStripWidget>> strips;
     std::unique_ptr<ChannelStripWidget> masterStrip;
+    bool activeContext = false;
+    int selectedStripIndex = -1;
 };
 
 } // namespace ui

@@ -29,10 +29,10 @@ void StepButton::paint (juce::Graphics& g)
         g.fillRoundedRectangle (bounds, 3.0f);
     }
 
-    // Selection border (cyan)
+    // Selection border (green)
     if (selected)
     {
-        g.setColour (juce::Colour (0xff00e5ff));
+        g.setColour (juce::Colour (0xff50c878));
         g.drawRoundedRectangle (bounds, 3.0f, 2.0f);
     }
 }

@@ -98,11 +98,50 @@ void ChannelStripWidget::resized()
     soloButton.setBounds (margin + buttonW + margin, y, buttonW, 22.0f);
 }
 
+void ChannelStripWidget::paintOverChildren (gfx::Canvas& canvas)
+{
+    using namespace gfx;
+    auto& theme = Theme::getDefault();
+
+    if (! selected || currentFocus == VimContext::FocusNone)
+        return;
+
+    gfx::Widget* focusedWidget = nullptr;
+
+    switch (currentFocus)
+    {
+        case VimContext::FocusVolume:  focusedWidget = &fader; break;
+        case VimContext::FocusPan:     focusedWidget = &panKnob; break;
+        case VimContext::FocusPlugins: focusedWidget = &pluginSlots; break;
+        default: break;
+    }
+
+    if (focusedWidget != nullptr)
+    {
+        Rect focusBounds = focusedWidget->getBounds().reduced (-2.0f);
+
+        // Subtle green fill
+        canvas.fillRoundedRect (focusBounds, 2.0f, theme.selection.withAlpha ((uint8_t) 20));
+
+        // Green stroke
+        canvas.strokeRect (focusBounds, theme.selection.withAlpha ((uint8_t) 153), 1.5f);
+    }
+}
+
 void ChannelStripWidget::setSelected (bool sel)
 {
     if (selected != sel)
     {
         selected = sel;
+        repaint();
+    }
+}
+
+void ChannelStripWidget::setMixerFocus (VimContext::MixerFocus focus)
+{
+    if (currentFocus != focus)
+    {
+        currentFocus = focus;
         repaint();
     }
 }

@@ -767,6 +767,17 @@ void MainComponent::vimContextChanged()
 {
     updatePanelVisibility();
 
+    // Propagate active context indicator
+    auto panel = vimContext.getPanel();
+    if (arrangementView != nullptr)
+        arrangementView->setActiveContext (panel == VimContext::Editor);
+    if (mixerPanel != nullptr)
+    {
+        mixerPanel->setActiveContext (panel == VimContext::Mixer);
+        mixerPanel->setSelectedStripIndex (arrangement.getSelectedTrackIndex());
+        mixerPanel->setMixerFocus (vimContext.getMixerFocus());
+    }
+
     // Sync grid cursor to VimContext
     if (sequencerView != nullptr)
         sequencerView->getGrid().setCursorPosition (vimContext.getSeqRow(), vimContext.getSeqStep());

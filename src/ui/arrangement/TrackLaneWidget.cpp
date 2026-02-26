@@ -42,7 +42,13 @@ void TrackLaneWidget::paint (gfx::Canvas& canvas)
     // Track lane background (right of header)
     float laneWidth = getWidth() - headerWidth;
     if (laneWidth > 0)
+    {
         canvas.fillRect (Rect (headerWidth, 0, laneWidth, h), theme.panelBackground);
+
+        // Subtle green tint over lane body when selected
+        if (selected)
+            canvas.fillRect (Rect (headerWidth, 0, laneWidth, h), theme.selection.withAlpha ((uint8_t) 15));
+    }
 
     // Bottom separator
     canvas.drawLine (0, h - 1.0f, getWidth(), h - 1.0f, theme.outlineColor, 1.0f);

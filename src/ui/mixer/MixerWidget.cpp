@@ -1,6 +1,7 @@
 #include "MixerWidget.h"
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/Theme.h"
+#include "vim/VimContext.h"
 
 namespace dc
 {
@@ -77,6 +78,53 @@ void MixerWidget::rebuildStrips()
     }
 
     resized();
+}
+
+void MixerWidget::paintOverChildren (gfx::Canvas& canvas)
+{
+    using namespace gfx;
+    auto& theme = Theme::getDefault();
+
+    if (activeContext)
+    {
+        canvas.fillRect (Rect (0, 0, getWidth(), 2.0f), theme.selection);
+    }
+    else
+    {
+        canvas.fillRect (Rect (0, 0, getWidth(), getHeight()), Color (0, 0, 0, 40));
+    }
+}
+
+void MixerWidget::setActiveContext (bool active)
+{
+    if (activeContext != active)
+    {
+        activeContext = active;
+        repaint();
+    }
+}
+
+void MixerWidget::setSelectedStripIndex (int index)
+{
+    if (selectedStripIndex == index)
+        return;
+
+    selectedStripIndex = index;
+
+    for (size_t i = 0; i < strips.size(); ++i)
+        strips[i]->setSelected (static_cast<int> (i) == index);
+
+    if (masterStrip)
+        masterStrip->setSelected (index == static_cast<int> (strips.size()));
+}
+
+void MixerWidget::setMixerFocus (VimContext::MixerFocus focus)
+{
+    for (auto& strip : strips)
+        strip->setMixerFocus (focus);
+
+    if (masterStrip)
+        masterStrip->setMixerFocus (focus);
 }
 
 void MixerWidget::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&)

@@ -62,29 +62,50 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
         x += pendingWidth;
     }
 
-    // ── Context panel segment
-    float panelWidth = 100.0f;
+    // ── Context panel segment (prominent green on dark bg)
+    float panelWidth = 120.0f;
+    auto& theme = Theme::getDefault();
+    canvas.fillRect (Rect (x, 0, panelWidth, h), Color::fromARGB (0xff202030));
     canvas.drawText (context.getPanelName().toStdString(),
-                     x + 6.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffcdd6f4));
+                     x + 6.0f, h * 0.5f + 5.0f, font, theme.selection);
     x += panelWidth;
 
-    // ── Cursor info segment
+    // ── Breadcrumb info segment (context-dependent)
+    float breadcrumbWidth = 280.0f;
     int trackIdx = arrangement.getSelectedTrackIndex();
-    std::string cursorText;
+    std::string breadcrumb;
 
     if (trackIdx >= 0 && trackIdx < arrangement.getNumTracks())
     {
         Track track = arrangement.getTrack (trackIdx);
-        cursorText = "T" + std::to_string (trackIdx + 1) + ":"
-                   + track.getName().toStdString()
-                   + " C" + std::to_string (context.getSelectedClipIndex() + 1);
+        std::string trackInfo = "T" + std::to_string (trackIdx + 1) + ":"
+                              + track.getName().toStdString();
+
+        auto panel = context.getPanel();
+        if (panel == VimContext::Editor)
+        {
+            breadcrumb = "> " + trackInfo + " > C"
+                       + std::to_string (context.getSelectedClipIndex() + 1);
+        }
+        else if (panel == VimContext::Mixer)
+        {
+            auto focusName = context.getMixerFocusName().toStdString();
+            breadcrumb = "> " + trackInfo;
+            if (! focusName.empty())
+                breadcrumb += " > " + focusName;
+        }
+        else if (panel == VimContext::Sequencer)
+        {
+            breadcrumb = "> R" + std::to_string (context.getSeqRow() + 1)
+                       + " > S" + std::to_string (context.getSeqStep() + 1);
+        }
     }
     else
     {
-        cursorText = "No track selected";
+        breadcrumb = "No track selected";
     }
 
-    canvas.drawText (cursorText, x + 6.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffa6adc8));
+    canvas.drawText (breadcrumb, x + 6.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffa6adc8));
 
     // ── Playhead info (right-aligned)
     auto timeStr = transport.getTimeString().toStdString();

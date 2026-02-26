@@ -47,6 +47,13 @@ void TrackLane::paint (juce::Graphics& g)
                 juce::Justification::centredLeft,
                 true);
 
+    // Subtle green tint over lane body when selected
+    if (selected)
+    {
+        g.setColour (juce::Colour (0xff50c878).withAlpha (0.06f));
+        g.fillRect (bounds);
+    }
+
     // Draw horizontal separator at bottom
     g.setColour (juce::Colours::white.withAlpha (0.15f));
     g.drawHorizontalLine (getHeight() - 1, 0.0f, static_cast<float> (getWidth()));

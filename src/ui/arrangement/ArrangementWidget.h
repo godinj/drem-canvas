@@ -31,6 +31,7 @@ public:
     void animationTick (double timestampMs) override;
 
     void rebuildTrackLanes();
+    void setActiveContext (bool active);
 
     // VimEngine::Listener
     void vimModeChanged (VimEngine::Mode newMode) override;
@@ -56,6 +57,7 @@ private:
     std::vector<std::unique_ptr<TrackLaneWidget>> trackLanes;
 
     double pixelsPerSecond = 100.0;
+    bool activeContext = true;
     static constexpr float rulerHeight = 30.0f;
     static constexpr float trackHeight = 100.0f;
 };

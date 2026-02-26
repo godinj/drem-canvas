@@ -148,6 +148,44 @@ void ChannelStrip::paint (juce::Graphics& g)
     }
 }
 
+void ChannelStrip::paintOverChildren (juce::Graphics& g)
+{
+    if (! selected || currentFocus == VimContext::FocusNone)
+        return;
+
+    juce::Component* focusedComponent = nullptr;
+
+    switch (currentFocus)
+    {
+        case VimContext::FocusVolume:  focusedComponent = &fader; break;
+        case VimContext::FocusPan:     focusedComponent = &panKnob; break;
+        case VimContext::FocusPlugins: focusedComponent = &pluginSlotList; break;
+        default: break;
+    }
+
+    if (focusedComponent != nullptr)
+    {
+        auto focusBounds = focusedComponent->getBounds().toFloat().expanded (2.0f);
+
+        // Subtle green fill
+        g.setColour (juce::Colour (0xff50c878).withAlpha (0.08f));
+        g.fillRoundedRectangle (focusBounds, 2.0f);
+
+        // Green stroke
+        g.setColour (juce::Colour (0xff50c878).withAlpha (0.6f));
+        g.drawRoundedRectangle (focusBounds, 2.0f, 1.5f);
+    }
+}
+
+void ChannelStrip::setMixerFocus (VimContext::MixerFocus focus)
+{
+    if (currentFocus != focus)
+    {
+        currentFocus = focus;
+        repaint();
+    }
+}
+
 void ChannelStrip::resized()
 {
     auto area = getLocalBounds().reduced (2);

@@ -4,6 +4,7 @@
 #include "PluginSlotList.h"
 #include "model/Project.h"
 #include "utils/UndoSystem.h"
+#include "vim/VimContext.h"
 
 namespace dc
 {
@@ -16,12 +17,16 @@ public:
     ~ChannelStrip() override;
 
     void paint (juce::Graphics& g) override;
+    void paintOverChildren (juce::Graphics& g) override;
     void resized() override;
 
     MeterComponent& getMeter() { return meter; }
 
     // Vim cursor selection
     void setSelected (bool shouldBeSelected);
+
+    // Mixer parameter focus
+    void setMixerFocus (VimContext::MixerFocus focus);
 
     // Callback when volume/pan/mute/solo changes
     std::function<void()> onStateChanged;
@@ -46,6 +51,7 @@ private:
     PluginSlotList pluginSlotList;
 
     bool selected = false;
+    VimContext::MixerFocus currentFocus = VimContext::FocusNone;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChannelStrip)
 };

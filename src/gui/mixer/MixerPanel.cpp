@@ -113,6 +113,38 @@ void MixerPanel::resized()
     masterMeter.setBounds (area.removeFromLeft (40).reduced (4, 8));
 }
 
+void MixerPanel::paintOverChildren (juce::Graphics& g)
+{
+    if (activeContext)
+    {
+        g.setColour (juce::Colour (0xff50c878));
+        g.fillRect (0, 0, getWidth(), 2);
+    }
+    else
+    {
+        g.setColour (juce::Colour (0x28000000));
+        g.fillRect (getLocalBounds());
+    }
+}
+
+void MixerPanel::setActiveContext (bool active)
+{
+    if (activeContext != active)
+    {
+        activeContext = active;
+        repaint();
+    }
+}
+
+void MixerPanel::setMixerFocus (VimContext::MixerFocus focus)
+{
+    for (auto* strip : strips)
+        strip->setMixerFocus (focus);
+
+    if (masterStrip != nullptr)
+        masterStrip->setMixerFocus (focus);
+}
+
 void MixerPanel::valueTreeChildAdded (juce::ValueTree& parentTree, juce::ValueTree& /*childWhichHasBeenAdded*/)
 {
     if (parentTree.getType() == IDs::TRACKS)

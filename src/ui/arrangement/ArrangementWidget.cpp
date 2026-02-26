@@ -62,6 +62,18 @@ void ArrangementWidget::paintOverChildren (gfx::Canvas& canvas)
         canvas.drawLine (cursorX, rulerHeight, cursorX, getHeight(),
                          theme.playhead, 2.0f);
     }
+
+    // Active context indicator
+    if (activeContext)
+    {
+        // Green top bar
+        canvas.fillRect (Rect (0, 0, getWidth(), 2.0f), theme.selection);
+    }
+    else
+    {
+        // Dark overlay for inactive panel
+        canvas.fillRect (Rect (0, 0, getWidth(), getHeight()), Color (0, 0, 0, 40));
+    }
 }
 
 void ArrangementWidget::resized()
@@ -125,6 +137,15 @@ void ArrangementWidget::updateSelectionVisuals()
         bool isSelected = static_cast<int> (i) == selectedTrack;
         trackLanes[i]->setSelected (isSelected);
         trackLanes[i]->setSelectedClipIndex (isSelected ? selectedClip : -1);
+    }
+}
+
+void ArrangementWidget::setActiveContext (bool active)
+{
+    if (activeContext != active)
+    {
+        activeContext = active;
+        repaint();
     }
 }
 

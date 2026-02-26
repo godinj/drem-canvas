@@ -69,7 +69,10 @@ void ArrangementView::paint (juce::Graphics& g)
     // Background
     g.setColour (juce::Colour (0xff1a1a2a));
     g.fillAll();
+}
 
+void ArrangementView::paintOverChildren (juce::Graphics& g)
+{
     // Draw playback cursor
     double sr = transportController.getSampleRate();
 
@@ -90,6 +93,29 @@ void ArrangementView::paint (juce::Graphics& g)
                                 static_cast<float> (rulerHeight),
                                 static_cast<float> (getHeight()));
         }
+    }
+
+    // Active context indicator
+    if (activeContext)
+    {
+        // Green top bar
+        g.setColour (juce::Colour (0xff50c878));
+        g.fillRect (0, 0, getWidth(), 2);
+    }
+    else
+    {
+        // Dark overlay for inactive panel
+        g.setColour (juce::Colour (0x28000000));
+        g.fillRect (getLocalBounds());
+    }
+}
+
+void ArrangementView::setActiveContext (bool active)
+{
+    if (activeContext != active)
+    {
+        activeContext = active;
+        repaint();
     }
 }
 

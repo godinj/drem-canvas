@@ -8,6 +8,7 @@ class VimContext
 {
 public:
     enum Panel { Editor, Mixer, Sequencer };
+    enum MixerFocus { FocusNone, FocusVolume, FocusPan, FocusPlugins };
 
     VimContext() = default;
 
@@ -15,6 +16,11 @@ public:
     Panel getPanel() const { return activePanel; }
     void cyclePanel();
     juce::String getPanelName() const;
+
+    // Mixer parameter focus
+    MixerFocus getMixerFocus() const { return mixerFocus; }
+    void setMixerFocus (MixerFocus focus) { mixerFocus = focus; }
+    juce::String getMixerFocusName() const;
 
     // Clip selection
     int getSelectedClipIndex() const { return selectedClipIndex; }
@@ -38,6 +44,7 @@ public:
 
 private:
     Panel activePanel = Editor;
+    MixerFocus mixerFocus = FocusNone;
     int selectedClipIndex = 0;
     int seqRow  = 0;
     int seqStep = 0;

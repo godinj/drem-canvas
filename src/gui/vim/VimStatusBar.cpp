@@ -55,31 +55,51 @@ void VimStatusBar::paint (juce::Graphics& g)
                     juce::Justification::centredLeft);
     }
 
-    // ── Context panel segment ───────────────────────────────────────────
-    auto panelArea = area.removeFromLeft (100);
-    g.setColour (juce::Colour (0xffcdd6f4));
+    // ── Context panel segment (prominent green on dark bg) ─────────────
+    auto panelArea = area.removeFromLeft (120);
+    g.setColour (juce::Colour (0xff202030));
+    g.fillRect (panelArea);
+    g.setColour (juce::Colour (0xff50c878));
     g.drawText (context.getPanelName(), panelArea.reduced (6, 0),
                 juce::Justification::centredLeft);
 
-    // ── Cursor info segment ─────────────────────────────────────────────
-    auto cursorArea = area.removeFromLeft (200);
+    // ── Breadcrumb info segment (context-dependent) ─────────────────────
+    auto cursorArea = area.removeFromLeft (280);
     int trackIdx = arrangement.getSelectedTrackIndex();
-    juce::String cursorText;
+    juce::String breadcrumb;
 
     if (trackIdx >= 0 && trackIdx < arrangement.getNumTracks())
     {
         Track track = arrangement.getTrack (trackIdx);
-        cursorText = "T" + juce::String (trackIdx + 1) + ":"
-                   + track.getName()
-                   + " C" + juce::String (context.getSelectedClipIndex() + 1);
+        juce::String trackInfo = "T" + juce::String (trackIdx + 1) + ":"
+                               + track.getName();
+
+        auto panel = context.getPanel();
+        if (panel == VimContext::Editor)
+        {
+            breadcrumb = "> " + trackInfo + " > C"
+                       + juce::String (context.getSelectedClipIndex() + 1);
+        }
+        else if (panel == VimContext::Mixer)
+        {
+            auto focusName = context.getMixerFocusName();
+            breadcrumb = "> " + trackInfo;
+            if (focusName.isNotEmpty())
+                breadcrumb += " > " + focusName;
+        }
+        else if (panel == VimContext::Sequencer)
+        {
+            breadcrumb = "> R" + juce::String (context.getSeqRow() + 1)
+                       + " > S" + juce::String (context.getSeqStep() + 1);
+        }
     }
     else
     {
-        cursorText = "No track selected";
+        breadcrumb = "No track selected";
     }
 
     g.setColour (juce::Colour (0xffa6adc8));
-    g.drawText (cursorText, cursorArea.reduced (6, 0),
+    g.drawText (breadcrumb, cursorArea.reduced (6, 0),
                 juce::Justification::centredLeft);
 
     // ── Playhead info (right-aligned) ───────────────────────────────────

@@ -1215,6 +1215,17 @@ void AppController::vimContextChanged()
 {
     updatePanelVisibility();
 
+    // Propagate active context indicator
+    auto panel = vimContext.getPanel();
+    if (arrangementWidget)
+        arrangementWidget->setActiveContext (panel == VimContext::Editor);
+    if (mixerWidget)
+    {
+        mixerWidget->setActiveContext (panel == VimContext::Mixer);
+        mixerWidget->setSelectedStripIndex (arrangement.getSelectedTrackIndex());
+        mixerWidget->setMixerFocus (vimContext.getMixerFocus());
+    }
+
     // Sync grid cursor to VimContext
     if (sequencerWidget)
     {

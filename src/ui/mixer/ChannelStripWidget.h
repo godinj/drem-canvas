@@ -6,6 +6,7 @@
 #include "graphics/widgets/LabelWidget.h"
 #include "MeterWidget.h"
 #include "PluginSlotListWidget.h"
+#include "vim/VimContext.h"
 #include <JuceHeader.h>
 #include <functional>
 
@@ -20,10 +21,12 @@ public:
     explicit ChannelStripWidget (const juce::ValueTree& trackState);
 
     void paint (gfx::Canvas& canvas) override;
+    void paintOverChildren (gfx::Canvas& canvas) override;
     void resized() override;
 
     void setSelected (bool sel);
     bool isSelected() const { return selected; }
+    void setMixerFocus (VimContext::MixerFocus focus);
 
     MeterWidget& getMeter() { return meter; }
     gfx::SliderWidget& getFader() { return fader; }
@@ -35,6 +38,7 @@ public:
 private:
     juce::ValueTree trackState;
     bool selected = false;
+    VimContext::MixerFocus currentFocus = VimContext::FocusNone;
 
     gfx::LabelWidget nameLabel;
     PluginSlotListWidget pluginSlots;

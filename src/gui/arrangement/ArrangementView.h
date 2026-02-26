@@ -22,8 +22,10 @@ public:
     ~ArrangementView() override;
 
     void paint (juce::Graphics& g) override;
+    void paintOverChildren (juce::Graphics& g) override;
     void resized() override;
     void rebuildTrackLanes();
+    void setActiveContext (bool active);
 
     // VimEngine::Listener
     void vimModeChanged (VimEngine::Mode newMode) override;
@@ -49,6 +51,7 @@ private:
     juce::Component trackContainer;  // Goes inside viewport
 
     double pixelsPerSecond = 100.0;
+    bool activeContext = true;
     static constexpr int rulerHeight = 30;
     static constexpr int trackHeight = 100;
 

@@ -3,6 +3,7 @@
 #include "ChannelStrip.h"
 #include "model/Project.h"
 #include "engine/MixBusProcessor.h"
+#include "vim/VimContext.h"
 
 namespace dc
 {
@@ -15,12 +16,19 @@ public:
     ~MixerPanel() override;
 
     void paint (juce::Graphics& g) override;
+    void paintOverChildren (juce::Graphics& g) override;
     void resized() override;
 
     void rebuildStrips();
 
     // Vim cursor selection — index into strips[], or strips.size() for master
     void setSelectedStripIndex (int index);
+
+    // Active context indicator
+    void setActiveContext (bool active);
+
+    // Mixer parameter focus
+    void setMixerFocus (VimContext::MixerFocus focus);
 
     // Call this to wire meter sources from track processors
     std::function<void (int trackIndex, ChannelStrip& strip)> onWireMeter;
@@ -40,6 +48,7 @@ private:
     MeterComponent masterMeter;
 
     int selectedStripIndex = -1;
+    bool activeContext = false;
 
     static constexpr int stripWidth = 80;
 

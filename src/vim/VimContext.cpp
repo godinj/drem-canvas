@@ -11,6 +11,12 @@ void VimContext::cyclePanel()
         case Mixer:     activePanel = Sequencer; break;
         case Sequencer: activePanel = Editor;    break;
     }
+
+    // Default to FocusVolume when entering Mixer, clear otherwise
+    if (activePanel == Mixer)
+        mixerFocus = FocusVolume;
+    else
+        mixerFocus = FocusNone;
 }
 
 juce::String VimContext::getPanelName() const
@@ -22,6 +28,18 @@ juce::String VimContext::getPanelName() const
         case Sequencer: return "Sequencer";
     }
     return "Editor";
+}
+
+juce::String VimContext::getMixerFocusName() const
+{
+    switch (mixerFocus)
+    {
+        case FocusVolume:  return "Volume";
+        case FocusPan:     return "Pan";
+        case FocusPlugins: return "Plugins";
+        case FocusNone:    return "";
+    }
+    return "";
 }
 
 void VimContext::setClipboardMulti (const juce::Array<juce::ValueTree>& clips, bool linewise)
