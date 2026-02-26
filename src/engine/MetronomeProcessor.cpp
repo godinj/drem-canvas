@@ -57,7 +57,7 @@ void MetronomeProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             clickSamplePos = 0;
 
             // Determine if this is a downbeat (beat 0 of a bar)
-            int beatInBar = static_cast<int> (currentBeatFloor) % 4; // Assuming 4/4 time
+            int beatInBar = static_cast<int> (currentBeatFloor) % beatsPerBar.load();
             isDownbeat = (beatInBar == 0);
         }
 

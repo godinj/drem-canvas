@@ -94,6 +94,26 @@ void Project::setSampleRate (double sr)
     state.setProperty (IDs::sampleRate, sr, &undoManager);
 }
 
+int Project::getTimeSigNumerator() const
+{
+    return state.getProperty (IDs::timeSigNumerator, 4);
+}
+
+void Project::setTimeSigNumerator (int num)
+{
+    state.setProperty (IDs::timeSigNumerator, num, &undoManager);
+}
+
+int Project::getTimeSigDenominator() const
+{
+    return state.getProperty (IDs::timeSigDenominator, 4);
+}
+
+void Project::setTimeSigDenominator (int den)
+{
+    state.setProperty (IDs::timeSigDenominator, den, &undoManager);
+}
+
 bool Project::saveSessionToDirectory (const juce::File& sessionDir) const
 {
     return SessionWriter::writeSession (state, sessionDir);

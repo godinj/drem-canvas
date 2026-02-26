@@ -94,6 +94,10 @@ public:
     void setTempo (double bpm);
     double getSampleRate() const;
     void setSampleRate (double sr);
+    int getTimeSigNumerator() const;
+    void setTimeSigNumerator (int num);
+    int getTimeSigDenominator() const;
+    void setTimeSigDenominator (int den);
 
 private:
     juce::ValueTree state;

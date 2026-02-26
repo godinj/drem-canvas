@@ -28,7 +28,20 @@ void TransportController::togglePlayStop()
 void TransportController::advancePosition (int numSamples)
 {
     if (playing.load())
-        positionInSamples.fetch_add (static_cast<int64_t> (numSamples));
+    {
+        auto newPos = positionInSamples.load() + static_cast<int64_t> (numSamples);
+
+        if (loopEnabled.load())
+        {
+            auto loopStart = loopStartInSamples.load();
+            auto loopEnd = loopEndInSamples.load();
+
+            if (loopEnd > loopStart && newPos >= loopEnd)
+                newPos = loopStart + (newPos - loopEnd);
+        }
+
+        positionInSamples.store (newPos);
+    }
 }
 
 double TransportController::getPositionInSeconds() const

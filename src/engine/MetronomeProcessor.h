@@ -36,6 +36,7 @@ public:
     bool isEnabled() const   { return enabled.load(); }
     void setTempo (double bpm) { tempo.store (bpm); }
     void setVolume (float v) { volume.store (v); }
+    void setBeatsPerBar (int beats) { beatsPerBar.store (beats); }
 
 private:
     TransportController& transportController;
@@ -43,6 +44,7 @@ private:
     std::atomic<bool> enabled { false };
     std::atomic<double> tempo { 120.0 };
     std::atomic<float> volume { 0.7f };
+    std::atomic<int> beatsPerBar { 4 };
 
     double currentSampleRate = 44100.0;
     int clickSampleLength = 0;

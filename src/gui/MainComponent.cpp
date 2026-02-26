@@ -10,7 +10,7 @@ namespace dc
 {
 
 MainComponent::MainComponent()
-    : transportBar (transportController)
+    : transportBar (transportController, project, tempoMap)
 {
     setLookAndFeel (&lookAndFeel);
 
@@ -43,8 +43,29 @@ MainComponent::MainComponent()
         syncSequencerFromModel();
     }
 
+    // Create metronome processor and add to graph
+    {
+        auto proc = std::make_unique<MetronomeProcessor> (transportController);
+        metronomeProcessor = proc.get();
+        metronomeNode = audioEngine.addProcessor (std::move (proc));
+
+        // Connect metronome directly to audio output (monitoring signal, not through mix bus)
+        audioEngine.connectNodes (metronomeNode->nodeID, 0,
+                                  audioEngine.getAudioOutputNode()->nodeID, 0);
+        audioEngine.connectNodes (metronomeNode->nodeID, 1,
+                                  audioEngine.getAudioOutputNode()->nodeID, 1);
+
+        metronomeProcessor->setTempo (project.getTempo());
+        metronomeProcessor->setBeatsPerBar (project.getTimeSigNumerator());
+    }
+
     // Set up GUI components
     addAndMakeVisible (transportBar);
+    transportBar.onMetronomeToggled = [this] (bool enabled)
+    {
+        if (metronomeProcessor != nullptr)
+            metronomeProcessor->setEnabled (enabled);
+    };
 
     arrangementView = std::make_unique<ArrangementView> (project, transportController, arrangement, vimContext);
     addAndMakeVisible (*arrangementView);
@@ -115,11 +136,8 @@ MainComponent::MainComponent()
     // Sync tempo map from project
     tempoMap.setTempo (project.getTempo());
 
-    // Listen to track changes for audio graph sync
-    project.getState().getChildWithName (IDs::TRACKS).addListener (this);
-
-    // Listen to step sequencer changes for engine sync
-    project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+    // Listen to all project state changes (tracks, tempo, time sig, step sequencer)
+    project.getState().addListener (this);
 
     // Select first track if available
     if (arrangement.getNumTracks() > 0)
@@ -139,14 +157,15 @@ MainComponent::~MainComponent()
     vimEngine->removeListener (this);
     vimEngine->removeListener (arrangementView.get());
     removeKeyListener (vimEngine.get());
-    project.getState().getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
-    project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
+    project.getState().removeListener (this);
     setLookAndFeel (nullptr);
     pluginWindowManager.closeAll();
     trackPluginChains.clear();
     trackProcessors.clear();
     midiClipProcessors.clear();
     trackNodes.clear();
+    metronomeProcessor = nullptr;
+    metronomeNode = nullptr;
     sequencerProcessor = nullptr;
     sequencerNode = nullptr;
     mixBusNode = nullptr;
@@ -648,8 +667,7 @@ void MainComponent::loadSession()
 
             // Save ref to old state so we can detach widget listeners after replacement
             auto oldState = project.getState();
-            oldState.getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
-            oldState.getChildWithName (IDs::TRACKS).removeListener (this);
+            oldState.removeListener (this);
             oldState.getChildWithName (IDs::TRACKS).removeListener (arrangementView.get());
             oldState.getChildWithName (IDs::TRACKS).removeListener (mixerPanel.get());
 
@@ -658,8 +676,7 @@ void MainComponent::loadSession()
                 currentSessionDirectory = dir;
 
                 // Re-add listeners on the new state tree
-                project.getState().getChildWithName (IDs::TRACKS).addListener (this);
-                project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+                project.getState().addListener (this);
                 project.getState().getChildWithName (IDs::TRACKS).addListener (arrangementView.get());
                 project.getState().getChildWithName (IDs::TRACKS).addListener (mixerPanel.get());
                 rebuildAudioGraph();
@@ -668,8 +685,7 @@ void MainComponent::loadSession()
             else
             {
                 // Restore listeners on old (unchanged) state
-                oldState.getChildWithName (IDs::TRACKS).addListener (this);
-                oldState.getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+                oldState.addListener (this);
                 oldState.getChildWithName (IDs::TRACKS).addListener (arrangementView.get());
                 oldState.getChildWithName (IDs::TRACKS).addListener (mixerPanel.get());
 
@@ -687,11 +703,16 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
             syncTrackProcessorsFromModel();
     }
 
-    // Tempo change — sync to sequencer and MIDI clip processors
+    // Tempo change — sync to sequencer, metronome, and MIDI clip processors
     if (tree.hasType (IDs::PROJECT) && property == IDs::tempo)
     {
         if (sequencerProcessor != nullptr)
             sequencerProcessor->setTempo (project.getTempo());
+
+        if (metronomeProcessor != nullptr)
+            metronomeProcessor->setTempo (project.getTempo());
+
+        tempoMap.setTempo (project.getTempo());
 
         // Re-sync all MIDI tracks (beat→sample conversion depends on tempo)
         for (int i = 0; i < midiClipProcessors.size(); ++i)
@@ -702,6 +723,15 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
                 syncMidiClipFromModel (i);
             }
         }
+    }
+
+    // Time signature change — sync to metronome and tempo map
+    if (tree.hasType (IDs::PROJECT) && (property == IDs::timeSigNumerator || property == IDs::timeSigDenominator))
+    {
+        if (metronomeProcessor != nullptr)
+            metronomeProcessor->setBeatsPerBar (project.getTimeSigNumerator());
+
+        tempoMap.setTimeSig (project.getTimeSigNumerator(), project.getTimeSigDenominator());
     }
 
     // MIDI clip property changed (e.g. midiData, startPosition, length)
