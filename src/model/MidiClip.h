@@ -21,6 +21,17 @@ public:
     juce::MidiMessageSequence getMidiSequence() const;
     void setMidiSequence (const juce::MidiMessageSequence& seq, juce::UndoManager* um = nullptr);
 
+    // Data bridge: NOTE children ←→ base64 midiData
+    // expandNotesToChildren() decodes base64 into NOTE ValueTree children for editing.
+    // collapseChildrenToMidiData() encodes NOTE children back into base64 for storage/playback.
+    void expandNotesToChildren();
+    void collapseChildrenToMidiData (juce::UndoManager* um = nullptr);
+
+    // Note editing (operates on NOTE children, then collapses)
+    juce::ValueTree addNote (int noteNumber, double startBeat, double lengthBeats,
+                             int velocity, juce::UndoManager* um = nullptr);
+    void removeNote (int childIndex, juce::UndoManager* um = nullptr);
+
     juce::ValueTree& getState() { return state; }
 
 private:

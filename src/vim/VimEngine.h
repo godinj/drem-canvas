@@ -63,6 +63,27 @@ public:
     // MIDI track creation callback
     std::function<void (const juce::String&)> onCreateMidiTrack;
 
+    // Piano roll open callback
+    std::function<void (const juce::ValueTree&)> onOpenPianoRoll;
+
+    // Piano roll action callbacks (wired by AppController)
+    std::function<void (int tool)> onSetPianoRollTool;     // 0=Select, 1=Draw, 2=Erase
+    std::function<void()> onPianoRollDeleteSelected;
+    std::function<void()> onPianoRollCopy;
+    std::function<void()> onPianoRollPaste;
+    std::function<void()> onPianoRollDuplicate;
+    std::function<void (int)> onPianoRollTranspose;        // semitones
+    std::function<void()> onPianoRollSelectAll;
+    std::function<void()> onPianoRollQuantize;
+    std::function<void()> onPianoRollHumanize;
+    std::function<void (bool)> onPianoRollVelocityLane;    // toggle
+    std::function<void (float)> onPianoRollZoom;           // factor
+    std::function<void()> onPianoRollZoomToFit;
+    std::function<void (int)> onPianoRollGridDiv;          // delta to grid division
+    std::function<void (int, int)> onPianoRollMoveCursor;  // dBeatCol, dNoteRow
+    std::function<void()> onPianoRollAddNote;
+    std::function<void (int, int)> onPianoRollJumpCursor;  // absolute beatCol, noteRow (-1 = no change)
+
     void addListener (Listener* l) { listeners.add (l); }
     void removeListener (Listener* l) { listeners.remove (l); }
 
@@ -103,6 +124,17 @@ public:
     // Panel
     void cycleFocusPanel();
 
+    // Piano roll actions
+    void prMoveLeft();
+    void prMoveRight();
+    void prMoveUp();
+    void prMoveDown();
+    void prSelectNote();
+    void prDeleteNote();
+    void prAddNote();
+    void prJumpStart();
+    void prJumpEnd();
+
     // Sequencer actions
     void seqMoveLeft();
     void seqMoveRight();
@@ -125,9 +157,10 @@ private:
     void executeCommand();
 
     bool handleSequencerNormalKey (const juce::KeyPress& key);
+    bool handlePianoRollNormalKey (const juce::KeyPress& key);
 
-    // Stubs
     void openFocusedItem();
+    void closePianoRoll();
 
     // Pending key helpers
     void clearPending();

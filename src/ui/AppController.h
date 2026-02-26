@@ -10,6 +10,7 @@
 #include "engine/TrackProcessor.h"
 #include "engine/StepSequencerProcessor.h"
 #include "engine/MidiClipProcessor.h"
+#include "engine/MidiEngine.h"
 #include "model/Project.h"
 #include "model/Arrangement.h"
 #include "model/TempoMap.h"
@@ -114,6 +115,7 @@ private:
     juce::Array<juce::Array<PluginNodeInfo>> trackPluginChains;
     StepSequencerProcessor* sequencerProcessor = nullptr;
     juce::AudioProcessorGraph::Node::Ptr sequencerNode;
+    MidiEngine midiEngine;
 
     // ─── Model ───────────────────────────────────────────
     Project project;

@@ -168,6 +168,10 @@ target_sources(DremCanvas PRIVATE
     # UI - Piano Roll
     src/ui/midieditor/PianoKeyboardWidget.cpp
     src/ui/midieditor/NoteWidget.cpp
+    src/ui/midieditor/NoteGridWidget.cpp
+    src/ui/midieditor/PianoRollRulerWidget.cpp
+    src/ui/midieditor/VelocityLaneWidget.cpp
+    src/ui/midieditor/CCLaneWidget.cpp
     src/ui/midieditor/PianoRollWidget.cpp
 
     # UI - Browser

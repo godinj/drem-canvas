@@ -18,6 +18,7 @@ public:
 
     void setScrollOffset (float offset) { scrollOffset = offset; repaint(); }
     float getRowHeight() const { return rowHeight; }
+    void setRowHeight (float rh) { rowHeight = rh; repaint(); }
 
     std::function<void (int)> onNoteClicked; // MIDI note number
 

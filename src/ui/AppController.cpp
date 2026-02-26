@@ -28,6 +28,7 @@ AppController::~AppController()
     project.getState().getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
     project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
 
+    midiEngine.shutdown();
     pluginWindowManager.closeAll();
     trackPluginChains.clear();
     trackProcessors.clear();
@@ -91,6 +92,167 @@ void AppController::initialise()
 
     vimEngine->onCreateMidiTrack = [this] (const juce::String& name) { addMidiTrack (name); };
 
+    // Wire piano roll open
+    vimEngine->onOpenPianoRoll = [this] (const juce::ValueTree& clipState)
+    {
+        if (pianoRollWidget)
+            pianoRollWidget->loadClip (clipState);
+    };
+
+    // Wire piano roll action callbacks
+    vimEngine->onSetPianoRollTool = [this] (int tool)
+    {
+        if (pianoRollWidget)
+            pianoRollWidget->setTool (static_cast<PianoRollWidget::Tool> (tool));
+    };
+
+    vimEngine->onPianoRollDeleteSelected = [this]()
+    {
+        if (pianoRollWidget) pianoRollWidget->deleteSelectedNotes();
+    };
+
+    vimEngine->onPianoRollCopy = [this]()
+    {
+        if (pianoRollWidget) pianoRollWidget->copySelectedNotes();
+    };
+
+    vimEngine->onPianoRollPaste = [this]()
+    {
+        if (pianoRollWidget) pianoRollWidget->pasteNotes();
+    };
+
+    vimEngine->onPianoRollDuplicate = [this]()
+    {
+        if (pianoRollWidget) pianoRollWidget->duplicateSelectedNotes();
+    };
+
+    vimEngine->onPianoRollTranspose = [this] (int semitones)
+    {
+        if (pianoRollWidget) pianoRollWidget->transposeSelected (semitones);
+    };
+
+    vimEngine->onPianoRollSelectAll = [this]()
+    {
+        if (pianoRollWidget) pianoRollWidget->selectAll();
+    };
+
+    vimEngine->onPianoRollQuantize = [this]()
+    {
+        if (pianoRollWidget) pianoRollWidget->quantizeSelected();
+    };
+
+    vimEngine->onPianoRollHumanize = [this]()
+    {
+        if (pianoRollWidget) pianoRollWidget->humanizeSelected();
+    };
+
+    vimEngine->onPianoRollVelocityLane = [this] (bool)
+    {
+        if (pianoRollWidget)
+            pianoRollWidget->setVelocityLaneVisible (! pianoRollWidget->isVelocityLaneVisible());
+    };
+
+    vimEngine->onPianoRollZoom = [this] (float factor)
+    {
+        if (pianoRollWidget) pianoRollWidget->zoomHorizontal (factor);
+    };
+
+    vimEngine->onPianoRollZoomToFit = [this]()
+    {
+        if (pianoRollWidget) pianoRollWidget->zoomToFit();
+    };
+
+    vimEngine->onPianoRollGridDiv = [this] (int delta)
+    {
+        if (! pianoRollWidget) return;
+        int div = pianoRollWidget->getGridDivision();
+        if (delta > 0)
+            div = std::min (16, div * 2);
+        else
+            div = std::max (1, div / 2);
+        pianoRollWidget->setGridDivision (div);
+    };
+
+    vimEngine->onPianoRollMoveCursor = [this] (int dBeatCol, int dNoteRow)
+    {
+        if (! pianoRollWidget) return;
+        int newCol = pianoRollWidget->getPrBeatCol() + dBeatCol;
+        int newRow = pianoRollWidget->getPrNoteRow() + dNoteRow;
+        newCol = std::max (0, newCol);
+        newRow = juce::jlimit (0, 127, newRow);
+        pianoRollWidget->setPrBeatCol (newCol);
+        pianoRollWidget->setPrNoteRow (newRow);
+    };
+
+    vimEngine->onPianoRollAddNote = [this]()
+    {
+        if (! pianoRollWidget) return;
+        auto& clipState = vimContext.openClipState;
+        if (! clipState.isValid()) return;
+
+        int noteNumber = pianoRollWidget->getPrNoteRow();
+        double beat = static_cast<double> (pianoRollWidget->getPrBeatCol())
+                    / pianoRollWidget->getGridDivision();
+        double length = 1.0 / pianoRollWidget->getGridDivision();
+
+        ScopedTransaction txn (project.getUndoSystem(), "Add Note");
+        MidiClip clip (clipState);
+        clip.addNote (noteNumber, beat, length, 100, &project.getUndoManager());
+    };
+
+    vimEngine->onPianoRollJumpCursor = [this] (int beatCol, int noteRow)
+    {
+        if (! pianoRollWidget) return;
+
+        if (beatCol >= 0)
+        {
+            // Clamp to content bounds
+            int maxCol = static_cast<int> (128.0 * pianoRollWidget->getGridDivision());
+            pianoRollWidget->setPrBeatCol (std::min (beatCol, maxCol));
+        }
+        if (noteRow >= 0)
+            pianoRollWidget->setPrNoteRow (juce::jlimit (0, 127, noteRow));
+    };
+
+    // Initialise MIDI engine
+    midiEngine.initialise();
+
+    // Wire MIDI recording: when piano roll is open and recording,
+    // incoming MIDI notes create notes in real-time
+    midiEngine.onMidiMessage = [this] (const juce::MidiMessage& msg)
+    {
+        if (! pianoRollWidget || ! pianoRollWidget->isVisible())
+            return;
+
+        if (! midiEngine.isRecording())
+            return;
+
+        auto& clipState = vimContext.openClipState;
+        if (! clipState.isValid())
+            return;
+
+        if (msg.isNoteOn())
+        {
+            // Convert current transport position to beat-relative
+            auto posSamples = transportController.getPositionInSamples();
+            double sr = project.getSampleRate();
+            double tempo = project.getTempo();
+            int64_t clipStart = static_cast<int64_t> (
+                static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+
+            double relativeSamples = static_cast<double> (posSamples - clipStart);
+            double relativeSeconds = relativeSamples / sr;
+            double relativeBeat = relativeSeconds * tempo / 60.0;
+
+            if (relativeBeat >= 0.0)
+            {
+                MidiClip clip (clipState);
+                clip.addNote (msg.getNoteNumber(), relativeBeat, 0.25,
+                              msg.getVelocity(), &project.getUndoManager());
+            }
+        }
+    };
+
     // ─── Create UI widgets ───────────────────────────────
 
     // Transport bar
@@ -129,7 +291,7 @@ void AppController::initialise()
     addChild (sequencerWidget.get());
 
     // Piano roll (hidden initially)
-    pianoRollWidget = std::make_unique<PianoRollWidget>();
+    pianoRollWidget = std::make_unique<PianoRollWidget> (project, transportController);
     pianoRollWidget->setVisible (false);
     addChild (pianoRollWidget.get());
 
@@ -162,6 +324,7 @@ void AppController::initialise()
         renderer->addAnimatingWidget (transportBar.get());
         renderer->addAnimatingWidget (vimStatusBar.get());
         renderer->addAnimatingWidget (arrangementWidget.get());
+        renderer->addAnimatingWidget (pianoRollWidget.get());
     }
 
     // Listen to model changes
@@ -228,13 +391,15 @@ void AppController::resized()
     if (arrangementWidget)
         arrangementWidget->setBounds (centerX, centerY, centerW, arrangementH);
 
-    // Bottom panel: mixer or sequencer
-    bool showSequencer = (vimContext.getPanel() == VimContext::Sequencer);
+    // Bottom panel: mixer, sequencer, or piano roll
+    auto currentPanel = vimContext.getPanel();
+    bool showSequencer = (currentPanel == VimContext::Sequencer);
+    bool showPianoRoll = (currentPanel == VimContext::PianoRoll);
 
     if (mixerWidget)
     {
-        mixerWidget->setVisible (! showSequencer);
-        if (! showSequencer)
+        mixerWidget->setVisible (! showSequencer && ! showPianoRoll);
+        if (! showSequencer && ! showPianoRoll)
             mixerWidget->setBounds (centerX, centerY + arrangementH, centerW, bottomH);
     }
 
@@ -243,6 +408,13 @@ void AppController::resized()
         sequencerWidget->setVisible (showSequencer);
         if (showSequencer)
             sequencerWidget->setBounds (centerX, centerY + arrangementH, centerW, bottomH);
+    }
+
+    if (pianoRollWidget)
+    {
+        pianoRollWidget->setVisible (showPianoRoll);
+        if (showPianoRoll)
+            pianoRollWidget->setBounds (centerX, centerY + arrangementH, centerW, bottomH);
     }
 
     // Command palette overlay (centered, top portion)
@@ -556,6 +728,117 @@ void AppController::registerAllActions()
         "seq.jump_last_row", "Jump to Last Row", "Sequencer", "G",
         [this]() { vimEngine->seqJumpLastRow(); },
         { VimContext::Sequencer }
+    });
+
+    // ─── Piano Roll ─────────────────────────────────────────
+    actionRegistry.registerAction ({
+        "pr.tool_select", "Select Tool", "Piano Roll", "1",
+        [this]() { if (pianoRollWidget) pianoRollWidget->setTool (PianoRollWidget::Select); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.tool_draw", "Draw Tool", "Piano Roll", "2",
+        [this]() { if (pianoRollWidget) pianoRollWidget->setTool (PianoRollWidget::Draw); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.tool_erase", "Erase Tool", "Piano Roll", "3",
+        [this]() { if (pianoRollWidget) pianoRollWidget->setTool (PianoRollWidget::Erase); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.delete", "Delete Selected Notes", "Piano Roll", "x",
+        [this]() { if (pianoRollWidget) pianoRollWidget->deleteSelectedNotes(); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.copy", "Copy Notes", "Piano Roll", "y",
+        [this]() { if (pianoRollWidget) pianoRollWidget->copySelectedNotes(); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.paste", "Paste Notes", "Piano Roll", "p",
+        [this]() { if (pianoRollWidget) pianoRollWidget->pasteNotes(); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.duplicate", "Duplicate Notes", "Piano Roll", "D",
+        [this]() { if (pianoRollWidget) pianoRollWidget->duplicateSelectedNotes(); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.transpose_up", "Transpose Up", "Piano Roll", "+",
+        [this]() { if (pianoRollWidget) pianoRollWidget->transposeSelected (1); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.transpose_down", "Transpose Down", "Piano Roll", "-",
+        [this]() { if (pianoRollWidget) pianoRollWidget->transposeSelected (-1); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.select_all", "Select All Notes", "Piano Roll", "Ctrl+A",
+        [this]() { if (pianoRollWidget) pianoRollWidget->selectAll(); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.quantize", "Quantize Notes", "Piano Roll", "q",
+        [this]() { if (pianoRollWidget) pianoRollWidget->quantizeSelected(); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.humanize", "Humanize Notes", "Piano Roll", "Q",
+        [this]() { if (pianoRollWidget) pianoRollWidget->humanizeSelected(); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.zoom_in", "Zoom In", "Piano Roll", "zi",
+        [this]() { if (pianoRollWidget) pianoRollWidget->zoomHorizontal (1.25f); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.zoom_out", "Zoom Out", "Piano Roll", "zo",
+        [this]() { if (pianoRollWidget) pianoRollWidget->zoomHorizontal (0.8f); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.zoom_fit", "Zoom to Fit", "Piano Roll", "zf",
+        [this]() { if (pianoRollWidget) pianoRollWidget->zoomToFit(); },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.velocity_lane", "Toggle Velocity Lane", "Piano Roll", "v",
+        [this]()
+        {
+            if (pianoRollWidget)
+                pianoRollWidget->setVelocityLaneVisible (! pianoRollWidget->isVelocityLaneVisible());
+        },
+        { VimContext::PianoRoll }
+    });
+
+    actionRegistry.registerAction ({
+        "pr.cc_lane", "Toggle CC Lane", "Piano Roll", "",
+        [this]()
+        {
+            if (pianoRollWidget)
+                pianoRollWidget->setCCLaneVisible (! pianoRollWidget->isCCLaneVisible());
+        },
+        { VimContext::PianoRoll }
     });
 }
 
@@ -1262,6 +1545,12 @@ void AppController::vimContextChanged()
     if (sequencerWidget)
     {
         // Sequencer widget handles cursor updates via VimContext internally
+    }
+
+    // When piano roll is closed, clear its clip data
+    if (panel != VimContext::PianoRoll && pianoRollWidget && pianoRollWidget->isVisible())
+    {
+        pianoRollWidget->loadClip (juce::ValueTree());
     }
 }
 

@@ -3,13 +3,25 @@
 namespace dc
 {
 
+void VimContext::setPanel (Panel p)
+{
+    activePanel = p;
+
+    if (activePanel == Mixer)
+        mixerFocus = FocusVolume;
+    else
+        mixerFocus = FocusNone;
+}
+
 void VimContext::cyclePanel()
 {
+    // PianoRoll is entered explicitly via Enter, not cycled to
     switch (activePanel)
     {
         case Editor:    activePanel = Mixer;     break;
         case Mixer:     activePanel = Sequencer; break;
         case Sequencer: activePanel = Editor;    break;
+        case PianoRoll: activePanel = Editor;    break;
     }
 
     // Default to FocusVolume when entering Mixer, clear otherwise
@@ -26,6 +38,7 @@ juce::String VimContext::getPanelName() const
         case Editor:    return "Editor";
         case Mixer:     return "Mixer";
         case Sequencer: return "Sequencer";
+        case PianoRoll: return "PianoRoll";
     }
     return "Editor";
 }

@@ -39,6 +39,10 @@ void NoteWidget::mouseDown (const gfx::MouseEvent& e)
     dragStartX = e.x;
     dragStartY = e.y;
 
+    // Fire click callback for selection
+    if (onClicked)
+        onClicked (e.shift);
+
     // Right edge = resize
     if (e.x > getWidth() - 6.0f)
         resizing = true;

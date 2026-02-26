@@ -7,15 +7,19 @@ namespace dc
 class VimContext
 {
 public:
-    enum Panel { Editor, Mixer, Sequencer };
+    enum Panel { Editor, Mixer, Sequencer, PianoRoll };
     enum MixerFocus { FocusNone, FocusVolume, FocusPan, FocusPlugins };
 
     VimContext() = default;
 
     // Panel
     Panel getPanel() const { return activePanel; }
+    void setPanel (Panel p);
     void cyclePanel();
     juce::String getPanelName() const;
+
+    // State for the currently-open clip in the piano roll
+    juce::ValueTree openClipState;
 
     // Mixer parameter focus
     MixerFocus getMixerFocus() const { return mixerFocus; }

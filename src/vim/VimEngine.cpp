@@ -1,5 +1,6 @@
 #include "VimEngine.h"
 #include "model/AudioClip.h"
+#include "model/MidiClip.h"
 #include "utils/UndoSystem.h"
 
 namespace dc
@@ -79,7 +80,10 @@ bool VimEngine::handleInsertKey (const juce::KeyPress& key)
 
 bool VimEngine::handleNormalKey (const juce::KeyPress& key)
 {
-    // Dispatch to sequencer-specific handler when on Sequencer panel
+    // Dispatch to panel-specific handlers
+    if (context.getPanel() == VimContext::PianoRoll)
+        return handlePianoRollNormalKey (key);
+
     if (context.getPanel() == VimContext::Sequencer)
         return handleSequencerNormalKey (key);
 
@@ -673,11 +677,267 @@ void VimEngine::cycleFocusPanel()
     listeners.call (&Listener::vimContextChanged);
 }
 
-// ── Stubs ───────────────────────────────────────────────────────────────────
-
 void VimEngine::openFocusedItem()
 {
-    // Phase 5 stub — will open piano roll / clip editor
+    int trackIdx = arrangement.getSelectedTrackIndex();
+    if (trackIdx < 0 || trackIdx >= arrangement.getNumTracks())
+        return;
+
+    Track track = arrangement.getTrack (trackIdx);
+    int clipIdx = context.getSelectedClipIndex();
+
+    if (clipIdx < 0 || clipIdx >= track.getNumClips())
+        return;
+
+    auto clipState = track.getClip (clipIdx);
+
+    if (clipState.hasType (IDs::MIDI_CLIP))
+    {
+        MidiClip clip (clipState);
+        clip.expandNotesToChildren();
+
+        context.openClipState = clipState;
+        context.setPanel (VimContext::PianoRoll);
+
+        if (onOpenPianoRoll)
+            onOpenPianoRoll (clipState);
+
+        listeners.call (&Listener::vimContextChanged);
+    }
+}
+
+void VimEngine::closePianoRoll()
+{
+    if (context.getPanel() == VimContext::PianoRoll)
+    {
+        // Collapse NOTE children back to base64 for storage
+        if (context.openClipState.isValid() && context.openClipState.hasType (IDs::MIDI_CLIP))
+        {
+            MidiClip clip (context.openClipState);
+            clip.collapseChildrenToMidiData (&project.getUndoManager());
+        }
+
+        context.openClipState = juce::ValueTree();
+        context.setPanel (VimContext::Editor);
+        listeners.call (&Listener::vimContextChanged);
+    }
+}
+
+bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
+{
+    auto keyChar = key.getTextCharacter();
+    auto modifiers = key.getModifiers();
+
+    // Escape closes piano roll
+    if (key == juce::KeyPress::escapeKey)
+    {
+        closePianoRoll();
+        return true;
+    }
+
+    // Ctrl+P opens command palette
+    if (modifiers.isCtrlDown() && keyChar == 'p')
+    {
+        if (onCommandPalette)
+            onCommandPalette();
+        return true;
+    }
+
+    // Ctrl+A selects all
+    if (modifiers.isCtrlDown() && keyChar == 'a')
+    {
+        if (onPianoRollSelectAll) onPianoRollSelectAll();
+        return true;
+    }
+
+    // Pending 'g' for gg (jump to highest note row)
+    if (pendingKey == 'g')
+    {
+        if (keyChar == 'g'
+            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+        {
+            clearPending();
+            if (onPianoRollJumpCursor) onPianoRollJumpCursor (-1, 127);
+            return true;
+        }
+        clearPending();
+    }
+
+    // Pending 'z' for zi/zo/zf
+    if (pendingKey == 'z')
+    {
+        clearPending();
+        if (keyChar == 'i')
+        {
+            if (onPianoRollZoom) onPianoRollZoom (1.25f);
+            return true;
+        }
+        if (keyChar == 'o')
+        {
+            if (onPianoRollZoom) onPianoRollZoom (0.8f);
+            return true;
+        }
+        if (keyChar == 'f')
+        {
+            if (onPianoRollZoomToFit) onPianoRollZoomToFit();
+            return true;
+        }
+        return true; // consume unknown z-sequence
+    }
+
+    // Undo/redo
+    if (keyChar == 'u') { project.getUndoSystem().undo(); return true; }
+    if (keyChar == 'r' && modifiers.isCtrlDown())
+    {
+        project.getUndoSystem().redo();
+        return true;
+    }
+
+    // Transport
+    if (key == juce::KeyPress::spaceKey)
+    {
+        // If no pending action, use space for adding note at cursor
+        // But we use Space for add-note and Return for play/stop in piano roll
+        if (onPianoRollAddNote) onPianoRollAddNote();
+        return true;
+    }
+
+    if (key == juce::KeyPress::returnKey) { togglePlayStop(); return true; }
+
+    // Panel cycling
+    if (key == juce::KeyPress::tabKey) { cycleFocusPanel(); return true; }
+
+    // Tool switching
+    if (keyChar == '1' || keyChar == 's')
+    {
+        if (onSetPianoRollTool) onSetPianoRollTool (0); // Select
+        return true;
+    }
+    if (keyChar == '2' || keyChar == 'd')
+    {
+        if (onSetPianoRollTool) onSetPianoRollTool (1); // Draw
+        return true;
+    }
+    if (keyChar == '3')
+    {
+        if (onSetPianoRollTool) onSetPianoRollTool (2); // Erase
+        return true;
+    }
+
+    // Navigation hjkl
+    if (keyChar == 'h') { if (onPianoRollMoveCursor) onPianoRollMoveCursor (-1, 0); return true; }
+    if (keyChar == 'l') { if (onPianoRollMoveCursor) onPianoRollMoveCursor (1, 0); return true; }
+    if (keyChar == 'k') { if (onPianoRollMoveCursor) onPianoRollMoveCursor (0, 1); return true; }
+    if (keyChar == 'j') { if (onPianoRollMoveCursor) onPianoRollMoveCursor (0, -1); return true; }
+
+    // Jump keys
+    if (keyChar == '0') { if (onPianoRollJumpCursor) onPianoRollJumpCursor (0, -1); return true; }
+    if (keyChar == '$')
+    {
+        // Jump to end — will be interpreted as "large value"
+        if (onPianoRollJumpCursor) onPianoRollJumpCursor (99999, -1);
+        return true;
+    }
+    if (keyChar == 'G') { if (onPianoRollJumpCursor) onPianoRollJumpCursor (-1, 0); return true; }
+    if (keyChar == 'g')
+    {
+        pendingKey = 'g';
+        pendingTimestamp = juce::Time::currentTimeMillis();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // Delete
+    if (keyChar == 'x' || key == juce::KeyPress::deleteKey)
+    {
+        if (onPianoRollDeleteSelected) onPianoRollDeleteSelected();
+        return true;
+    }
+
+    // Yank (copy)
+    if (keyChar == 'y')
+    {
+        if (onPianoRollCopy) onPianoRollCopy();
+        return true;
+    }
+
+    // Paste
+    if (keyChar == 'p')
+    {
+        if (onPianoRollPaste) onPianoRollPaste();
+        return true;
+    }
+
+    // Duplicate
+    if (keyChar == 'D')
+    {
+        if (onPianoRollDuplicate) onPianoRollDuplicate();
+        return true;
+    }
+
+    // Transpose
+    if (keyChar == '+' || keyChar == '=')
+    {
+        if (onPianoRollTranspose) onPianoRollTranspose (1);
+        return true;
+    }
+    if (keyChar == '-')
+    {
+        if (onPianoRollTranspose) onPianoRollTranspose (-1);
+        return true;
+    }
+
+    // Quantize / humanize
+    if (keyChar == 'q')
+    {
+        if (onPianoRollQuantize) onPianoRollQuantize();
+        return true;
+    }
+    if (keyChar == 'Q')
+    {
+        if (onPianoRollHumanize) onPianoRollHumanize();
+        return true;
+    }
+
+    // Velocity lane toggle
+    if (keyChar == 'v')
+    {
+        if (onPianoRollVelocityLane) onPianoRollVelocityLane (true);
+        return true;
+    }
+
+    // Zoom
+    if (keyChar == 'z')
+    {
+        pendingKey = 'z';
+        pendingTimestamp = juce::Time::currentTimeMillis();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // Grid division coarser/finer
+    if (keyChar == '[')
+    {
+        if (onPianoRollGridDiv) onPianoRollGridDiv (-1);
+        return true;
+    }
+    if (keyChar == ']')
+    {
+        if (onPianoRollGridDiv) onPianoRollGridDiv (1);
+        return true;
+    }
+
+    // Command mode
+    if (keyChar == ':')
+    {
+        mode = Command;
+        commandBuffer.clear();
+        listeners.call (&Listener::vimModeChanged, Command);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    return false;
 }
 
 // ── Pending key helpers ─────────────────────────────────────────────────────

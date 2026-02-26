@@ -26,8 +26,9 @@ public:
     int getVelocity() const { return velocity; }
     bool isSelected() const { return selected; }
 
-    std::function<void (float, float)> onDrag;  // dx, dy
-    std::function<void (float)> onResize;        // new width
+    std::function<void (float, float)> onDrag;    // dx, dy
+    std::function<void (float)> onResize;          // new width
+    std::function<void (bool)> onClicked;          // shift held
 
 private:
     int noteNumber = 60;
