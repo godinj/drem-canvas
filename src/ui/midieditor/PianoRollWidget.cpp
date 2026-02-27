@@ -222,7 +222,6 @@ void PianoRollWidget::loadClip (const juce::ValueTree& state)
 
     clipState = state;
     selectedNoteIndices.clear();
-    noteClipboard.clear();
 
     if (clipState.isValid())
     {
@@ -518,13 +517,34 @@ void PianoRollWidget::deleteSelectedNotes()
 
 void PianoRollWidget::copySelectedNotes()
 {
-    noteClipboard.clear();
+    juce::Array<Clipboard::NoteEntry> entries;
+    double minBeat = 1e12;
 
+    // First pass: find minimum startBeat
     for (int idx : selectedNoteIndices)
     {
         if (idx < clipState.getNumChildren())
-            noteClipboard.add (clipState.getChild (idx).createCopy());
+        {
+            double sb = static_cast<double> (clipState.getChild (idx).getProperty ("startBeat", 0.0));
+            minBeat = std::min (minBeat, sb);
+        }
     }
+
+    if (minBeat >= 1e12)
+        return;
+
+    // Second pass: build entries with relative beat offsets
+    for (int idx : selectedNoteIndices)
+    {
+        if (idx < clipState.getNumChildren())
+        {
+            auto note = clipState.getChild (idx);
+            double sb = static_cast<double> (note.getProperty ("startBeat", 0.0));
+            entries.add ({ note, sb - minBeat });
+        }
+    }
+
+    project.getClipboard().storeNotes (entries);
 }
 
 void PianoRollWidget::cutSelectedNotes()
@@ -535,30 +555,22 @@ void PianoRollWidget::cutSelectedNotes()
 
 void PianoRollWidget::pasteNotes()
 {
-    if (noteClipboard.isEmpty() || ! clipState.isValid())
+    auto& cb = project.getClipboard();
+    if (! cb.hasNotes() || ! clipState.isValid())
         return;
 
     ScopedTransaction txn (project.getUndoSystem(), "Paste Notes");
     auto& um = project.getUndoManager();
 
-    // Find minimum startBeat in clipboard to use as offset
-    double minBeat = 1e12;
-    for (auto& note : noteClipboard)
-    {
-        double sb = static_cast<double> (note.getProperty ("startBeat", 0.0));
-        minBeat = std::min (minBeat, sb);
-    }
-
-    // Paste at current cursor position (convert display beat back to stored beat)
-    double pasteOffset = static_cast<double> (prBeatCol) / gridDivision + trimOffsetBeats - minBeat;
+    // Convert display beat to stored beat (accounting for clip's trim offset)
+    double cursorBeat = static_cast<double> (prBeatCol) / gridDivision + trimOffsetBeats;
 
     selectedNoteIndices.clear();
 
-    for (auto& note : noteClipboard)
+    for (auto& entry : cb.getNoteEntries())
     {
-        auto newNote = note.createCopy();
-        double sb = static_cast<double> (newNote.getProperty ("startBeat", 0.0));
-        newNote.setProperty ("startBeat", sb + pasteOffset, &um);
+        auto newNote = entry.noteData.createCopy();
+        newNote.setProperty ("startBeat", cursorBeat + entry.beatOffset, &um);
         clipState.appendChild (newNote, &um);
         selectedNoteIndices.insert (clipState.getNumChildren() - 1);
     }

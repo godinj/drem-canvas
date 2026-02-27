@@ -126,9 +126,6 @@ private:
     float rubberBandEndX = 0.0f;
     float rubberBandEndY = 0.0f;
 
-    // Clipboard
-    juce::Array<juce::ValueTree> noteClipboard;
-
     // Grid/zoom
     float pixelsPerBeat = 80.0f;
     float rowHeight = 12.0f;

@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "utils/UndoSystem.h"
+#include "Clipboard.h"
 
 namespace dc
 {
@@ -89,6 +90,8 @@ public:
     juce::UndoManager& getUndoManager() { return undoManager; }
     UndoSystem& getUndoSystem() { return undoSystem; }
 
+    Clipboard& getClipboard() { return clipboard; }
+
     // Project properties
     double getTempo() const;
     void setTempo (double bpm);
@@ -103,6 +106,7 @@ private:
     juce::ValueTree state;
     juce::UndoManager undoManager;
     UndoSystem undoSystem { undoManager };
+    Clipboard clipboard;
 
     void createDefaultState();
 

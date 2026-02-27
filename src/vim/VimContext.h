@@ -72,16 +72,6 @@ public:
     void setSeqRow (int r)  { seqRow = r; }
     void setSeqStep (int s) { seqStep = s; }
 
-    // Clipboard (single-clip — legacy, also set from first item of multi)
-    void setClipboard (const juce::ValueTree& clip) { clipboard = clip.createCopy(); }
-    juce::ValueTree getClipboard() const { return clipboard; }
-    bool hasClipboardContent() const { return clipboard.isValid(); }
-
-    // Multi-clip clipboard (for operator yank/delete)
-    void setClipboardMulti (const juce::Array<juce::ValueTree>& clips, bool linewise);
-    const juce::Array<juce::ValueTree>& getClipboardMulti() const { return clipboardMulti; }
-    bool isClipboardLinewise() const { return clipboardLinewise; }
-
 private:
     Panel activePanel = Editor;
     MixerFocus mixerFocus = FocusNone;
@@ -89,9 +79,6 @@ private:
     int64_t gridCursorPosition = 0;
     int seqRow  = 0;
     int seqStep = 0;
-    juce::ValueTree clipboard;
-    juce::Array<juce::ValueTree> clipboardMulti;
-    bool clipboardLinewise = false;
     VisualSelection visualSelection;
     GridVisualSelection gridVisualSelection;
 

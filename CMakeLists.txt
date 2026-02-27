@@ -84,6 +84,7 @@ target_sources(DremCanvas PRIVATE
     src/model/Track.cpp
     src/model/AudioClip.cpp
     src/model/MidiClip.cpp
+    src/model/Clipboard.cpp
     src/model/TempoMap.cpp
     src/model/StepSequencer.cpp
     src/model/RecentProjects.cpp

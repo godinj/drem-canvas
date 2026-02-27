@@ -1,9 +1,11 @@
 #include "VimEngine.h"
 #include "model/AudioClip.h"
 #include "model/MidiClip.h"
+#include "model/Clipboard.h"
 #include "utils/UndoSystem.h"
 #include <vector>
 #include <algorithm>
+#include <limits>
 namespace dc
 {
 
@@ -523,6 +525,9 @@ void VimEngine::deleteSelectedRegions()
 
     if (clipIdx >= 0 && clipIdx < track.getNumClips())
     {
+        // Yank before delete (Vim semantics: x always yanks)
+        yankSelectedRegions();
+
         ScopedTransaction txn (project.getUndoSystem(), "Delete Clip");
         track.removeClip (clipIdx, &project.getUndoManager());
 
@@ -544,7 +549,9 @@ void VimEngine::yankSelectedRegions()
 
     if (clipIdx >= 0 && clipIdx < track.getNumClips())
     {
-        context.setClipboard (track.getClip (clipIdx));
+        juce::Array<Clipboard::ClipEntry> entries;
+        entries.add ({ track.getClip (clipIdx), 0, 0 });
+        project.getClipboard().storeClips (entries, false);
     }
 }
 
@@ -606,61 +613,34 @@ static void carveGap (Track& track, int64_t gapStart, int64_t gapEnd, juce::Undo
 
 void VimEngine::pasteAfterPlayhead()
 {
-    auto& multi = context.getClipboardMulti();
-    bool hasMulti = ! multi.isEmpty();
-
-    if (! hasMulti && ! context.hasClipboardContent())
+    auto& cb = project.getClipboard();
+    if (! cb.hasClips())
         return;
 
-    int trackIdx = arrangement.getSelectedTrackIndex();
-    if (trackIdx < 0 || trackIdx >= arrangement.getNumTracks())
+    int baseTrack = arrangement.getSelectedTrackIndex();
+    if (baseTrack < 0 || baseTrack >= arrangement.getNumTracks())
         return;
 
     ScopedTransaction txn (project.getUndoSystem(), "Paste Clip");
     auto& um = project.getUndoManager();
-
     int64_t pastePos = context.getGridCursorPosition();
-    Track track = arrangement.getTrack (trackIdx);
 
-    if (hasMulti)
+    for (auto& entry : cb.getClipEntries())
     {
-        // Find the earliest start position in the clipboard to compute offsets
-        int64_t basePos = std::numeric_limits<int64_t>::max();
-        int64_t totalEnd = 0;
-        for (auto& c : multi)
-        {
-            auto s = static_cast<int64_t> (static_cast<juce::int64> (c.getProperty (IDs::startPosition, 0)));
-            auto l = static_cast<int64_t> (static_cast<juce::int64> (c.getProperty (IDs::length, 0)));
-            basePos = std::min (basePos, s);
-            totalEnd = std::max (totalEnd, s + l);
-        }
+        int targetTrack = baseTrack + entry.trackOffset;
+        if (targetTrack < 0 || targetTrack >= arrangement.getNumTracks())
+            continue;
 
-        int64_t totalSpan = totalEnd - basePos;
+        Track track = arrangement.getTrack (targetTrack);
+        auto clipData = entry.clipData.createCopy();
+        int64_t finalPos = pastePos + entry.timeOffset;
+        auto pasteLen = static_cast<int64_t> (
+            static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
 
-        // Carve a gap in existing clips to make room for the pasted material
-        carveGap (track, pastePos, pastePos + totalSpan, um);
-
-        for (auto& c : multi)
-        {
-            auto copy = c.createCopy();
-            auto origStart = static_cast<int64_t> (static_cast<juce::int64> (copy.getProperty (IDs::startPosition, 0)));
-            int64_t offset = origStart - basePos;
-            int64_t finalPos = pastePos + offset;
-            copy.setProperty (IDs::startPosition,
-                              static_cast<juce::int64> (finalPos), nullptr);
-            track.getState().appendChild (copy, &um);
-        }
-    }
-    else
-    {
-        auto clipData = context.getClipboard().createCopy();
-        auto pasteLen = static_cast<int64_t> (static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
-
-        // Carve a gap in existing clips to make room
-        carveGap (track, pastePos, pastePos + pasteLen, um);
+        carveGap (track, finalPos, finalPos + pasteLen, um);
 
         clipData.setProperty (IDs::startPosition,
-                              static_cast<juce::int64> (pastePos), nullptr);
+                              static_cast<juce::int64> (finalPos), &um);
         track.getState().appendChild (clipData, &um);
     }
 
@@ -670,61 +650,45 @@ void VimEngine::pasteAfterPlayhead()
 
 void VimEngine::pasteBeforePlayhead()
 {
-    auto& multi = context.getClipboardMulti();
-    bool hasMulti = ! multi.isEmpty();
-
-    if (! hasMulti && ! context.hasClipboardContent())
+    auto& cb = project.getClipboard();
+    if (! cb.hasClips())
         return;
 
-    int trackIdx = arrangement.getSelectedTrackIndex();
-    if (trackIdx < 0 || trackIdx >= arrangement.getNumTracks())
+    int baseTrack = arrangement.getSelectedTrackIndex();
+    if (baseTrack < 0 || baseTrack >= arrangement.getNumTracks())
         return;
 
     ScopedTransaction txn (project.getUndoSystem(), "Paste Clip");
     auto& um = project.getUndoManager();
 
-    Track track = arrangement.getTrack (trackIdx);
-
-    if (hasMulti)
+    // Find the total extent so we can place everything before the cursor
+    int64_t maxEnd = 0;
+    for (auto& entry : cb.getClipEntries())
     {
-        // Find earliest start and latest end to compute total span
-        int64_t basePos = std::numeric_limits<int64_t>::max();
-        int64_t maxEnd = 0;
-        for (auto& c : multi)
-        {
-            auto s = static_cast<int64_t> (static_cast<juce::int64> (c.getProperty (IDs::startPosition, 0)));
-            auto l = static_cast<int64_t> (static_cast<juce::int64> (c.getProperty (IDs::length, 0)));
-            basePos = std::min (basePos, s);
-            maxEnd  = std::max (maxEnd, s + l);
-        }
-
-        int64_t totalSpan = maxEnd - basePos;
-        int64_t pastePos = context.getGridCursorPosition() - totalSpan;
-        if (pastePos < 0) pastePos = 0;
-
-        carveGap (track, pastePos, pastePos + totalSpan, um);
-
-        for (auto& c : multi)
-        {
-            auto copy = c.createCopy();
-            auto origStart = static_cast<int64_t> (static_cast<juce::int64> (copy.getProperty (IDs::startPosition, 0)));
-            int64_t offset = origStart - basePos;
-            copy.setProperty (IDs::startPosition,
-                              static_cast<juce::int64> (pastePos + offset), nullptr);
-            track.getState().appendChild (copy, &um);
-        }
+        auto len = static_cast<int64_t> (
+            static_cast<juce::int64> (entry.clipData.getProperty (IDs::length, 0)));
+        maxEnd = std::max (maxEnd, entry.timeOffset + len);
     }
-    else
-    {
-        auto clipData = context.getClipboard().createCopy();
-        auto pasteLen = static_cast<int64_t> (static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
-        auto pastePos = context.getGridCursorPosition() - pasteLen;
-        if (pastePos < 0) pastePos = 0;
 
-        carveGap (track, pastePos, pastePos + pasteLen, um);
+    int64_t pasteBase = context.getGridCursorPosition() - maxEnd;
+    if (pasteBase < 0) pasteBase = 0;
+
+    for (auto& entry : cb.getClipEntries())
+    {
+        int targetTrack = baseTrack + entry.trackOffset;
+        if (targetTrack < 0 || targetTrack >= arrangement.getNumTracks())
+            continue;
+
+        Track track = arrangement.getTrack (targetTrack);
+        auto clipData = entry.clipData.createCopy();
+        int64_t finalPos = pasteBase + entry.timeOffset;
+        auto pasteLen = static_cast<int64_t> (
+            static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
+
+        carveGap (track, finalPos, finalPos + pasteLen, um);
 
         clipData.setProperty (IDs::startPosition,
-                              static_cast<juce::int64> (pastePos), nullptr);
+                              static_cast<juce::int64> (finalPos), &um);
         track.getState().appendChild (clipData, &um);
     }
 
@@ -1618,7 +1582,13 @@ void VimEngine::executeDelete (const MotionRange& range)
 
 void VimEngine::executeYank (const MotionRange& range)
 {
-    juce::Array<juce::ValueTree> clips;
+    juce::Array<Clipboard::ClipEntry> entries;
+    int baseTrack = range.startTrack;
+    int64_t minStart = std::numeric_limits<int64_t>::max();
+
+    // First pass: collect clips with raw positions
+    struct RawClip { juce::ValueTree data; int trackIdx; int64_t startPos; };
+    juce::Array<RawClip> rawClips;
 
     if (range.linewise)
     {
@@ -1630,7 +1600,13 @@ void VimEngine::executeYank (const MotionRange& range)
             Track track = arrangement.getTrack (t);
 
             for (int c = 0; c < track.getNumClips(); ++c)
-                clips.add (track.getClip (c));
+            {
+                auto clip = track.getClip (c);
+                auto startPos = static_cast<int64_t> (
+                    static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+                rawClips.add ({ clip, t, startPos });
+                minStart = std::min (minStart, startPos);
+            }
         }
     }
     else if (range.startTrack == range.endTrack)
@@ -1645,7 +1621,13 @@ void VimEngine::executeYank (const MotionRange& range)
         for (int c = range.startClip; c <= endClip; ++c)
         {
             if (c >= 0 && c < track.getNumClips())
-                clips.add (track.getClip (c));
+            {
+                auto clip = track.getClip (c);
+                auto startPos = static_cast<int64_t> (
+                    static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+                rawClips.add ({ clip, t, startPos });
+                minStart = std::min (minStart, startPos);
+            }
         }
     }
     else
@@ -1677,7 +1659,16 @@ void VimEngine::executeYank (const MotionRange& range)
         }
     }
 
-    context.setClipboardMulti (clips, range.linewise);
+    if (minStart == std::numeric_limits<int64_t>::max())
+        minStart = 0;
+
+    // Second pass: build entries with relative offsets
+    for (auto& raw : rawClips)
+    {
+        entries.add ({ raw.data, raw.trackIdx - baseTrack, raw.startPos - minStart });
+    }
+
+    project.getClipboard().storeClips (entries, range.linewise);
     listeners.call (&Listener::vimContextChanged);
 }
 
