@@ -32,6 +32,7 @@
 #include "ui/palette/CommandPaletteWidget.h"
 #include "vim/ActionRegistry.h"
 #include "ui/keyboard/VirtualKeyboardWidget.h"
+#include "model/RecentProjects.h"
 
 namespace dc
 {
@@ -94,6 +95,7 @@ private:
     // Session management
     void saveSession();
     void loadSession();
+    void loadSessionFromDirectory (const juce::File& dir);
     void openFile();
     void addTrackFromFile (const juce::File& file);
     void addMidiTrack (const juce::String& name);
@@ -107,6 +109,7 @@ private:
     void registerAllActions();
     void showCommandPalette();
     void dismissCommandPalette();
+    void refreshRecentProjectActions();
 
     // ─── Plugin infrastructure ───────────────────────────
     PluginManager pluginManager;
@@ -135,6 +138,7 @@ private:
     VimContext vimContext;
     std::unique_ptr<VimEngine> vimEngine;
     ActionRegistry actionRegistry;
+    RecentProjects recentProjects;
 
     juce::File currentSessionDirectory;
 

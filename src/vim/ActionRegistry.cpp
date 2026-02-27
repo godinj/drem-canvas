@@ -63,6 +63,17 @@ bool ActionRegistry::executeAction (const std::string& id) const
     return false;
 }
 
+void ActionRegistry::removeActionsWithPrefix (const std::string& idPrefix)
+{
+    actions.erase (
+        std::remove_if (actions.begin(), actions.end(),
+            [&idPrefix] (const ActionInfo& a)
+            {
+                return a.id.compare (0, idPrefix.size(), idPrefix) == 0;
+            }),
+        actions.end());
+}
+
 int ActionRegistry::fuzzyScore (const std::string& query, const std::string& text)
 {
     if (query.empty() || text.empty())

@@ -353,6 +353,10 @@ void AppController::initialise()
     // Register all actions in the palette
     registerAllActions();
 
+    // Load recent projects and populate palette
+    recentProjects.load();
+    refreshRecentProjectActions();
+
     // Register animating widgets
     if (renderer)
     {
@@ -514,6 +518,25 @@ void AppController::showCommandPalette()
 void AppController::dismissCommandPalette()
 {
     gfx::Widget::setCurrentFocus (nullptr);
+}
+
+void AppController::refreshRecentProjectActions()
+{
+    actionRegistry.removeActionsWithPrefix ("recent.");
+
+    auto& entries = recentProjects.getEntries();
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        auto path = entries[i].path;
+        actionRegistry.registerAction ({
+            "recent." + std::to_string (i),
+            entries[i].displayName,
+            "Recent",
+            "",
+            [this, path]() { loadSessionFromDirectory (juce::File (path)); },
+            {}
+        });
+    }
 }
 
 void AppController::registerAllActions()
@@ -1488,6 +1511,8 @@ void AppController::saveSession()
             if (project.saveSessionToDirectory (dir))
             {
                 currentSessionDirectory = dir;
+                recentProjects.addProject (dir);
+                refreshRecentProjectActions();
             }
             else
             {
@@ -1505,41 +1530,49 @@ void AppController::loadSession()
             if (path.empty())
                 return;
 
-            juce::File dir (path);
-            if (! dir.isDirectory())
-                return;
-
-            // Save ref to old state so we can detach listeners after replacement
-            auto oldState = project.getState();
-            oldState.getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
-            oldState.getChildWithName (IDs::TRACKS).removeListener (this);
-            oldState.removeListener (arrangementWidget.get());
-            oldState.removeListener (mixerWidget.get());
-            oldState.removeListener (sequencerWidget.get());
-
-            if (project.loadSessionFromDirectory (dir))
-            {
-                currentSessionDirectory = dir;
-                project.getState().getChildWithName (IDs::TRACKS).addListener (this);
-                project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
-                project.getState().addListener (arrangementWidget.get());
-                project.getState().addListener (mixerWidget.get());
-                project.getState().addListener (sequencerWidget.get());
-                rebuildAudioGraph();
-                syncSequencerFromModel();
-            }
-            else
-            {
-                oldState.getChildWithName (IDs::TRACKS).addListener (this);
-                oldState.getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
-                oldState.addListener (arrangementWidget.get());
-                oldState.addListener (mixerWidget.get());
-                oldState.addListener (sequencerWidget.get());
-
-                platform::NativeDialogs::showAlert ("Load Error",
-                    "Failed to load session from:\n" + path);
-            }
+            loadSessionFromDirectory (juce::File (path));
         });
+}
+
+void AppController::loadSessionFromDirectory (const juce::File& dir)
+{
+    if (! dir.isDirectory())
+        return;
+
+    // Save ref to old state so we can detach listeners after replacement
+    auto oldState = project.getState();
+    oldState.getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
+    oldState.getChildWithName (IDs::TRACKS).removeListener (this);
+    oldState.removeListener (arrangementWidget.get());
+    oldState.removeListener (mixerWidget.get());
+    oldState.removeListener (sequencerWidget.get());
+
+    if (project.loadSessionFromDirectory (dir))
+    {
+        currentSessionDirectory = dir;
+        project.getState().getChildWithName (IDs::TRACKS).addListener (this);
+        project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+        project.getState().addListener (arrangementWidget.get());
+        project.getState().addListener (mixerWidget.get());
+        project.getState().addListener (sequencerWidget.get());
+        rebuildAudioGraph();
+        syncSequencerFromModel();
+
+        recentProjects.addProject (dir);
+        refreshRecentProjectActions();
+    }
+    else
+    {
+        oldState.getChildWithName (IDs::TRACKS).addListener (this);
+        oldState.getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+        oldState.addListener (arrangementWidget.get());
+        oldState.addListener (mixerWidget.get());
+        oldState.addListener (sequencerWidget.get());
+
+        auto path = dir.getFullPathName().toStdString();
+        platform::NativeDialogs::showAlert ("Load Error",
+            "Failed to load session from:\n" + path);
+    }
 }
 
 void AppController::openFile()

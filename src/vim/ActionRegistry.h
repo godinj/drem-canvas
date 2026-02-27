@@ -34,6 +34,8 @@ public:
 
     bool executeAction (const std::string& id) const;
 
+    void removeActionsWithPrefix (const std::string& idPrefix);
+
     const std::vector<ActionInfo>& getAllActions() const { return actions; }
 
 private:

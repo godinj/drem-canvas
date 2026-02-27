@@ -86,6 +86,7 @@ target_sources(DremCanvas PRIVATE
     src/model/MidiClip.cpp
     src/model/TempoMap.cpp
     src/model/StepSequencer.cpp
+    src/model/RecentProjects.cpp
 
     # Plugins
     src/plugins/PluginManager.cpp
