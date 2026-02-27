@@ -14,6 +14,9 @@
 #include "include/gpu/vk/VulkanExtensions.h"
 #include "include/gpu/vk/VulkanTypes.h"
 
+#include "include/gpu/ganesh/GrBackendSemaphore.h"
+#include "include/gpu/ganesh/vk/GrVkBackendSemaphore.h"
+
 #include <stdexcept>
 #include <algorithm>
 #include <iostream>
@@ -356,15 +359,24 @@ void VulkanBackend::endFrame (sk_sp<SkSurface>& surface)
     if (!surface)
         return;
 
-    // Flush Skia rendering and wait for GPU to finish
-    grContext->flushAndSubmit (surface.get(), GrSyncCpu::kYes);
+    // Signal renderFinishedSemaphore on the GPU when Skia rendering completes.
+    // This avoids the unbounded CPU wait that GrSyncCpu::kYes would cause —
+    // the GPU handles synchronisation via semaphores instead.
+    GrBackendSemaphore signalSemaphore = GrBackendSemaphores::MakeVk (renderFinishedSemaphore);
+
+    GrFlushInfo flushInfo;
+    flushInfo.fNumSemaphores = 1;
+    flushInfo.fSignalSemaphores = &signalSemaphore;
+
+    grContext->flush (surface.get(), SkSurfaces::BackendSurfaceAccess::kPresent, flushInfo);
+    grContext->submit (GrSyncCpu::kNo);
     surface.reset();
 
-    // Present — no wait semaphores needed since GPU work is already complete
+    // Present — GPU waits on renderFinishedSemaphore before displaying
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = 0;
-    presentInfo.pWaitSemaphores = nullptr;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &swapchain;
     presentInfo.pImageIndices = &currentImageIndex;

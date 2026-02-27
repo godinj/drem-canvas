@@ -132,19 +132,19 @@ void EventDispatch::dispatchWheel (const WheelEvent& e)
 void EventDispatch::dispatchKeyDown (const KeyEvent& e)
 {
     Widget* focus = Widget::getCurrentFocus();
-    if (focus)
+    if (focus && focus->isVisible() && focus != &rootWidget)
     {
         if (focus->keyDown (e))
             return;
     }
-    // Fall through to root widget if not consumed
+    // Fall through to root widget if not consumed (or focus is hidden)
     rootWidget.keyDown (e);
 }
 
 void EventDispatch::dispatchKeyUp (const KeyEvent& e)
 {
     Widget* focus = Widget::getCurrentFocus();
-    if (focus)
+    if (focus && focus->isVisible() && focus != &rootWidget)
     {
         if (focus->keyUp (e))
             return;
