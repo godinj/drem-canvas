@@ -58,6 +58,12 @@ private:
     void insertPluginOnTrack (int trackIndex, const juce::PluginDescription& desc);
     void toggleBrowser();
 
+    // Master bus plugin chain
+    void connectMasterPluginChain();
+    void disconnectMasterPluginChain();
+    void insertPluginOnMaster (const juce::PluginDescription& desc);
+    void openMasterPluginEditor (int pluginIndex);
+
     // ValueTree listener
     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
@@ -96,6 +102,11 @@ private:
     juce::Array<juce::Array<PluginNodeInfo>> trackPluginChains;
     juce::Array<MeterTapProcessor*> meterTapProcessors;              // non-owning; graph owns
     juce::Array<juce::AudioProcessorGraph::Node::Ptr> meterTapNodes;
+
+    // Master bus plugin chain
+    juce::Array<PluginNodeInfo> masterPluginChain;
+    juce::AudioProcessorGraph::Node::Ptr masterMeterTapNode;
+    MeterTapProcessor* masterMeterTapProcessor = nullptr;
 
     // Model
     Project project;

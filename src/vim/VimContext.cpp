@@ -43,6 +43,14 @@ juce::String VimContext::getPanelName() const
     return "Editor";
 }
 
+void VimContext::setMixerFocus (MixerFocus focus)
+{
+    mixerFocus = focus;
+
+    if (focus == FocusPlugins)
+        selectedPluginSlot = 0;
+}
+
 juce::String VimContext::getMixerFocusName() const
 {
     switch (mixerFocus)

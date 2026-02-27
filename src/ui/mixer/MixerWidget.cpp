@@ -149,6 +149,15 @@ void MixerWidget::setMixerFocus (VimContext::MixerFocus focus)
         masterStrip->setMixerFocus (focus);
 }
 
+void MixerWidget::setSelectedPluginSlot (int slotIndex)
+{
+    for (size_t i = 0; i < strips.size(); ++i)
+        strips[i]->setSelectedPluginSlot (static_cast<int> (i) == selectedStripIndex ? slotIndex : -1);
+
+    if (masterStrip)
+        masterStrip->setSelectedPluginSlot (selectedStripIndex == static_cast<int> (strips.size()) ? slotIndex : -1);
+}
+
 void MixerWidget::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&)
 {
     rebuildStrips();

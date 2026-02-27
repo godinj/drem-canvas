@@ -26,12 +26,14 @@ public:
     };
 
     void setSlots (const std::vector<PluginSlot>& slots);
+    void setSelectedSlotIndex (int index);
 
     std::function<void (int)> onSlotClicked;        // Left click opens editor
     std::function<void (int)> onSlotRightClicked;   // Right click opens context menu
 
 private:
     std::vector<PluginSlot> slots;
+    int selectedSlotIndex = -1;
     static constexpr float slotHeight = 20.0f;
 };
 

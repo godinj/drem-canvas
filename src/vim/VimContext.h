@@ -23,8 +23,16 @@ public:
 
     // Mixer parameter focus
     MixerFocus getMixerFocus() const { return mixerFocus; }
-    void setMixerFocus (MixerFocus focus) { mixerFocus = focus; }
+    void setMixerFocus (MixerFocus focus);
     juce::String getMixerFocusName() const;
+
+    // Plugin slot selection (within Plugins focus)
+    int getSelectedPluginSlot() const { return selectedPluginSlot; }
+    void setSelectedPluginSlot (int slot) { selectedPluginSlot = slot; }
+
+    // Master strip selection (separate from track index)
+    bool isMasterStripSelected() const { return masterStripSelected; }
+    void setMasterStripSelected (bool selected) { masterStripSelected = selected; }
 
     // Visual selection
     struct VisualSelection
@@ -76,6 +84,8 @@ private:
     Panel activePanel = Editor;
     MixerFocus mixerFocus = FocusNone;
     int selectedClipIndex = 0;
+    int selectedPluginSlot = 0;
+    bool masterStripSelected = false;
     int64_t gridCursorPosition = 0;
     int seqRow  = 0;
     int seqStep = 0;

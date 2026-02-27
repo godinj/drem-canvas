@@ -30,6 +30,9 @@ public:
     // Mixer parameter focus
     void setMixerFocus (VimContext::MixerFocus focus);
 
+    // Plugin slot selection (only highlighted on the selected strip)
+    void setSelectedPluginSlot (int slotIndex);
+
     // Call this to wire meter sources from track processors
     std::function<void (int trackIndex, ChannelStrip& strip)> onWireMeter;
 

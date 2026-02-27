@@ -43,6 +43,9 @@ namespace IDs
     DECLARE_ID (timeSigDenominator)
     DECLARE_ID (sampleRate)
 
+    // Master bus
+    DECLARE_ID (MASTER_BUS)
+
     // Step sequencer
     DECLARE_ID (STEP_SEQUENCER)
     DECLARE_ID (STEP_PATTERN)
@@ -91,6 +94,9 @@ public:
     UndoSystem& getUndoSystem() { return undoSystem; }
 
     Clipboard& getClipboard() { return clipboard; }
+
+    // Master bus state (persistent, holds volume + plugin chain)
+    juce::ValueTree getMasterBusState();
 
     // Project properties
     double getTempo() const;

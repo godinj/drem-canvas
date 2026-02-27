@@ -8,14 +8,18 @@ MixerPanel::MixerPanel (Project& proj, MixBusProcessor& bus, UndoSystem* us)
       masterBus (bus),
       undoSystem (us)
 {
-    // Create master strip with a special "Master" ValueTree state
-    masterState = juce::ValueTree (IDs::TRACK);
-    masterState.setProperty (IDs::name, "Master", nullptr);
-    masterState.setProperty (IDs::volume, 1.0, nullptr);
-    masterState.setProperty (IDs::pan, 0.0, nullptr);
-    masterState.setProperty (IDs::mute, false, nullptr);
-    masterState.setProperty (IDs::solo, false, nullptr);
-    masterState.setProperty (IDs::colour, static_cast<int> (0xffff9020), nullptr);
+    // Use project's persistent master bus state
+    masterState = project.getMasterBusState();
+    if (! masterState.hasProperty (IDs::name))
+        masterState.setProperty (IDs::name, "Master", nullptr);
+    if (! masterState.hasProperty (IDs::pan))
+        masterState.setProperty (IDs::pan, 0.0, nullptr);
+    if (! masterState.hasProperty (IDs::mute))
+        masterState.setProperty (IDs::mute, false, nullptr);
+    if (! masterState.hasProperty (IDs::solo))
+        masterState.setProperty (IDs::solo, false, nullptr);
+    if (! masterState.hasProperty (IDs::colour))
+        masterState.setProperty (IDs::colour, static_cast<int> (0xffff9020), nullptr);
 
     masterStrip = std::make_unique<ChannelStrip> (masterState);
     masterStrip->onStateChanged = [this]
@@ -143,6 +147,16 @@ void MixerPanel::setMixerFocus (VimContext::MixerFocus focus)
 
     if (masterStrip != nullptr)
         masterStrip->setMixerFocus (focus);
+}
+
+void MixerPanel::setSelectedPluginSlot (int slotIndex)
+{
+    // Only show highlight on the selected strip
+    for (int i = 0; i < strips.size(); ++i)
+        strips[i]->setSelectedPluginSlot (i == selectedStripIndex ? slotIndex : -1);
+
+    if (masterStrip != nullptr)
+        masterStrip->setSelectedPluginSlot (selectedStripIndex == strips.size() ? slotIndex : -1);
 }
 
 void MixerPanel::valueTreeChildAdded (juce::ValueTree& parentTree, juce::ValueTree& /*childWhichHasBeenAdded*/)

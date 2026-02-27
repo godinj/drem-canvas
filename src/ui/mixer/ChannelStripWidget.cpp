@@ -146,5 +146,10 @@ void ChannelStripWidget::setMixerFocus (VimContext::MixerFocus focus)
     }
 }
 
+void ChannelStripWidget::setSelectedPluginSlot (int slotIndex)
+{
+    pluginSlots.setSelectedSlotIndex (slotIndex);
+}
+
 } // namespace ui
 } // namespace dc

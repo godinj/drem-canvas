@@ -19,6 +19,9 @@ public:
     static constexpr int maxVisibleSlots = 4;
     static constexpr int preferredHeight = slotHeight * maxVisibleSlots;
 
+    // Vim slot selection highlight
+    void setSelectedSlotIndex (int index);
+
     // Callbacks
     std::function<void (int pluginIndex)> onPluginClicked;
     std::function<void (int pluginIndex)> onPluginBypassToggled;
@@ -33,6 +36,7 @@ private:
     juce::ValueTree getPluginChain() const;
 
     juce::ValueTree trackState;
+    int selectedSlotIndex = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginSlotList)
 };

@@ -12,6 +12,15 @@ PluginSlotListWidget::PluginSlotListWidget()
 {
 }
 
+void PluginSlotListWidget::setSelectedSlotIndex (int index)
+{
+    if (selectedSlotIndex != index)
+    {
+        selectedSlotIndex = index;
+        repaint();
+    }
+}
+
 void PluginSlotListWidget::paint (gfx::Canvas& canvas)
 {
     using namespace gfx;
@@ -19,6 +28,7 @@ void PluginSlotListWidget::paint (gfx::Canvas& canvas)
     auto& font = FontManager::getInstance().getSmallFont();
     float w = getWidth();
 
+    // Draw populated slots
     for (size_t i = 0; i < slots.size(); ++i)
     {
         float y = static_cast<float> (i) * slotHeight;
@@ -29,7 +39,17 @@ void PluginSlotListWidget::paint (gfx::Canvas& canvas)
             : theme.widgetBackground;
 
         canvas.fillRect (slotRect, bg);
-        canvas.strokeRect (slotRect, theme.outlineColor, 0.5f);
+
+        // Selected slot highlight
+        if (static_cast<int> (i) == selectedSlotIndex)
+        {
+            canvas.fillRect (slotRect, theme.selection.withAlpha ((uint8_t) 38));
+            canvas.strokeRect (slotRect, theme.selection, 1.0f);
+        }
+        else
+        {
+            canvas.strokeRect (slotRect, theme.outlineColor, 0.5f);
+        }
 
         if (!slots[i].name.empty())
         {
@@ -42,6 +62,16 @@ void PluginSlotListWidget::paint (gfx::Canvas& canvas)
             canvas.drawText ("(empty)", 4.0f, y + slotHeight * 0.5f + 4.0f,
                              font, theme.dimText);
         }
+    }
+
+    // Draw "add" slot if selected past the last plugin
+    if (selectedSlotIndex >= 0 && selectedSlotIndex >= static_cast<int> (slots.size()))
+    {
+        float y = static_cast<float> (slots.size()) * slotHeight;
+        Rect slotRect (0, y, w, slotHeight);
+        canvas.fillRect (slotRect, theme.selection.withAlpha ((uint8_t) 38));
+        canvas.strokeRect (slotRect, theme.selection, 1.0f);
+        canvas.drawText ("[+]", 4.0f, y + slotHeight * 0.5f + 4.0f, font, theme.selection);
     }
 }
 

@@ -23,11 +23,15 @@ MainComponent::MainComponent()
     // Create mix bus processor and add to graph
     mixBusNode = audioEngine.addProcessor (std::make_unique<MixBusProcessor> (transportController));
 
-    // Connect mix bus output to audio output
-    audioEngine.connectNodes (mixBusNode->nodeID, 0,
-                              audioEngine.getAudioOutputNode()->nodeID, 0);
-    audioEngine.connectNodes (mixBusNode->nodeID, 1,
-                              audioEngine.getAudioOutputNode()->nodeID, 1);
+    // Create master meter tap (sits after master plugin chain, before audio output)
+    {
+        auto masterTap = std::make_unique<MeterTapProcessor>();
+        masterMeterTapProcessor = masterTap.get();
+        masterMeterTapNode = audioEngine.addProcessor (std::move (masterTap));
+    }
+
+    // Connect: MixBus → [master plugins] → masterMeterTap → AudioOutput
+    connectMasterPluginChain();
 
     // Create step sequencer processor and add to graph
     {
@@ -97,7 +101,10 @@ MainComponent::MainComponent()
     auto* browser = new BrowserPanel (pluginManager);
     browser->onPluginSelected = [this] (const juce::PluginDescription& desc)
     {
-        insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
+        if (vimContext.isMasterStripSelected())
+            insertPluginOnMaster (desc);
+        else
+            insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
     };
     browserPanel.reset (browser);
     browserPanel->setVisible (false);
@@ -132,6 +139,146 @@ MainComponent::MainComponent()
 
     // Wire browser toggle (gp keybinding)
     vimEngine->onToggleBrowser = [this] { toggleBrowser(); };
+
+    // Wire mixer plugin navigation callbacks
+    vimEngine->onMixerPluginOpen = [this] (int trackIdx, int pluginIndex)
+    {
+        if (trackIdx < 0)
+            openMasterPluginEditor (pluginIndex);
+        else
+            openPluginEditor (trackIdx, pluginIndex);
+    };
+
+    vimEngine->onMixerPluginAdd = [this] (int trackIdx)
+    {
+        if (trackIdx >= 0)
+            arrangement.selectTrack (trackIdx);
+        // Store context for browser: -1 means master
+        toggleBrowser();
+    };
+
+    vimEngine->onMixerPluginRemove = [this] (int trackIdx, int pluginIndex)
+    {
+        if (trackIdx < 0)
+        {
+            // Master strip
+            if (pluginIndex < masterPluginChain.size())
+            {
+                auto& info = masterPluginChain.getReference (pluginIndex);
+                pluginWindowManager.closeEditorForPlugin (info.plugin);
+
+                audioEngine.getGraph().suspendProcessing (true);
+                disconnectMasterPluginChain();
+                audioEngine.removeProcessor (info.node->nodeID);
+                masterPluginChain.remove (pluginIndex);
+
+                // Remove from model
+                auto masterBus = project.getMasterBusState();
+                auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+                if (chain.isValid() && pluginIndex < chain.getNumChildren())
+                    chain.removeChild (pluginIndex, &project.getUndoManager());
+
+                connectMasterPluginChain();
+                audioEngine.getGraph().suspendProcessing (false);
+            }
+        }
+        else
+        {
+            // Regular track
+            auto trackState = project.getTrack (trackIdx);
+            Track t (trackState);
+
+            if (trackIdx < trackPluginChains.size()
+                && pluginIndex < trackPluginChains[trackIdx].size())
+            {
+                auto& info = trackPluginChains[trackIdx].getReference (pluginIndex);
+                pluginWindowManager.closeEditorForPlugin (info.plugin);
+
+                audioEngine.getGraph().suspendProcessing (true);
+                disconnectTrackPluginChain (trackIdx);
+                audioEngine.removeProcessor (info.node->nodeID);
+                trackPluginChains.getReference (trackIdx).remove (pluginIndex);
+                connectTrackPluginChain (trackIdx);
+                audioEngine.getGraph().suspendProcessing (false);
+            }
+
+            t.removePlugin (pluginIndex, &project.getUndoManager());
+        }
+
+        if (mixerPanel != nullptr)
+            mixerPanel->rebuildStrips();
+    };
+
+    vimEngine->onMixerPluginBypass = [this] (int trackIdx, int pluginIndex)
+    {
+        if (trackIdx < 0)
+        {
+            // Master strip
+            auto masterBus = project.getMasterBusState();
+            auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+            if (chain.isValid() && pluginIndex < chain.getNumChildren())
+            {
+                auto plugin = chain.getChild (pluginIndex);
+                bool enabled = plugin.getProperty (IDs::pluginEnabled, true);
+                plugin.setProperty (IDs::pluginEnabled, ! enabled, &project.getUndoManager());
+
+                audioEngine.getGraph().suspendProcessing (true);
+                disconnectMasterPluginChain();
+                connectMasterPluginChain();
+                audioEngine.getGraph().suspendProcessing (false);
+            }
+        }
+        else
+        {
+            auto trackState = project.getTrack (trackIdx);
+            Track t (trackState);
+            bool enabled = t.isPluginEnabled (pluginIndex);
+            t.setPluginEnabled (pluginIndex, ! enabled, &project.getUndoManager());
+
+            audioEngine.getGraph().suspendProcessing (true);
+            disconnectTrackPluginChain (trackIdx);
+            connectTrackPluginChain (trackIdx);
+            audioEngine.getGraph().suspendProcessing (false);
+        }
+    };
+
+    vimEngine->onMixerPluginReorder = [this] (int trackIdx, int fromIndex, int toIndex)
+    {
+        if (trackIdx < 0)
+        {
+            // Master strip
+            auto masterBus = project.getMasterBusState();
+            auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+            if (chain.isValid() && fromIndex < chain.getNumChildren() && toIndex < chain.getNumChildren())
+            {
+                audioEngine.getGraph().suspendProcessing (true);
+                disconnectMasterPluginChain();
+
+                chain.moveChild (fromIndex, toIndex, &project.getUndoManager());
+                masterPluginChain.swap (fromIndex, toIndex);
+
+                connectMasterPluginChain();
+                audioEngine.getGraph().suspendProcessing (false);
+            }
+        }
+        else
+        {
+            auto trackState = project.getTrack (trackIdx);
+            Track t (trackState);
+
+            if (trackIdx < trackPluginChains.size())
+            {
+                audioEngine.getGraph().suspendProcessing (true);
+                disconnectTrackPluginChain (trackIdx);
+
+                t.movePlugin (fromIndex, toIndex, &project.getUndoManager());
+                trackPluginChains.getReference (trackIdx).swap (fromIndex, toIndex);
+
+                connectTrackPluginChain (trackIdx);
+                audioEngine.getGraph().suspendProcessing (false);
+            }
+        }
+    };
 
     // Wire plugin menu callbacks
     vimEngine->onPluginMenuMove = [this] (int delta)
@@ -949,8 +1096,20 @@ void MainComponent::vimContextChanged()
     if (mixerPanel != nullptr)
     {
         mixerPanel->setActiveContext (panel == VimContext::Mixer);
-        mixerPanel->setSelectedStripIndex (arrangement.getSelectedTrackIndex());
+
+        // Select master strip or track strip
+        if (vimContext.isMasterStripSelected())
+            mixerPanel->setSelectedStripIndex (project.getNumTracks());
+        else
+            mixerPanel->setSelectedStripIndex (arrangement.getSelectedTrackIndex());
+
         mixerPanel->setMixerFocus (vimContext.getMixerFocus());
+
+        // Propagate plugin slot selection
+        if (vimContext.getMixerFocus() == VimContext::FocusPlugins)
+            mixerPanel->setSelectedPluginSlot (vimContext.getSelectedPluginSlot());
+        else
+            mixerPanel->setSelectedPluginSlot (-1);
     }
 
     // Sync grid cursor to VimContext
@@ -1097,6 +1256,152 @@ void MainComponent::captureAllPluginStates()
             }
         }
     }
+
+    // Capture master plugin states
+    auto masterBus = project.getMasterBusState();
+    auto masterChainTree = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+    for (int p = 0; p < masterPluginChain.size() && p < masterChainTree.getNumChildren(); ++p)
+    {
+        if (masterPluginChain[p].plugin != nullptr)
+        {
+            auto base64State = PluginHost::savePluginState (*masterPluginChain[p].plugin);
+            masterChainTree.getChild (p).setProperty (IDs::pluginState, base64State, nullptr);
+        }
+    }
+}
+
+// ── Master bus plugin chain ──────────────────────────────────────────────────
+
+void MainComponent::connectMasterPluginChain()
+{
+    if (mixBusNode == nullptr || masterMeterTapNode == nullptr)
+        return;
+
+    auto masterBus = project.getMasterBusState();
+    auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+
+    // Build list of enabled plugin nodes
+    juce::Array<juce::AudioProcessorGraph::Node::Ptr> enabledNodes;
+    for (int p = 0; p < masterPluginChain.size(); ++p)
+    {
+        if (chain.isValid() && p < chain.getNumChildren())
+        {
+            bool enabled = chain.getChild (p).getProperty (IDs::pluginEnabled, true);
+            if (enabled)
+                enabledNodes.add (masterPluginChain[p].node);
+        }
+    }
+
+    // Wire: MixBus → [enabled plugins] → masterMeterTap → AudioOutput
+    auto prevNode = mixBusNode;
+    for (auto& pluginNode : enabledNodes)
+    {
+        audioEngine.connectNodes (prevNode->nodeID, 0, pluginNode->nodeID, 0);
+        audioEngine.connectNodes (prevNode->nodeID, 1, pluginNode->nodeID, 1);
+        prevNode = pluginNode;
+    }
+
+    audioEngine.connectNodes (prevNode->nodeID, 0, masterMeterTapNode->nodeID, 0);
+    audioEngine.connectNodes (prevNode->nodeID, 1, masterMeterTapNode->nodeID, 1);
+
+    audioEngine.connectNodes (masterMeterTapNode->nodeID, 0,
+                              audioEngine.getAudioOutputNode()->nodeID, 0);
+    audioEngine.connectNodes (masterMeterTapNode->nodeID, 1,
+                              audioEngine.getAudioOutputNode()->nodeID, 1);
+}
+
+void MainComponent::disconnectMasterPluginChain()
+{
+    if (mixBusNode == nullptr)
+        return;
+
+    auto& graph = audioEngine.getGraph();
+
+    // Remove connections from mixBus output
+    for (auto& conn : graph.getConnections())
+    {
+        if (conn.source.nodeID == mixBusNode->nodeID)
+            graph.removeConnection (conn);
+    }
+
+    // Remove connections from master plugin nodes
+    for (auto& info : masterPluginChain)
+    {
+        if (info.node == nullptr) continue;
+        for (auto& conn : graph.getConnections())
+        {
+            if (conn.source.nodeID == info.node->nodeID)
+                graph.removeConnection (conn);
+        }
+    }
+
+    // Remove connections from master meter tap
+    if (masterMeterTapNode != nullptr)
+    {
+        for (auto& conn : graph.getConnections())
+        {
+            if (conn.source.nodeID == masterMeterTapNode->nodeID)
+                graph.removeConnection (conn);
+        }
+    }
+}
+
+void MainComponent::openMasterPluginEditor (int pluginIndex)
+{
+    if (pluginIndex < 0 || pluginIndex >= masterPluginChain.size())
+        return;
+
+    auto* plugin = masterPluginChain[pluginIndex].plugin;
+    if (plugin != nullptr)
+        pluginWindowManager.showEditorForPlugin (*plugin);
+}
+
+void MainComponent::insertPluginOnMaster (const juce::PluginDescription& desc)
+{
+    auto masterBus = project.getMasterBusState();
+    auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+    if (! chain.isValid())
+    {
+        chain = juce::ValueTree (IDs::PLUGIN_CHAIN);
+        masterBus.appendChild (chain, nullptr);
+    }
+
+    // Add to model
+    auto pluginNode = juce::ValueTree (IDs::PLUGIN);
+    pluginNode.setProperty (IDs::pluginName, desc.name, nullptr);
+    pluginNode.setProperty (IDs::pluginFormat, desc.pluginFormatName, nullptr);
+    pluginNode.setProperty (IDs::pluginManufacturer, desc.manufacturerName, nullptr);
+    pluginNode.setProperty (IDs::pluginUniqueId, desc.uniqueId, nullptr);
+    pluginNode.setProperty (IDs::pluginFileOrIdentifier, desc.fileOrIdentifier, nullptr);
+    pluginNode.setProperty (IDs::pluginEnabled, true, nullptr);
+    chain.appendChild (pluginNode, &project.getUndoManager());
+
+    // Async instantiate and add to graph
+    auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()
+                          ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentSampleRate()
+                          : 44100.0;
+    auto blockSize = audioEngine.getDeviceManager().getCurrentAudioDevice()
+                         ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentBufferSizeSamples()
+                         : 512;
+
+    pluginHost.createPluginAsync (desc, sampleRate, blockSize,
+        [this] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& errorMessage)
+        {
+            juce::ignoreUnused (errorMessage);
+            if (instance == nullptr)
+                return;
+
+            auto* pluginPtr = instance.get();
+
+            audioEngine.getGraph().suspendProcessing (true);
+            disconnectMasterPluginChain();
+
+            auto node = audioEngine.addProcessor (std::move (instance));
+            masterPluginChain.add ({ node, pluginPtr });
+
+            connectMasterPluginChain();
+            audioEngine.getGraph().suspendProcessing (false);
+        });
 }
 
 void MainComponent::insertPluginOnTrack (int trackIndex, const juce::PluginDescription& desc)
