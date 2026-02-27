@@ -81,6 +81,14 @@ public:
     std::function<void()> onPluginMenuConfirm;
     std::function<void()> onPluginMenuCancel;
 
+    // Plugin search callbacks (wired by AppController / MainComponent)
+    std::function<void (const juce::String&)> onPluginMenuFilter;
+    std::function<void()> onPluginMenuClearFilter;
+
+    // Plugin search accessors (used by status bars)
+    bool isPluginSearchActive() const { return pluginSearchActive; }
+    const juce::String& getPluginSearchBuffer() const { return pluginSearchBuffer; }
+
     // Piano roll action callbacks (wired by AppController)
     std::function<void (int tool)> onSetPianoRollTool;     // 0=Select, 1=Draw, 2=Erase
     std::function<void (char reg)> onPianoRollDeleteSelected;
@@ -186,6 +194,7 @@ private:
     bool handleCommandKey (const juce::KeyPress& key);
     bool handleKeyboardKey (const juce::KeyPress& key);
     bool handlePluginMenuKey (const juce::KeyPress& key);
+    bool handlePluginSearchKey (const juce::KeyPress& key);
     bool handleVisualKey (const juce::KeyPress& key);
     bool handleVisualLineKey (const juce::KeyPress& key);
     void executeCommand();
@@ -259,6 +268,10 @@ private:
     char consumeRegister();     // returns pending register and resets
 
     VirtualKeyboardState keyboardState;
+
+    // Plugin search sub-state
+    bool pluginSearchActive = false;
+    juce::String pluginSearchBuffer;
 
     // Visual mode anchor
     int visualAnchorTrack = 0;

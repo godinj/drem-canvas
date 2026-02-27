@@ -46,6 +46,10 @@ void BrowserWidget::paint (gfx::Canvas& canvas)
     Rect searchRect (4.0f, searchY, w - 8.0f, searchFieldHeight);
     canvas.fillRoundedRect (searchRect, 4.0f, theme.widgetBackground);
 
+    // Highlight border when search is active
+    if (searchActive)
+        canvas.strokeRect (searchRect, theme.selection, 1.5f);
+
     float textY = searchY + searchFieldHeight * 0.5f + 4.0f;
     float textX = 10.0f;
 
@@ -58,14 +62,17 @@ void BrowserWidget::paint (gfx::Canvas& canvas)
         canvas.drawText ("Filter plugins...", textX, textY, font, theme.dimText);
     }
 
-    // Cursor
-    SkScalar textWidth = 0.0f;
-    if (! searchBuffer.empty())
-        textWidth = font.measureText (searchBuffer.data(), searchBuffer.size(), SkTextEncoding::kUTF8);
+    // Cursor (only when search is active)
+    if (searchActive)
+    {
+        SkScalar textWidth = 0.0f;
+        if (! searchBuffer.empty())
+            textWidth = font.measureText (searchBuffer.data(), searchBuffer.size(), SkTextEncoding::kUTF8);
 
-    float cursorX = textX + textWidth;
-    canvas.drawLine (cursorX, searchY + 6.0f, cursorX, searchY + searchFieldHeight - 6.0f,
-                     theme.defaultText, 1.5f);
+        float cursorX = textX + textWidth;
+        canvas.drawLine (cursorX, searchY + 6.0f, cursorX, searchY + searchFieldHeight - 6.0f,
+                         theme.defaultText, 1.5f);
+    }
 }
 
 void BrowserWidget::resized()
@@ -79,45 +86,31 @@ void BrowserWidget::resized()
     pluginList.setBounds (0, listTop, w, h - listTop);
 }
 
-bool BrowserWidget::keyDown (const gfx::KeyEvent& e)
+bool BrowserWidget::keyDown (const gfx::KeyEvent&)
 {
-    // Escape — clear search buffer
-    if (e.keyCode == 0x35 || e.character == 27)
-    {
-        if (! searchBuffer.empty())
-        {
-            searchBuffer.clear();
-            filterPlugins();
-            repaint();
-            return true;
-        }
-        return false;
-    }
-
-    // Backspace
-    if (e.keyCode == 0x33 || e.character == 8)
-    {
-        if (! searchBuffer.empty())
-        {
-            searchBuffer.pop_back();
-            filterPlugins();
-            repaint();
-            return true;
-        }
-        return false;
-    }
-
-    // Printable characters — append to search
-    auto ch = e.character;
-    if (ch >= 32 && ch < 127 && ! e.control && ! e.command)
-    {
-        searchBuffer += static_cast<char> (ch);
-        filterPlugins();
-        repaint();
-        return true;
-    }
-
+    // All input is driven by VimEngine; widget does not handle keys directly
     return false;
+}
+
+void BrowserWidget::setSearchFilter (const juce::String& query)
+{
+    searchBuffer = query.toStdString();
+    searchActive = true;
+    filterPlugins();
+    // Auto-select first result
+    if (displayedPlugins.size() > 0)
+        selectPlugin (0);
+    repaint();
+}
+
+void BrowserWidget::clearSearchFilter()
+{
+    searchBuffer.clear();
+    searchActive = false;
+    filterPlugins();
+    if (displayedPlugins.size() > 0)
+        selectPlugin (0);
+    repaint();
 }
 
 void BrowserWidget::filterPlugins()

@@ -42,6 +42,14 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
         return;
     }
 
+    // ── Plugin search — full-width search line
+    if (engine.getMode() == VimEngine::PluginMenu && engine.isPluginSearchActive())
+    {
+        auto text = "/" + engine.getPluginSearchBuffer().toStdString();
+        canvas.drawText (text, 6.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffcdd6f4));
+        return;
+    }
+
     float x = 0.0f;
 
     // ── Mode segment

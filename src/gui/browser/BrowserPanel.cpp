@@ -9,7 +9,7 @@ namespace dc
 
 BrowserPanel::BrowserPanel (PluginManager& pm)
     : pluginManager (pm),
-      listModel (pm)
+      listModel (filteredTypes)
 {
     pluginListBox.setModel (&listModel);
     pluginListBox.setRowHeight (24);
@@ -46,13 +46,54 @@ void BrowserPanel::resized()
 
 void BrowserPanel::refreshPluginList()
 {
+    searchFilter.clear();
+    rebuildFilteredList();
+}
+
+void BrowserPanel::rebuildFilteredList()
+{
+    filteredTypes.clear();
+    auto allTypes = pluginManager.getKnownPlugins().getTypes();
+
+    if (searchFilter.isEmpty())
+    {
+        for (const auto& t : allTypes)
+            filteredTypes.add (t);
+    }
+    else
+    {
+        auto queryLower = searchFilter.toLowerCase();
+        for (const auto& t : allTypes)
+        {
+            if (t.name.toLowerCase().contains (queryLower)
+                || t.manufacturerName.toLowerCase().contains (queryLower))
+                filteredTypes.add (t);
+        }
+    }
+
     pluginListBox.updateContent();
     pluginListBox.repaint();
 }
 
+void BrowserPanel::setSearchFilter (const juce::String& query)
+{
+    searchFilter = query;
+    rebuildFilteredList();
+    if (filteredTypes.size() > 0)
+        selectPlugin (0);
+}
+
+void BrowserPanel::clearSearchFilter()
+{
+    searchFilter.clear();
+    rebuildFilteredList();
+    if (filteredTypes.size() > 0)
+        selectPlugin (0);
+}
+
 int BrowserPanel::getNumPlugins() const
 {
-    return pluginManager.getKnownPlugins().getNumTypes();
+    return filteredTypes.size();
 }
 
 int BrowserPanel::getSelectedPluginIndex() const
@@ -87,12 +128,11 @@ void BrowserPanel::scrollByHalfPage (int direction)
 void BrowserPanel::confirmSelection()
 {
     int row = pluginListBox.getSelectedRow();
-    auto types = pluginManager.getKnownPlugins().getTypes();
 
-    if (row >= 0 && row < static_cast<int> (types.size()))
+    if (row >= 0 && row < filteredTypes.size())
     {
         if (onPluginSelected)
-            onPluginSelected (types[static_cast<size_t> (row)]);
+            onPluginSelected (filteredTypes[row]);
     }
 }
 
@@ -102,19 +142,17 @@ void BrowserPanel::confirmSelection()
 
 int BrowserPanel::PluginListModel::getNumRows()
 {
-    return manager.getKnownPlugins().getNumTypes();
+    return filteredTypes.size();
 }
 
 void BrowserPanel::PluginListModel::paintListBoxItem (int rowNumber, juce::Graphics& g,
                                                        int width, int height,
                                                        bool rowIsSelected)
 {
-    auto types = manager.getKnownPlugins().getTypes();
-
-    if (rowNumber < 0 || rowNumber >= static_cast<int> (types.size()))
+    if (rowNumber < 0 || rowNumber >= filteredTypes.size())
         return;
 
-    const auto& desc = types[static_cast<size_t> (rowNumber)];
+    const auto& desc = filteredTypes[rowNumber];
 
     if (rowIsSelected)
         g.fillAll (juce::Colour (0xff3a3a5a));
@@ -134,11 +172,9 @@ void BrowserPanel::PluginListModel::paintListBoxItem (int rowNumber, juce::Graph
 
 void BrowserPanel::PluginListModel::listBoxItemDoubleClicked (int row, const juce::MouseEvent&)
 {
-    auto types = manager.getKnownPlugins().getTypes();
-
-    if (row >= 0 && row < static_cast<int> (types.size()))
+    if (row >= 0 && row < filteredTypes.size())
     {
-        const auto& desc = types[static_cast<size_t> (row)];
+        const auto& desc = filteredTypes[row];
 
         if (onItemSelected)
             onItemSelected (desc);

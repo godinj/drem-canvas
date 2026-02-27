@@ -934,6 +934,8 @@ void VimEngine::enterNormalMode()
 {
     bool wasPluginMenu = (mode == PluginMenu);
     mode = Normal;
+    pluginSearchActive = false;
+    pluginSearchBuffer.clear();
     cancelOperator();
     clearPending();
     context.clearVisualSelection();
@@ -945,13 +947,66 @@ void VimEngine::enterNormalMode()
 
 void VimEngine::enterPluginMenuMode()
 {
+    pluginSearchActive = false;
+    pluginSearchBuffer.clear();
     mode = PluginMenu;
     listeners.call (&Listener::vimModeChanged, PluginMenu);
     listeners.call (&Listener::vimContextChanged);
 }
 
+bool VimEngine::handlePluginSearchKey (const juce::KeyPress& key)
+{
+    // Escape / Ctrl-C — clear filter, back to browse
+    if (isEscapeOrCtrlC (key))
+    {
+        pluginSearchActive = false;
+        pluginSearchBuffer.clear();
+        if (onPluginMenuClearFilter)
+            onPluginMenuClearFilter();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // Return — accept filter, back to browse
+    if (key == juce::KeyPress::returnKey)
+    {
+        pluginSearchActive = false;
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // Backspace — remove last char
+    if (key == juce::KeyPress::backspaceKey)
+    {
+        if (pluginSearchBuffer.isNotEmpty())
+            pluginSearchBuffer = pluginSearchBuffer.dropLastCharacters (1);
+
+        if (onPluginMenuFilter)
+            onPluginMenuFilter (pluginSearchBuffer);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // Printable char (no Ctrl/Cmd) — append to buffer
+    auto c = key.getTextCharacter();
+    if (c >= 32 && ! key.getModifiers().isCtrlDown() && ! key.getModifiers().isCommandDown())
+    {
+        pluginSearchBuffer += juce::String::charToString (c);
+        if (onPluginMenuFilter)
+            onPluginMenuFilter (pluginSearchBuffer);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    return true; // consume all keys while searching
+}
+
 bool VimEngine::handlePluginMenuKey (const juce::KeyPress& key)
 {
+    // Delegate to search handler when search is active
+    if (pluginSearchActive)
+        return handlePluginSearchKey (key);
+
     if (isEscapeOrCtrlC (key))
     {
         enterNormalMode();
@@ -968,6 +1023,15 @@ bool VimEngine::handlePluginMenuKey (const juce::KeyPress& key)
 
     auto keyChar = key.getTextCharacter();
     auto modifiers = key.getModifiers();
+
+    // / — enter search sub-mode
+    if (keyChar == '/')
+    {
+        pluginSearchActive = true;
+        pluginSearchBuffer.clear();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
 
     // j / k — single-step navigation
     if (keyChar == 'j')

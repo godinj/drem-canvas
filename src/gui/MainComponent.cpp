@@ -166,6 +166,18 @@ MainComponent::MainComponent()
         resized();
     };
 
+    vimEngine->onPluginMenuFilter = [this] (const juce::String& query)
+    {
+        if (auto* bp = dynamic_cast<BrowserPanel*> (browserPanel.get()))
+            bp->setSearchFilter (query);
+    };
+
+    vimEngine->onPluginMenuClearFilter = [this]
+    {
+        if (auto* bp = dynamic_cast<BrowserPanel*> (browserPanel.get()))
+            bp->clearSearchFilter();
+    };
+
     vimStatusBar = std::make_unique<VimStatusBar> (*vimEngine, vimContext, arrangement, transportController);
     addAndMakeVisible (*vimStatusBar);
 
@@ -1150,6 +1162,8 @@ void MainComponent::toggleBrowser()
     }
     else
     {
+        if (auto* bp = dynamic_cast<BrowserPanel*> (browserPanel.get()))
+            bp->clearSearchFilter();
         // Return to normal mode if we were in plugin menu
         if (vimEngine->getMode() == VimEngine::PluginMenu)
             vimEngine->enterNormalMode();

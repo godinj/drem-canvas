@@ -15,6 +15,10 @@ public:
 
     void refreshPluginList();
 
+    // External filter API (driven by VimEngine)
+    void setSearchFilter (const juce::String& query);
+    void clearSearchFilter();
+
     // Keyboard navigation
     int getNumPlugins() const;
     int getSelectedPluginIndex() const;
@@ -30,10 +34,13 @@ private:
     PluginManager& pluginManager;
     juce::ListBox pluginListBox;
 
+    void rebuildFilteredList();
+
     class PluginListModel : public juce::ListBoxModel
     {
     public:
-        explicit PluginListModel (PluginManager& pm) : manager (pm) {}
+        explicit PluginListModel (juce::Array<juce::PluginDescription>& types)
+            : filteredTypes (types) {}
         int getNumRows() override;
         void paintListBoxItem (int rowNumber, juce::Graphics& g,
                                int width, int height, bool rowIsSelected) override;
@@ -41,9 +48,11 @@ private:
 
         std::function<void (const juce::PluginDescription&)> onItemSelected;
     private:
-        PluginManager& manager;
+        juce::Array<juce::PluginDescription>& filteredTypes;
     };
 
+    juce::Array<juce::PluginDescription> filteredTypes;
+    juce::String searchFilter;
     PluginListModel listModel;
     juce::TextButton scanButton { "Scan Plugins" };
 

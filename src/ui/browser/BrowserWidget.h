@@ -23,6 +23,10 @@ public:
 
     void refreshPluginList();
 
+    // External filter API (driven by VimEngine)
+    void setSearchFilter (const juce::String& query);
+    void clearSearchFilter();
+
     // Keyboard navigation
     int getNumPlugins() const;
     int getSelectedPluginIndex() const;
@@ -41,6 +45,7 @@ private:
     gfx::ListBoxWidget pluginList;
     juce::Array<juce::PluginDescription> displayedPlugins;
     std::string searchBuffer;
+    bool searchActive = false;
 
     static constexpr float searchFieldHeight = 28.0f;
 };
