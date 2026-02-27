@@ -80,9 +80,9 @@ public:
 
     // Piano roll action callbacks (wired by AppController)
     std::function<void (int tool)> onSetPianoRollTool;     // 0=Select, 1=Draw, 2=Erase
-    std::function<void()> onPianoRollDeleteSelected;
-    std::function<void()> onPianoRollCopy;
-    std::function<void()> onPianoRollPaste;
+    std::function<void (char reg)> onPianoRollDeleteSelected;
+    std::function<void (char reg)> onPianoRollCopy;
+    std::function<void (char reg)> onPianoRollPaste;
     std::function<void()> onPianoRollDuplicate;
     std::function<void (int)> onPianoRollTranspose;        // semitones
     std::function<void()> onPianoRollSelectAll;
@@ -219,12 +219,15 @@ private:
     void executeChange (const MotionRange& range);
     void executeMotion (juce_wchar key, int count);
 
+    // Clip collection helpers
+    juce::Array<Clipboard::ClipEntry> collectClipsForRange (const MotionRange& range) const;
+
     // Visual mode helpers
     MotionRange getVisualRange() const;
     void updateVisualSelection();
     void executeVisualOperator (Operator op);
     void executeGridVisualDelete();
-    void executeGridVisualYank();
+    void executeGridVisualYank (bool isYank);
     void executeVisualMute();
     void executeVisualSolo();
 
@@ -246,6 +249,11 @@ private:
     Operator pendingOperator = OpNone;
     int countAccumulator = 0;   // count typed before operator (e.g. the 3 in 3d2j)
     int operatorCount = 0;      // count typed after operator  (e.g. the 2 in 3d2j)
+
+    // Register prefix state ("x prefix)
+    char pendingRegister = '\0';
+    bool awaitingRegisterChar = false;
+    char consumeRegister();     // returns pending register and resets
 
     VirtualKeyboardState keyboardState;
 

@@ -34,6 +34,14 @@ VimEngine::VimEngine (Project& p, TransportController& t,
 {
 }
 
+char VimEngine::consumeRegister()
+{
+    char reg = pendingRegister;
+    pendingRegister = '\0';
+    awaitingRegisterChar = false;
+    return reg;
+}
+
 bool VimEngine::keyPressed (const juce::KeyPress& key, juce::Component*)
 {
     // Ctrl+P opens command palette from any mode
@@ -181,6 +189,30 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     {
         cancelOperator();
         clearPending();
+        return true;
+    }
+
+    // Phase 2.5: Register prefix ("x)
+    if (awaitingRegisterChar)
+    {
+        char c = static_cast<char> (keyChar);
+        if (Clipboard::isValidRegister (c) && c != '\0')
+        {
+            pendingRegister = c;
+            awaitingRegisterChar = false;
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+        // Invalid register char — cancel
+        awaitingRegisterChar = false;
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    if (keyChar == '"')
+    {
+        awaitingRegisterChar = true;
+        listeners.call (&Listener::vimContextChanged);
         return true;
     }
 
@@ -526,7 +558,10 @@ void VimEngine::deleteSelectedRegions()
     if (clipIdx >= 0 && clipIdx < track.getNumClips())
     {
         // Yank before delete (Vim semantics: x always yanks)
-        yankSelectedRegions();
+        char reg = consumeRegister();
+        juce::Array<Clipboard::ClipEntry> entries;
+        entries.add ({ track.getClip (clipIdx), 0, 0 });
+        project.getClipboard().storeClips (reg, entries, false, false);
 
         ScopedTransaction txn (project.getUndoSystem(), "Delete Clip");
         track.removeClip (clipIdx, &project.getUndoManager());
@@ -549,9 +584,10 @@ void VimEngine::yankSelectedRegions()
 
     if (clipIdx >= 0 && clipIdx < track.getNumClips())
     {
+        char reg = consumeRegister();
         juce::Array<Clipboard::ClipEntry> entries;
         entries.add ({ track.getClip (clipIdx), 0, 0 });
-        project.getClipboard().storeClips (entries, false);
+        project.getClipboard().storeClips (reg, entries, false, true);
     }
 }
 
@@ -613,8 +649,9 @@ static void carveGap (Track& track, int64_t gapStart, int64_t gapEnd, juce::Undo
 
 void VimEngine::pasteAfterPlayhead()
 {
-    auto& cb = project.getClipboard();
-    if (! cb.hasClips())
+    char reg = consumeRegister();
+    auto& entry = project.getClipboard().get (reg);
+    if (! entry.hasClips())
         return;
 
     int baseTrack = arrangement.getSelectedTrackIndex();
@@ -625,15 +662,15 @@ void VimEngine::pasteAfterPlayhead()
     auto& um = project.getUndoManager();
     int64_t pastePos = context.getGridCursorPosition();
 
-    for (auto& entry : cb.getClipEntries())
+    for (auto& clip : entry.clipEntries)
     {
-        int targetTrack = baseTrack + entry.trackOffset;
+        int targetTrack = baseTrack + clip.trackOffset;
         if (targetTrack < 0 || targetTrack >= arrangement.getNumTracks())
             continue;
 
         Track track = arrangement.getTrack (targetTrack);
-        auto clipData = entry.clipData.createCopy();
-        int64_t finalPos = pastePos + entry.timeOffset;
+        auto clipData = clip.clipData.createCopy();
+        int64_t finalPos = pastePos + clip.timeOffset;
         auto pasteLen = static_cast<int64_t> (
             static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
 
@@ -650,8 +687,9 @@ void VimEngine::pasteAfterPlayhead()
 
 void VimEngine::pasteBeforePlayhead()
 {
-    auto& cb = project.getClipboard();
-    if (! cb.hasClips())
+    char reg = consumeRegister();
+    auto& regEntry = project.getClipboard().get (reg);
+    if (! regEntry.hasClips())
         return;
 
     int baseTrack = arrangement.getSelectedTrackIndex();
@@ -663,25 +701,25 @@ void VimEngine::pasteBeforePlayhead()
 
     // Find the total extent so we can place everything before the cursor
     int64_t maxEnd = 0;
-    for (auto& entry : cb.getClipEntries())
+    for (auto& clip : regEntry.clipEntries)
     {
         auto len = static_cast<int64_t> (
-            static_cast<juce::int64> (entry.clipData.getProperty (IDs::length, 0)));
-        maxEnd = std::max (maxEnd, entry.timeOffset + len);
+            static_cast<juce::int64> (clip.clipData.getProperty (IDs::length, 0)));
+        maxEnd = std::max (maxEnd, clip.timeOffset + len);
     }
 
     int64_t pasteBase = context.getGridCursorPosition() - maxEnd;
     if (pasteBase < 0) pasteBase = 0;
 
-    for (auto& entry : cb.getClipEntries())
+    for (auto& clip : regEntry.clipEntries)
     {
-        int targetTrack = baseTrack + entry.trackOffset;
+        int targetTrack = baseTrack + clip.trackOffset;
         if (targetTrack < 0 || targetTrack >= arrangement.getNumTracks())
             continue;
 
         Track track = arrangement.getTrack (targetTrack);
-        auto clipData = entry.clipData.createCopy();
-        int64_t finalPos = pasteBase + entry.timeOffset;
+        auto clipData = clip.clipData.createCopy();
+        int64_t finalPos = pasteBase + clip.timeOffset;
         auto pasteLen = static_cast<int64_t> (
             static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
 
@@ -1019,6 +1057,29 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
         return true;
     }
 
+    // Register prefix ("x)
+    if (awaitingRegisterChar)
+    {
+        char c = static_cast<char> (keyChar);
+        if (Clipboard::isValidRegister (c) && c != '\0')
+        {
+            pendingRegister = c;
+            awaitingRegisterChar = false;
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+        awaitingRegisterChar = false;
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    if (keyChar == '"')
+    {
+        awaitingRegisterChar = true;
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
     // Ctrl+P opens command palette
     if (modifiers.isCtrlDown() && keyChar == 'p')
     {
@@ -1141,21 +1202,21 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     // Delete
     if (keyChar == 'x' || key == juce::KeyPress::deleteKey)
     {
-        if (onPianoRollDeleteSelected) onPianoRollDeleteSelected();
+        if (onPianoRollDeleteSelected) onPianoRollDeleteSelected (consumeRegister());
         return true;
     }
 
     // Yank (copy)
     if (keyChar == 'y')
     {
-        if (onPianoRollCopy) onPianoRollCopy();
+        if (onPianoRollCopy) onPianoRollCopy (consumeRegister());
         return true;
     }
 
     // Paste
     if (keyChar == 'p')
     {
-        if (onPianoRollPaste) onPianoRollPaste();
+        if (onPianoRollPaste) onPianoRollPaste (consumeRegister());
         return true;
     }
 
@@ -1237,6 +1298,8 @@ void VimEngine::clearPending()
 {
     pendingKey = 0;
     pendingTimestamp = 0;
+    pendingRegister = '\0';
+    awaitingRegisterChar = false;
     listeners.call (&Listener::vimContextChanged);
 }
 
@@ -1476,6 +1539,92 @@ VimEngine::MotionRange VimEngine::resolveLinewiseMotion (int count) const
 
 // ── Operator execution ──────────────────────────────────────────────────────
 
+juce::Array<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionRange& range) const
+{
+    juce::Array<Clipboard::ClipEntry> entries;
+    int baseTrack = range.startTrack;
+    int64_t minStart = std::numeric_limits<int64_t>::max();
+
+    struct RawClip { juce::ValueTree data; int trackIdx; int64_t startPos; };
+    juce::Array<RawClip> rawClips;
+
+    if (range.linewise)
+    {
+        for (int t = range.startTrack; t <= range.endTrack; ++t)
+        {
+            if (t < 0 || t >= arrangement.getNumTracks())
+                continue;
+
+            Track track = arrangement.getTrack (t);
+
+            for (int c = 0; c < track.getNumClips(); ++c)
+            {
+                auto clip = track.getClip (c);
+                auto startPos = static_cast<int64_t> (
+                    static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+                rawClips.add ({ clip, t, startPos });
+                minStart = std::min (minStart, startPos);
+            }
+        }
+    }
+    else if (range.startTrack == range.endTrack)
+    {
+        int t = range.startTrack;
+        if (t < 0 || t >= arrangement.getNumTracks())
+            return entries;
+
+        Track track = arrangement.getTrack (t);
+        int endClip = std::min (range.endClip, track.getNumClips() - 1);
+
+        for (int c = range.startClip; c <= endClip; ++c)
+        {
+            if (c >= 0 && c < track.getNumClips())
+            {
+                auto clip = track.getClip (c);
+                auto startPos = static_cast<int64_t> (
+                    static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+                rawClips.add ({ clip, t, startPos });
+                minStart = std::min (minStart, startPos);
+            }
+        }
+    }
+    else
+    {
+        for (int t = range.startTrack; t <= range.endTrack; ++t)
+        {
+            if (t < 0 || t >= arrangement.getNumTracks())
+                continue;
+
+            Track track = arrangement.getTrack (t);
+
+            int startC = (t == range.startTrack) ? range.startClip : 0;
+            int endC   = (t == range.endTrack)
+                         ? std::min (range.endClip, track.getNumClips() - 1)
+                         : track.getNumClips() - 1;
+
+            for (int c = startC; c <= endC; ++c)
+            {
+                if (c >= 0 && c < track.getNumClips())
+                {
+                    auto clip = track.getClip (c);
+                    auto startPos = static_cast<int64_t> (
+                        static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+                    rawClips.add ({ clip, t, startPos });
+                    minStart = std::min (minStart, startPos);
+                }
+            }
+        }
+    }
+
+    if (minStart == std::numeric_limits<int64_t>::max())
+        minStart = 0;
+
+    for (auto& raw : rawClips)
+        entries.add ({ raw.data, raw.trackIdx - baseTrack, raw.startPos - minStart });
+
+    return entries;
+}
+
 void VimEngine::executeOperator (Operator op, const MotionRange& range)
 {
     if (! range.valid)
@@ -1492,8 +1641,11 @@ void VimEngine::executeOperator (Operator op, const MotionRange& range)
 
 void VimEngine::executeDelete (const MotionRange& range)
 {
-    // Yank first (Vim deletes always yank)
-    executeYank (range);
+    // Store deleted clips (Vim delete → unnamed + "1-"9 history)
+    char reg = consumeRegister();
+    auto entries = collectClipsForRange (range);
+    if (! entries.isEmpty())
+        project.getClipboard().storeClips (reg, entries, range.linewise, false);
 
     auto& um = project.getUndoManager();
 
@@ -1582,93 +1734,10 @@ void VimEngine::executeDelete (const MotionRange& range)
 
 void VimEngine::executeYank (const MotionRange& range)
 {
-    juce::Array<Clipboard::ClipEntry> entries;
-    int baseTrack = range.startTrack;
-    int64_t minStart = std::numeric_limits<int64_t>::max();
-
-    // First pass: collect clips with raw positions
-    struct RawClip { juce::ValueTree data; int trackIdx; int64_t startPos; };
-    juce::Array<RawClip> rawClips;
-
-    if (range.linewise)
-    {
-        for (int t = range.startTrack; t <= range.endTrack; ++t)
-        {
-            if (t < 0 || t >= arrangement.getNumTracks())
-                continue;
-
-            Track track = arrangement.getTrack (t);
-
-            for (int c = 0; c < track.getNumClips(); ++c)
-            {
-                auto clip = track.getClip (c);
-                auto startPos = static_cast<int64_t> (
-                    static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-                rawClips.add ({ clip, t, startPos });
-                minStart = std::min (minStart, startPos);
-            }
-        }
-    }
-    else if (range.startTrack == range.endTrack)
-    {
-        int t = range.startTrack;
-        if (t < 0 || t >= arrangement.getNumTracks())
-            return;
-
-        Track track = arrangement.getTrack (t);
-        int endClip = std::min (range.endClip, track.getNumClips() - 1);
-
-        for (int c = range.startClip; c <= endClip; ++c)
-        {
-            if (c >= 0 && c < track.getNumClips())
-            {
-                auto clip = track.getClip (c);
-                auto startPos = static_cast<int64_t> (
-                    static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-                rawClips.add ({ clip, t, startPos });
-                minStart = std::min (minStart, startPos);
-            }
-        }
-    }
-    else
-    {
-        // Multi-track clipwise
-        for (int t = range.startTrack; t <= range.endTrack; ++t)
-        {
-            if (t < 0 || t >= arrangement.getNumTracks())
-                continue;
-
-            Track track = arrangement.getTrack (t);
-
-            if (t > range.startTrack && t < range.endTrack)
-            {
-                for (int c = 0; c < track.getNumClips(); ++c)
-                    clips.add (track.getClip (c));
-            }
-            else if (t == range.startTrack)
-            {
-                for (int c = range.startClip; c < track.getNumClips(); ++c)
-                    clips.add (track.getClip (c));
-            }
-            else // t == range.endTrack
-            {
-                int end = std::min (range.endClip, track.getNumClips() - 1);
-                for (int c = 0; c <= end; ++c)
-                    clips.add (track.getClip (c));
-            }
-        }
-    }
-
-    if (minStart == std::numeric_limits<int64_t>::max())
-        minStart = 0;
-
-    // Second pass: build entries with relative offsets
-    for (auto& raw : rawClips)
-    {
-        entries.add ({ raw.data, raw.trackIdx - baseTrack, raw.startPos - minStart });
-    }
-
-    project.getClipboard().storeClips (entries, range.linewise);
+    char reg = consumeRegister();
+    auto entries = collectClipsForRange (range);
+    if (! entries.isEmpty())
+        project.getClipboard().storeClips (reg, entries, range.linewise, true);
     listeners.call (&Listener::vimContextChanged);
 }
 
@@ -2040,18 +2109,18 @@ void VimEngine::executeVisualOperator (Operator op)
     switch (op)
     {
         case OpDelete:
-            executeGridVisualYank(); // Vim always yanks before delete
+            executeGridVisualYank (false); // store as delete (rotates "1-"9)
             executeGridVisualDelete();
             break;
         case OpYank:
-            executeGridVisualYank();
+            executeGridVisualYank (true);
             break;
         case OpChange:
-            executeGridVisualYank();
+            executeGridVisualYank (false);
             executeGridVisualDelete();
             enterInsertMode();
             exitVisualMode();
-            return; // enterInsertMode already called, don't exit twice
+            return;
         case OpNone:
             break;
     }
@@ -2154,8 +2223,9 @@ void VimEngine::executeGridVisualDelete()
     listeners.call (&Listener::vimContextChanged);
 }
 
-void VimEngine::executeGridVisualYank()
+void VimEngine::executeGridVisualYank (bool isYank)
 {
+    char reg = consumeRegister();
     auto& gridSel = context.getGridVisualSelection();
     double sr = transport.getSampleRate();
     if (sr <= 0.0)
@@ -2168,7 +2238,12 @@ void VimEngine::executeGridVisualYank()
     int minTrack = std::min (gridSel.startTrack, gridSel.endTrack);
     int maxTrack = std::max (gridSel.startTrack, gridSel.endTrack);
 
-    juce::Array<juce::ValueTree> clips;
+    juce::Array<Clipboard::ClipEntry> entries;
+    int64_t globalMinStart = std::numeric_limits<int64_t>::max();
+
+    // First pass: collect trimmed clips with raw positions
+    struct RawClip { juce::ValueTree data; int trackIdx; int64_t startPos; };
+    juce::Array<RawClip> rawClips;
 
     for (int t = minTrack; t <= maxTrack; ++t)
     {
@@ -2203,11 +2278,19 @@ void VimEngine::executeGridVisualYank()
             trimmedCopy.setProperty (IDs::trimStart,
                                      static_cast<juce::int64> (origTrimStart + trimDelta), nullptr);
 
-            clips.add (trimmedCopy);
+            rawClips.add ({ trimmedCopy, t, newStart });
+            globalMinStart = std::min (globalMinStart, newStart);
         }
     }
 
-    context.setClipboardMulti (clips, false);
+    if (globalMinStart == std::numeric_limits<int64_t>::max())
+        globalMinStart = 0;
+
+    // Second pass: build entries with relative offsets
+    for (auto& raw : rawClips)
+        entries.add ({ raw.data, raw.trackIdx - minTrack, raw.startPos - globalMinStart });
+
+    project.getClipboard().storeClips (reg, entries, false, isYank);
     listeners.call (&Listener::vimContextChanged);
 }
 
@@ -2271,6 +2354,29 @@ bool VimEngine::handleVisualKey (const juce::KeyPress& key)
     if (isEscapeOrCtrlC (key) || keyChar == 'v')
     {
         exitVisualMode();
+        return true;
+    }
+
+    // Register prefix ("x)
+    if (awaitingRegisterChar)
+    {
+        char c = static_cast<char> (keyChar);
+        if (Clipboard::isValidRegister (c) && c != '\0')
+        {
+            pendingRegister = c;
+            awaitingRegisterChar = false;
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+        awaitingRegisterChar = false;
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    if (keyChar == '"')
+    {
+        awaitingRegisterChar = true;
+        listeners.call (&Listener::vimContextChanged);
         return true;
     }
 
@@ -2376,6 +2482,29 @@ bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
     if (isEscapeOrCtrlC (key) || keyChar == 'V')
     {
         exitVisualMode();
+        return true;
+    }
+
+    // Register prefix ("x)
+    if (awaitingRegisterChar)
+    {
+        char c = static_cast<char> (keyChar);
+        if (Clipboard::isValidRegister (c) && c != '\0')
+        {
+            pendingRegister = c;
+            awaitingRegisterChar = false;
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+        awaitingRegisterChar = false;
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    if (keyChar == '"')
+    {
+        awaitingRegisterChar = true;
+        listeners.call (&Listener::vimContextChanged);
         return true;
     }
 
@@ -2485,12 +2614,23 @@ bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
 bool VimEngine::hasPendingState() const
 {
     return pendingOperator != OpNone || countAccumulator > 0
-        || operatorCount > 0 || pendingKey != 0;
+        || operatorCount > 0 || pendingKey != 0
+        || pendingRegister != '\0' || awaitingRegisterChar;
 }
 
 juce::String VimEngine::getPendingDisplay() const
 {
     juce::String display;
+
+    if (pendingRegister != '\0')
+    {
+        display += "\"";
+        display += juce::String::charToString (static_cast<juce_wchar> (pendingRegister));
+    }
+    else if (awaitingRegisterChar)
+    {
+        display += "\"";
+    }
 
     if (countAccumulator > 0)
         display += juce::String (countAccumulator);

@@ -154,19 +154,19 @@ void AppController::initialise()
             pianoRollWidget->setTool (static_cast<PianoRollWidget::Tool> (tool));
     };
 
-    vimEngine->onPianoRollDeleteSelected = [this]()
+    vimEngine->onPianoRollDeleteSelected = [this] (char reg)
     {
-        if (pianoRollWidget) pianoRollWidget->deleteSelectedNotes();
+        if (pianoRollWidget) pianoRollWidget->deleteSelectedNotes (reg);
     };
 
-    vimEngine->onPianoRollCopy = [this]()
+    vimEngine->onPianoRollCopy = [this] (char reg)
     {
-        if (pianoRollWidget) pianoRollWidget->copySelectedNotes();
+        if (pianoRollWidget) pianoRollWidget->copySelectedNotes (reg);
     };
 
-    vimEngine->onPianoRollPaste = [this]()
+    vimEngine->onPianoRollPaste = [this] (char reg)
     {
-        if (pianoRollWidget) pianoRollWidget->pasteNotes();
+        if (pianoRollWidget) pianoRollWidget->pasteNotes (reg);
     };
 
     vimEngine->onPianoRollDuplicate = [this]()

@@ -59,10 +59,10 @@ public:
     const std::set<int>& getSelectedNoteIndices() const { return selectedNoteIndices; }
 
     // Editing operations
-    void deleteSelectedNotes();
-    void copySelectedNotes();
-    void cutSelectedNotes();
-    void pasteNotes();
+    void deleteSelectedNotes (char reg = '\0');
+    void copySelectedNotes (char reg = '\0');
+    void cutSelectedNotes (char reg = '\0');
+    void pasteNotes (char reg = '\0');
     void duplicateSelectedNotes();
     void transposeSelected (int semitones);
     void quantizeSelected (double strength = 1.0);

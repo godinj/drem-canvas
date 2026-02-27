@@ -491,10 +491,40 @@ void PianoRollWidget::selectNotesInRect (float x, float y, float w, float h)
 
 // ── Editing operations ───────────────────────────────────────────────────────
 
-void PianoRollWidget::deleteSelectedNotes()
+void PianoRollWidget::deleteSelectedNotes (char reg)
 {
     if (! clipState.isValid() || selectedNoteIndices.empty())
         return;
+
+    // Store deleted notes (Vim delete → unnamed + "1-"9 history)
+    {
+        juce::Array<Clipboard::NoteEntry> entries;
+        double minBeat = 1e12;
+
+        for (int idx : selectedNoteIndices)
+        {
+            if (idx < clipState.getNumChildren())
+            {
+                double sb = static_cast<double> (clipState.getChild (idx).getProperty ("startBeat", 0.0));
+                minBeat = std::min (minBeat, sb);
+            }
+        }
+
+        if (minBeat < 1e12)
+        {
+            for (int idx : selectedNoteIndices)
+            {
+                if (idx < clipState.getNumChildren())
+                {
+                    auto note = clipState.getChild (idx);
+                    double sb = static_cast<double> (note.getProperty ("startBeat", 0.0));
+                    entries.add ({ note, sb - minBeat });
+                }
+            }
+
+            project.getClipboard().storeNotes (reg, entries, false);
+        }
+    }
 
     ScopedTransaction txn (project.getUndoSystem(), "Delete Notes");
     auto& um = project.getUndoManager();
@@ -515,7 +545,7 @@ void PianoRollWidget::deleteSelectedNotes()
     clip.collapseChildrenToMidiData (&um);
 }
 
-void PianoRollWidget::copySelectedNotes()
+void PianoRollWidget::copySelectedNotes (char reg)
 {
     juce::Array<Clipboard::NoteEntry> entries;
     double minBeat = 1e12;
@@ -544,19 +574,19 @@ void PianoRollWidget::copySelectedNotes()
         }
     }
 
-    project.getClipboard().storeNotes (entries);
+    project.getClipboard().storeNotes (reg, entries, true);
 }
 
-void PianoRollWidget::cutSelectedNotes()
+void PianoRollWidget::cutSelectedNotes (char reg)
 {
-    copySelectedNotes();
-    deleteSelectedNotes();
+    // deleteSelectedNotes yanks before deleting (Vim semantics)
+    deleteSelectedNotes (reg);
 }
 
-void PianoRollWidget::pasteNotes()
+void PianoRollWidget::pasteNotes (char reg)
 {
-    auto& cb = project.getClipboard();
-    if (! cb.hasNotes() || ! clipState.isValid())
+    auto& regEntry = project.getClipboard().get (reg);
+    if (! regEntry.hasNotes() || ! clipState.isValid())
         return;
 
     ScopedTransaction txn (project.getUndoSystem(), "Paste Notes");
@@ -567,7 +597,7 @@ void PianoRollWidget::pasteNotes()
 
     selectedNoteIndices.clear();
 
-    for (auto& entry : cb.getNoteEntries())
+    for (auto& entry : regEntry.noteEntries)
     {
         auto newNote = entry.noteData.createCopy();
         newNote.setProperty ("startBeat", cursorBeat + entry.beatOffset, &um);
