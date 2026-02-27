@@ -44,7 +44,6 @@ VirtualKeyboardWidget::VirtualKeyboardWidget (VirtualKeyboardState& state)
     : kbState (state)
 {
     kbState.addListener (this);
-    setAnimating (true);
 }
 
 VirtualKeyboardWidget::~VirtualKeyboardWidget()
@@ -155,11 +154,6 @@ void VirtualKeyboardWidget::paint (gfx::Canvas& canvas)
             ++whiteIdx;
         }
     }
-}
-
-void VirtualKeyboardWidget::animationTick (double /*timestampMs*/)
-{
-    repaint();
 }
 
 void VirtualKeyboardWidget::keyboardStateChanged()

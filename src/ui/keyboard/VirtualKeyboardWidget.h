@@ -18,7 +18,6 @@ public:
     ~VirtualKeyboardWidget() override;
 
     void paint (gfx::Canvas& canvas) override;
-    void animationTick (double timestampMs) override;
 
     // VirtualKeyboardState::Listener
     void keyboardStateChanged() override;
