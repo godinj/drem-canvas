@@ -205,6 +205,28 @@ elseif(UNIX AND NOT APPLE)
     )
 endif()
 
+# Copy icon next to binary so the app can set it at runtime (X11)
+add_custom_command(TARGET DremCanvas POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/assets/icon_256.png"
+        "$<TARGET_FILE_DIR:DremCanvas>/drem-canvas.png"
+    COMMENT "Copying app icon next to binary"
+)
+
+# ─── Install rules (Linux desktop integration) ───────────────
+if(UNIX AND NOT APPLE)
+    include(GNUInstallDirs)
+    install(TARGETS DremCanvas RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(FILES assets/com.drem.canvas.desktop
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    install(FILES assets/icon_256.png
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
+            RENAME drem-canvas.png)
+    install(FILES assets/icon.svg
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
+            RENAME drem-canvas.svg)
+endif()
+
 target_include_directories(DremCanvas PRIVATE
     src
     "${SKIA_DIR}/include"

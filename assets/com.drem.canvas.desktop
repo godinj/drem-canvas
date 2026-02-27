@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Drem Canvas
+GenericName=Digital Audio Workstation
+Comment=Audio production and composition
+Exec=DremCanvas
+Icon=drem-canvas
+Terminal=false
+Categories=AudioVideo;Audio;Music;Sequencer;
+StartupWMClass=com.drem.canvas

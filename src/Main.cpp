@@ -93,6 +93,13 @@ public:
         // Create GLFW window (Vulkan-ready, no GL context)
         glfwWindow = std::make_unique<dc::platform::GlfwWindow> ("Drem Canvas", 1280, 800);
 
+        // Set window icon for X11 (Wayland uses the .desktop file instead)
+        auto exeDir = juce::File::getSpecialLocation (
+            juce::File::currentExecutableFile).getParentDirectory();
+        auto iconFile = exeDir.getChildFile ("drem-canvas.png");
+        if (iconFile.existsAsFile())
+            glfwWindow->setWindowIcon (iconFile.getFullPathName().toStdString());
+
         // Create Skia Vulkan backend
         gpuBackend = std::make_unique<dc::platform::VulkanBackend> (
             glfwWindow->getHandle(),

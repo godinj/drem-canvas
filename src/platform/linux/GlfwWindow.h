@@ -31,6 +31,10 @@ public:
     void pollEvents();
     bool shouldClose() const;
 
+    /** Load a PNG file and set it as the X11 window icon.
+        On Wayland this is a no-op (the .desktop file provides the icon). */
+    void setWindowIcon (const std::string& pngPath);
+
     // Callbacks (same pattern as MetalView)
     std::function<void()> onFrame;
     std::function<void (int, int)> onResize;

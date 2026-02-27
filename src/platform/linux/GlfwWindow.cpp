@@ -3,7 +3,10 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <png.h>
+#include <cstdio>
 #include <stdexcept>
+#include <vector>
 
 namespace dc
 {
@@ -19,6 +22,14 @@ GlfwWindow::GlfwWindow (const std::string& title, int w, int h)
     // No OpenGL — Vulkan manages its own context
     glfwWindowHint (GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint (GLFW_RESIZABLE, GLFW_TRUE);
+
+    // Set app identity so desktop environments can match the window to its
+    // .desktop file and display the correct icon in the taskbar / alt-tab.
+    glfwWindowHintString (GLFW_X11_CLASS_NAME, "com.drem.canvas");
+    glfwWindowHintString (GLFW_X11_INSTANCE_NAME, "drem-canvas");
+#if defined(GLFW_WAYLAND_APP_ID)
+    glfwWindowHintString (GLFW_WAYLAND_APP_ID, "com.drem.canvas");
+#endif
 
     window = glfwCreateWindow (width, height, title.c_str(), nullptr, nullptr);
     if (!window)
@@ -310,6 +321,81 @@ uint16_t GlfwWindow::glfwKeyToMacKeyCode (int glfwKey)
         case GLFW_KEY_RIGHT:     return 0x7C;
         default:                 return 0;
     }
+}
+
+// ─── Window icon (X11 only — Wayland uses the .desktop file) ─────────────────
+
+void GlfwWindow::setWindowIcon (const std::string& pngPath)
+{
+    FILE* fp = fopen (pngPath.c_str(), "rb");
+    if (! fp)
+        return;
+
+    png_structp png = png_create_read_struct (PNG_LIBPNG_VER_STRING,
+                                              nullptr, nullptr, nullptr);
+    if (! png)
+    {
+        fclose (fp);
+        return;
+    }
+
+    png_infop info = png_create_info_struct (png);
+    if (! info)
+    {
+        png_destroy_read_struct (&png, nullptr, nullptr);
+        fclose (fp);
+        return;
+    }
+
+    if (setjmp (png_jmpbuf (png)))
+    {
+        png_destroy_read_struct (&png, &info, nullptr);
+        fclose (fp);
+        return;
+    }
+
+    png_init_io (png, fp);
+    png_read_info (png, info);
+
+    int imgW = static_cast<int> (png_get_image_width (png, info));
+    int imgH = static_cast<int> (png_get_image_height (png, info));
+    auto colorType = png_get_color_type (png, info);
+    auto bitDepth  = png_get_bit_depth (png, info);
+
+    // Normalise to 8-bit RGBA regardless of source format
+    if (bitDepth == 16)
+        png_set_strip_16 (png);
+    if (colorType == PNG_COLOR_TYPE_PALETTE)
+        png_set_palette_to_rgb (png);
+    if (colorType == PNG_COLOR_TYPE_GRAY && bitDepth < 8)
+        png_set_expand_gray_1_2_4_to_8 (png);
+    if (png_get_valid (png, info, PNG_INFO_tRNS))
+        png_set_tRNS_to_alpha (png);
+    if (colorType == PNG_COLOR_TYPE_RGB
+        || colorType == PNG_COLOR_TYPE_GRAY
+        || colorType == PNG_COLOR_TYPE_PALETTE)
+        png_set_filler (png, 0xFF, PNG_FILLER_AFTER);
+    if (colorType == PNG_COLOR_TYPE_GRAY
+        || colorType == PNG_COLOR_TYPE_GRAY_ALPHA)
+        png_set_gray_to_rgb (png);
+
+    png_read_update_info (png, info);
+
+    std::vector<unsigned char> pixels (static_cast<size_t> (imgW * imgH * 4));
+    std::vector<png_bytep> rows (static_cast<size_t> (imgH));
+    for (int y = 0; y < imgH; y++)
+        rows[static_cast<size_t> (y)] = pixels.data()
+                                       + static_cast<size_t> (y * imgW * 4);
+
+    png_read_image (png, rows.data());
+    png_destroy_read_struct (&png, &info, nullptr);
+    fclose (fp);
+
+    GLFWimage image;
+    image.width  = imgW;
+    image.height = imgH;
+    image.pixels = pixels.data();
+    glfwSetWindowIcon (window, 1, &image);
 }
 
 } // namespace platform
