@@ -132,7 +132,7 @@ void TransportBarWidget::animationTick (double /*timestampMs*/)
         playButton.setText ("Play");
 }
 
-void TransportBarWidget::mouseWheel (const gfx::WheelEvent& e)
+bool TransportBarWidget::mouseWheel (const gfx::WheelEvent& e)
 {
     // Check if wheel is over the tempo display area
     auto tempoBounds = tempoDisplay.getBounds();
@@ -144,7 +144,9 @@ void TransportBarWidget::mouseWheel (const gfx::WheelEvent& e)
         newTempo = std::max (20.0, std::min (300.0, newTempo));
         tempoMap.setTempo (newTempo);
         updateTempoDisplay();
+        return true;
     }
+    return false;
 }
 
 void TransportBarWidget::updateTempoDisplay()

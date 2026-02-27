@@ -20,7 +20,7 @@ public:
     void paint (gfx::Canvas& canvas) override;
     void resized() override;
     void animationTick (double timestampMs) override;
-    void mouseWheel (const gfx::WheelEvent& e) override;
+    bool mouseWheel (const gfx::WheelEvent& e) override;
 
     // Callbacks for session/utility actions (wired by AppController)
     std::function<void()> onSaveSession;

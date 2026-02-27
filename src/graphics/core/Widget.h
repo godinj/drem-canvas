@@ -23,7 +23,7 @@ public:
     virtual void mouseMove (const MouseEvent& e) {}
     virtual void mouseEnter (const MouseEvent& e) {}
     virtual void mouseExit (const MouseEvent& e) {}
-    virtual void mouseWheel (const WheelEvent& e) {}
+    virtual bool mouseWheel (const WheelEvent& e) { return false; }
     virtual void mouseDoubleClick (const MouseEvent& e) {}
 
     // ─── Keyboard events ─────────────────────────────────

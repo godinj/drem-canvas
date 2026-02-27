@@ -29,7 +29,7 @@ public:
     void paint (gfx::Canvas& canvas) override;
     void paintOverChildren (gfx::Canvas& canvas) override;
     void resized() override;
-    void mouseWheel (const gfx::WheelEvent& e) override;
+    bool mouseWheel (const gfx::WheelEvent& e) override;
 
     void loadClip (const juce::ValueTree& midiClipState);
 

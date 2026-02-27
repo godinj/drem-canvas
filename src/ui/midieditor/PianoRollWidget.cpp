@@ -723,20 +723,23 @@ void PianoRollWidget::zoomToFit()
     keyboard.setScrollOffset (scrollY);
 }
 
-void PianoRollWidget::mouseWheel (const gfx::WheelEvent& e)
+bool PianoRollWidget::mouseWheel (const gfx::WheelEvent& e)
 {
     if (e.control || e.command)
     {
         // Ctrl+scroll = horizontal zoom
         float factor = e.deltaY > 0 ? 1.15f : 0.87f;
         zoomHorizontal (factor);
+        return true;
     }
     else if (e.shift)
     {
         // Shift+scroll = vertical zoom
         float factor = e.deltaY > 0 ? 1.15f : 0.87f;
         zoomVertical (factor);
+        return true;
     }
+    return false;
 }
 
 // ── Velocity / CC lanes ──────────────────────────────────────────────────────

@@ -116,10 +116,16 @@ void EventDispatch::dispatchMouseMove (const MouseEvent& e)
 void EventDispatch::dispatchWheel (const WheelEvent& e)
 {
     Widget* target = findWidgetAt (e.x, e.y);
-    if (target)
+
+    // Bubble up the widget tree until someone handles the event
+    while (target)
     {
         auto local = transformWheelEvent (e, target);
-        target->mouseWheel (local);
+        if (target->mouseWheel (local))
+            return;
+
+        auto* parent = target->getParent();
+        target = parent ? dynamic_cast<Widget*> (parent) : nullptr;
     }
 }
 

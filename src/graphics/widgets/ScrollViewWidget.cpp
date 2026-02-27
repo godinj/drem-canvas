@@ -34,12 +34,13 @@ void ScrollViewWidget::resized()
     }
 }
 
-void ScrollViewWidget::mouseWheel (const WheelEvent& e)
+bool ScrollViewWidget::mouseWheel (const WheelEvent& e)
 {
     float dx = e.deltaX * (e.isPixelDelta ? 1.0f : 40.0f);
     float dy = e.deltaY * (e.isPixelDelta ? 1.0f : 40.0f);
 
     setScrollOffset (scrollX - dx, scrollY - dy);
+    return true;
 }
 
 void ScrollViewWidget::setContentWidget (Widget* content)

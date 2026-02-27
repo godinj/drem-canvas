@@ -17,7 +17,7 @@ public:
     void paintOverChildren (Canvas& canvas) override;
     void resized() override;
 
-    void mouseWheel (const WheelEvent& e) override;
+    bool mouseWheel (const WheelEvent& e) override;
 
     // Content management
     void setContentWidget (Widget* content);

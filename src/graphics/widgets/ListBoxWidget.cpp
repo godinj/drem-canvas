@@ -68,12 +68,13 @@ void ListBoxWidget::mouseDoubleClick (const MouseEvent& e)
     }
 }
 
-void ListBoxWidget::mouseWheel (const WheelEvent& e)
+bool ListBoxWidget::mouseWheel (const WheelEvent& e)
 {
     float delta = e.deltaY * (e.isPixelDelta ? 1.0f : 40.0f);
     float maxScroll = std::max (0.0f, static_cast<float> (items.size()) * rowHeight - getHeight());
     scrollOffset = std::clamp (scrollOffset - delta, 0.0f, maxScroll);
     repaint();
+    return true;
 }
 
 void ListBoxWidget::setItems (const std::vector<std::string>& newItems)

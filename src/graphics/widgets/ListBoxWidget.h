@@ -20,7 +20,7 @@ public:
 
     void mouseDown (const MouseEvent& e) override;
     void mouseDoubleClick (const MouseEvent& e) override;
-    void mouseWheel (const WheelEvent& e) override;
+    bool mouseWheel (const WheelEvent& e) override;
 
     // Data model
     void setItems (const std::vector<std::string>& items);
