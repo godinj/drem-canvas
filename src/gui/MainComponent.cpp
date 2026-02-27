@@ -130,6 +130,39 @@ MainComponent::MainComponent()
         }
     };
 
+    // Wire plugin menu callbacks
+    vimEngine->onPluginMenuMove = [this] (int delta)
+    {
+        if (auto* bp = dynamic_cast<BrowserPanel*> (browserPanel.get()))
+            bp->moveSelection (delta);
+    };
+
+    vimEngine->onPluginMenuScroll = [this] (int direction)
+    {
+        if (auto* bp = dynamic_cast<BrowserPanel*> (browserPanel.get()))
+            bp->scrollByHalfPage (direction);
+    };
+
+    vimEngine->onPluginMenuConfirm = [this]
+    {
+        if (auto* bp = dynamic_cast<BrowserPanel*> (browserPanel.get()))
+            bp->confirmSelection();
+
+        // Close browser after confirming
+        browserVisible = false;
+        if (browserPanel != nullptr)
+            browserPanel->setVisible (false);
+        resized();
+    };
+
+    vimEngine->onPluginMenuCancel = [this]
+    {
+        browserVisible = false;
+        if (browserPanel != nullptr)
+            browserPanel->setVisible (false);
+        resized();
+    };
+
     vimStatusBar = std::make_unique<VimStatusBar> (*vimEngine, vimContext, arrangement, transportController);
     addAndMakeVisible (*vimStatusBar);
 
@@ -1019,6 +1052,25 @@ void MainComponent::toggleBrowser()
     if (browserPanel != nullptr)
         browserPanel->setVisible (browserVisible);
     resized();
+
+    if (browserVisible)
+    {
+        // Enter plugin menu mode and select first item
+        vimEngine->enterPluginMenuMode();
+        if (auto* bp = dynamic_cast<BrowserPanel*> (browserPanel.get()))
+        {
+            if (bp->getSelectedPluginIndex() < 0 && bp->getNumPlugins() > 0)
+                bp->selectPlugin (0);
+        }
+        // Keep focus on MainComponent so VimEngine receives key events
+        grabKeyboardFocus();
+    }
+    else
+    {
+        // Return to normal mode if we were in plugin menu
+        if (vimEngine->getMode() == VimEngine::PluginMenu)
+            vimEngine->enterNormalMode();
+    }
 }
 
 } // namespace dc

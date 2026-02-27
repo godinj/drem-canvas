@@ -23,6 +23,14 @@ public:
 
     void refreshPluginList();
 
+    // Keyboard navigation
+    int getNumPlugins() const;
+    int getSelectedPluginIndex() const;
+    void selectPlugin (int index);
+    void moveSelection (int delta);
+    void scrollByHalfPage (int direction);
+    void confirmSelection();
+
     std::function<void (const juce::PluginDescription&)> onPluginSelected;
 
 private:

@@ -15,7 +15,7 @@ namespace dc
 class VimEngine : public juce::KeyListener
 {
 public:
-    enum Mode { Normal, Insert, Command, Keyboard };
+    enum Mode { Normal, Insert, Command, Keyboard, PluginMenu };
     enum Operator { OpNone, OpDelete, OpYank, OpChange };
 
     struct MotionRange
@@ -69,6 +69,12 @@ public:
 
     // Piano roll open callback
     std::function<void (const juce::ValueTree&)> onOpenPianoRoll;
+
+    // Plugin menu callbacks (wired by MainComponent)
+    std::function<void (int)> onPluginMenuMove;     // delta: +1 down, -1 up
+    std::function<void (int)> onPluginMenuScroll;    // direction: +1 half-page down, -1 half-page up
+    std::function<void()> onPluginMenuConfirm;
+    std::function<void()> onPluginMenuCancel;
 
     // Piano roll action callbacks (wired by AppController)
     std::function<void (int tool)> onSetPianoRollTool;     // 0=Select, 1=Draw, 2=Erase
@@ -135,6 +141,7 @@ public:
     // Mode switching
     void enterInsertMode();
     void enterNormalMode();
+    void enterPluginMenuMode();
 
     // Panel
     void cycleFocusPanel();
@@ -170,6 +177,7 @@ private:
     bool handleInsertKey (const juce::KeyPress& key);
     bool handleCommandKey (const juce::KeyPress& key);
     bool handleKeyboardKey (const juce::KeyPress& key);
+    bool handlePluginMenuKey (const juce::KeyPress& key);
     void executeCommand();
 
     bool handleSequencerNormalKey (const juce::KeyPress& key);

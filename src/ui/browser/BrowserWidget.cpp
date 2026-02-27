@@ -153,5 +153,47 @@ void BrowserWidget::refreshPluginList()
     filterPlugins();
 }
 
+int BrowserWidget::getNumPlugins() const
+{
+    return displayedPlugins.size();
+}
+
+int BrowserWidget::getSelectedPluginIndex() const
+{
+    return pluginList.getSelectedIndex();
+}
+
+void BrowserWidget::selectPlugin (int index)
+{
+    int numRows = displayedPlugins.size();
+    if (numRows == 0) return;
+
+    index = juce::jlimit (0, numRows - 1, index);
+    pluginList.setSelectedIndex (index);
+}
+
+void BrowserWidget::moveSelection (int delta)
+{
+    int current = pluginList.getSelectedIndex();
+    if (current < 0) current = 0;
+    selectPlugin (current + delta);
+}
+
+void BrowserWidget::scrollByHalfPage (int direction)
+{
+    float listHeight = pluginList.getHeight();
+    float rowH = pluginList.getRowHeight();
+    int visibleRows = static_cast<int> (listHeight / rowH);
+    int halfPage = std::max (1, visibleRows / 2);
+    moveSelection (direction * halfPage);
+}
+
+void BrowserWidget::confirmSelection()
+{
+    int idx = pluginList.getSelectedIndex();
+    if (idx >= 0 && idx < displayedPlugins.size() && onPluginSelected)
+        onPluginSelected (displayedPlugins[idx]);
+}
+
 } // namespace ui
 } // namespace dc

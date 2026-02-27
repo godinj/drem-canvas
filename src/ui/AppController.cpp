@@ -105,6 +105,41 @@ void AppController::initialise()
                 proc->injectLiveMidi (msg);
     };
 
+    // Wire plugin menu callbacks
+    vimEngine->onPluginMenuMove = [this] (int delta)
+    {
+        if (browserWidget)
+            browserWidget->moveSelection (delta);
+    };
+
+    vimEngine->onPluginMenuScroll = [this] (int direction)
+    {
+        if (browserWidget)
+            browserWidget->scrollByHalfPage (direction);
+    };
+
+    vimEngine->onPluginMenuConfirm = [this]
+    {
+        if (browserWidget)
+            browserWidget->confirmSelection();
+
+        // Close browser after confirming
+        browserVisible = false;
+        if (browserWidget)
+            browserWidget->setVisible (false);
+        resized();
+        repaint();
+    };
+
+    vimEngine->onPluginMenuCancel = [this]
+    {
+        browserVisible = false;
+        if (browserWidget)
+            browserWidget->setVisible (false);
+        resized();
+        repaint();
+    };
+
     // Wire piano roll open
     vimEngine->onOpenPianoRoll = [this] (const juce::ValueTree& clipState)
     {
@@ -1656,6 +1691,22 @@ void AppController::toggleBrowser()
         browserWidget->setVisible (browserVisible);
     resized();
     repaint();
+
+    if (browserVisible)
+    {
+        // Enter plugin menu mode and select first item
+        if (vimEngine)
+            vimEngine->enterPluginMenuMode();
+        if (browserWidget && browserWidget->getSelectedPluginIndex() < 0
+            && browserWidget->getNumPlugins() > 0)
+            browserWidget->selectPlugin (0);
+    }
+    else
+    {
+        // Return to normal mode if we were in plugin menu
+        if (vimEngine && vimEngine->getMode() == VimEngine::PluginMenu)
+            vimEngine->enterNormalMode();
+    }
 }
 
 // ─── ValueTree::Listener ─────────────────────────────────────

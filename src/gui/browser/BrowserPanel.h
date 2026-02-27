@@ -15,6 +15,14 @@ public:
 
     void refreshPluginList();
 
+    // Keyboard navigation
+    int getNumPlugins() const;
+    int getSelectedPluginIndex() const;
+    void selectPlugin (int index);
+    void moveSelection (int delta);
+    void scrollByHalfPage (int direction); // +1 = down, -1 = up
+    void confirmSelection();
+
     // Callback when a plugin is selected
     std::function<void (const juce::PluginDescription&)> onPluginSelected;
 

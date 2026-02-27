@@ -43,6 +43,9 @@ bool VimEngine::keyPressed (const juce::KeyPress& key, juce::Component*)
     if (mode == Keyboard)
         return handleKeyboardKey (key);
 
+    if (mode == PluginMenu)
+        return handlePluginMenuKey (key);
+
     if (mode == Command)
         return handleCommandKey (key);
 
@@ -694,10 +697,80 @@ void VimEngine::enterInsertMode()
 
 void VimEngine::enterNormalMode()
 {
+    bool wasPluginMenu = (mode == PluginMenu);
     mode = Normal;
     cancelOperator();
     clearPending();
     listeners.call (&Listener::vimModeChanged, Normal);
+
+    if (wasPluginMenu && onPluginMenuCancel)
+        onPluginMenuCancel();
+}
+
+void VimEngine::enterPluginMenuMode()
+{
+    mode = PluginMenu;
+    listeners.call (&Listener::vimModeChanged, PluginMenu);
+    listeners.call (&Listener::vimContextChanged);
+}
+
+bool VimEngine::handlePluginMenuKey (const juce::KeyPress& key)
+{
+    if (isEscapeOrCtrlC (key))
+    {
+        enterNormalMode();
+        return true;
+    }
+
+    if (key == juce::KeyPress::returnKey)
+    {
+        if (onPluginMenuConfirm)
+            onPluginMenuConfirm();
+        enterNormalMode();
+        return true;
+    }
+
+    auto keyChar = key.getTextCharacter();
+    auto modifiers = key.getModifiers();
+
+    // j / k — single-step navigation
+    if (keyChar == 'j')
+    {
+        if (onPluginMenuMove)
+            onPluginMenuMove (1);
+        return true;
+    }
+
+    if (keyChar == 'k')
+    {
+        if (onPluginMenuMove)
+            onPluginMenuMove (-1);
+        return true;
+    }
+
+    // Ctrl-D — half-page down
+    if (modifiers.isCtrlDown()
+        && (keyChar == 'd' || keyChar == 'D'
+            || keyChar == 4 /* Ctrl-D */
+            || key.getKeyCode() == 'd' || key.getKeyCode() == 'D'))
+    {
+        if (onPluginMenuScroll)
+            onPluginMenuScroll (1);
+        return true;
+    }
+
+    // Ctrl-U — half-page up
+    if (modifiers.isCtrlDown()
+        && (keyChar == 'u' || keyChar == 'U'
+            || keyChar == 21 /* Ctrl-U */
+            || key.getKeyCode() == 'u' || key.getKeyCode() == 'U'))
+    {
+        if (onPluginMenuScroll)
+            onPluginMenuScroll (-1);
+        return true;
+    }
+
+    return true; // consume all keys in plugin menu mode
 }
 
 // ── Panel ───────────────────────────────────────────────────────────────────

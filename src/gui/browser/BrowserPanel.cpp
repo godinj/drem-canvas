@@ -14,6 +14,7 @@ BrowserPanel::BrowserPanel (PluginManager& pm)
     pluginListBox.setModel (&listModel);
     pluginListBox.setRowHeight (24);
     pluginListBox.setColour (juce::ListBox::backgroundColourId, juce::Colour (0xff252535));
+    pluginListBox.setWantsKeyboardFocus (false);
     addAndMakeVisible (pluginListBox);
 
     scanButton.onClick = [this]()
@@ -47,6 +48,52 @@ void BrowserPanel::refreshPluginList()
 {
     pluginListBox.updateContent();
     pluginListBox.repaint();
+}
+
+int BrowserPanel::getNumPlugins() const
+{
+    return pluginManager.getKnownPlugins().getNumTypes();
+}
+
+int BrowserPanel::getSelectedPluginIndex() const
+{
+    return pluginListBox.getSelectedRow();
+}
+
+void BrowserPanel::selectPlugin (int index)
+{
+    int numRows = getNumPlugins();
+    if (numRows == 0) return;
+
+    index = juce::jlimit (0, numRows - 1, index);
+    pluginListBox.selectRow (index);
+    pluginListBox.scrollToEnsureRowIsOnscreen (index);
+}
+
+void BrowserPanel::moveSelection (int delta)
+{
+    int current = pluginListBox.getSelectedRow();
+    if (current < 0) current = 0;
+    selectPlugin (current + delta);
+}
+
+void BrowserPanel::scrollByHalfPage (int direction)
+{
+    int visibleRows = pluginListBox.getHeight() / pluginListBox.getRowHeight();
+    int halfPage = std::max (1, visibleRows / 2);
+    moveSelection (direction * halfPage);
+}
+
+void BrowserPanel::confirmSelection()
+{
+    int row = pluginListBox.getSelectedRow();
+    auto types = pluginManager.getKnownPlugins().getTypes();
+
+    if (row >= 0 && row < static_cast<int> (types.size()))
+    {
+        if (onPluginSelected)
+            onPluginSelected (types[static_cast<size_t> (row)]);
+    }
 }
 
 //==============================================================================

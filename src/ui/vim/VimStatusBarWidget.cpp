@@ -62,6 +62,10 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
             modeColor = Color::fromARGB (0xffff9933);
             modeText = "-- KEYBOARD --";
             break;
+        case VimEngine::PluginMenu:
+            modeColor = Color::fromARGB (0xffcba6f7);
+            modeText = "-- PLUGIN --";
+            break;
         default:
             modeColor = Color::fromARGB (0xff50c878);
             modeText = "-- NORMAL --";

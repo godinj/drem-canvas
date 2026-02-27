@@ -36,14 +36,30 @@ void VimStatusBar::paint (juce::Graphics& g)
 
     // ── Mode segment ────────────────────────────────────────────────────
     auto modeArea = area.removeFromLeft (160);
-    bool isNormal = engine.getMode() == VimEngine::Normal;
-    auto modeColour = isNormal ? juce::Colour (0xff50c878)   // green
-                               : juce::Colour (0xff4a9eff);  // blue
+    auto currentMode = engine.getMode();
+    juce::Colour modeColour;
+    const char* modeText;
+
+    switch (currentMode)
+    {
+        case VimEngine::Normal:
+            modeColour = juce::Colour (0xff50c878);  // green
+            modeText = "-- NORMAL --";
+            break;
+        case VimEngine::PluginMenu:
+            modeColour = juce::Colour (0xffcba6f7);  // mauve/purple
+            modeText = "-- PLUGIN --";
+            break;
+        default: // Insert
+            modeColour = juce::Colour (0xff4a9eff);  // blue
+            modeText = "-- INSERT --";
+            break;
+    }
+
     g.setColour (modeColour);
     g.fillRect (modeArea);
 
     g.setColour (juce::Colour (0xff181825));
-    auto modeText = isNormal ? "-- NORMAL --" : "-- INSERT --";
     g.drawText (modeText, modeArea.reduced (6, 0), juce::Justification::centredLeft);
 
     // ── Pending state indicator ─────────────────────────────────────────
