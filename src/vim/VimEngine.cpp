@@ -40,6 +40,9 @@ bool VimEngine::keyPressed (const juce::KeyPress& key, juce::Component*)
         return true;
     }
 
+    if (mode == Keyboard)
+        return handleKeyboardKey (key);
+
     if (mode == Command)
         return handleCommandKey (key);
 
@@ -110,6 +113,13 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
 
     auto keyChar = key.getTextCharacter();
     auto modifiers = key.getModifiers();
+
+    // Ctrl+K enters keyboard mode (from any panel context)
+    if (modifiers.isCtrlDown() && (keyChar == 'k' || keyChar == 'K'))
+    {
+        enterKeyboardMode();
+        return true;
+    }
 
     // Phase 1: Handle pending 'g' (with operator-pending awareness for dgg)
     if (pendingKey == 'g')
@@ -1655,6 +1665,117 @@ void VimEngine::seqToggleRowSolo()
     row.setProperty (IDs::solo, ! soloed, &project.getUndoManager());
 
     listeners.call (&Listener::vimContextChanged);
+}
+
+// ── Keyboard mode ───────────────────────────────────────────────────────────
+
+void VimEngine::enterKeyboardMode()
+{
+    mode = Keyboard;
+    listeners.call (&Listener::vimModeChanged, Keyboard);
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::exitKeyboardMode()
+{
+    // Send note-off for all held notes
+    for (int note : keyboardState.heldNotes)
+    {
+        if (onLiveMidiNote)
+            onLiveMidiNote (juce::MidiMessage::noteOff (keyboardState.midiChannel, note));
+    }
+    keyboardState.heldNotes.clear();
+    keyboardState.notifyListeners();
+
+    mode = Normal;
+    listeners.call (&Listener::vimModeChanged, Normal);
+    listeners.call (&Listener::vimContextChanged);
+}
+
+bool VimEngine::handleKeyboardKey (const juce::KeyPress& key)
+{
+    if (isEscapeOrCtrlC (key))
+    {
+        exitKeyboardMode();
+        return true;
+    }
+
+    auto keyChar = key.getTextCharacter();
+
+    // Control keys
+    switch (keyChar)
+    {
+        case 'z': case 'Z':
+            keyboardState.octaveDown();
+            keyboardState.notifyListeners();
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+
+        case 'x': case 'X':
+            keyboardState.octaveUp();
+            keyboardState.notifyListeners();
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+
+        case 'c': case 'C':
+            keyboardState.velocityDown();
+            keyboardState.notifyListeners();
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+
+        case 'v': case 'V':
+            keyboardState.velocityUp();
+            keyboardState.notifyListeners();
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+
+        default:
+            break;
+    }
+
+    // Piano key
+    int note = keyboardState.keyToNote (keyChar);
+    if (note >= 0 && keyboardState.heldNotes.find (note) == keyboardState.heldNotes.end())
+    {
+        keyboardState.heldNotes.insert (note);
+
+        if (onLiveMidiNote)
+            onLiveMidiNote (juce::MidiMessage::noteOn (keyboardState.midiChannel, note,
+                                                        static_cast<juce::uint8> (keyboardState.velocity)));
+
+        keyboardState.notifyListeners();
+        return true;
+    }
+
+    // Already held or not a piano key — consume if it's a piano key (prevent repeats)
+    if (note >= 0)
+        return true;
+
+    return false;
+}
+
+bool VimEngine::handleKeyUp (const gfx::KeyEvent& event)
+{
+    if (mode != Keyboard)
+        return false;
+
+    auto keyChar = static_cast<juce_wchar> (event.unmodifiedCharacter
+                                                ? event.unmodifiedCharacter
+                                                : event.character);
+
+    int note = keyboardState.keyToNote (keyChar);
+    if (note >= 0 && keyboardState.heldNotes.find (note) != keyboardState.heldNotes.end())
+    {
+        keyboardState.heldNotes.erase (note);
+
+        if (onLiveMidiNote)
+            onLiveMidiNote (juce::MidiMessage::noteOff (keyboardState.midiChannel, note));
+
+        keyboardState.notifyListeners();
+        return true;
+    }
+
+    return false;
 }
 
 } // namespace dc

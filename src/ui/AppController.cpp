@@ -96,6 +96,15 @@ void AppController::initialise()
 
     vimEngine->onCreateMidiTrack = [this] (const juce::String& name) { addMidiTrack (name); };
 
+    // Wire live MIDI keyboard output to selected MIDI track
+    vimEngine->onLiveMidiNote = [this] (const juce::MidiMessage& msg)
+    {
+        int trackIndex = arrangement.getSelectedTrackIndex();
+        if (trackIndex >= 0 && trackIndex < midiClipProcessors.size())
+            if (auto* proc = midiClipProcessors[trackIndex])
+                proc->injectLiveMidi (msg);
+    };
+
     // Wire piano roll open
     vimEngine->onOpenPianoRoll = [this] (const juce::ValueTree& clipState)
     {
@@ -326,6 +335,11 @@ void AppController::initialise()
         insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
     };
 
+    // Virtual keyboard (hidden initially, shown when entering Keyboard mode)
+    keyboardWidget = std::make_unique<VirtualKeyboardWidget> (vimEngine->getKeyboardState());
+    keyboardWidget->setVisible (false);
+    addChild (keyboardWidget.get());
+
     // Command palette (added last so it renders on top)
     commandPalette = std::make_unique<CommandPaletteWidget> (actionRegistry);
     commandPalette->setVisible (false);
@@ -347,6 +361,7 @@ void AppController::initialise()
         renderer->addAnimatingWidget (arrangementWidget.get());
         renderer->addAnimatingWidget (pianoRollWidget.get());
         renderer->addAnimatingWidget (mixerWidget.get());
+        renderer->addAnimatingWidget (keyboardWidget.get());
     }
 
     // Listen to model changes — register on the project root so we receive
@@ -390,6 +405,7 @@ void AppController::resized()
     float transportH = theme.transportHeight;
     float statusH = theme.statusBarHeight;
     float browserW = browserVisible ? 200.0f : 0.0f;
+    float keyboardH = (vimEngine && vimEngine->getMode() == VimEngine::Keyboard) ? 80.0f : 0.0f;
 
     // Transport bar at top
     if (transportBar)
@@ -399,11 +415,18 @@ void AppController::resized()
     if (vimStatusBar)
         vimStatusBar->setBounds (0, h - statusH, w, statusH);
 
-    // Center area between transport and status bar
+    // Virtual keyboard strip (above status bar)
+    if (keyboardWidget)
+    {
+        keyboardWidget->setVisible (keyboardH > 0);
+        keyboardWidget->setBounds (0, h - statusH - keyboardH, w, keyboardH);
+    }
+
+    // Center area between transport and status bar + keyboard
     float centerX = 0;
     float centerY = transportH;
     float centerW = w - browserW;
-    float centerH = h - transportH - statusH;
+    float centerH = h - transportH - statusH - keyboardH;
 
     // Browser on the right
     if (browserWidget && browserVisible)
@@ -454,6 +477,15 @@ bool AppController::keyDown (const gfx::KeyEvent& e)
 {
     // Route all keys through VimEngine first
     if (vimEngine && vimEngine->handleKeyEvent (e))
+        return true;
+
+    return false;
+}
+
+bool AppController::keyUp (const gfx::KeyEvent& e)
+{
+    // Route key-up through VimEngine for Keyboard mode note-off
+    if (vimEngine && vimEngine->handleKeyUp (e))
         return true;
 
     return false;
@@ -662,6 +694,17 @@ void AppController::registerAllActions()
     actionRegistry.registerAction ({
         "mode.normal", "Enter Normal Mode", "Mode", "Esc",
         [this]() { vimEngine->enterNormalMode(); }, {}
+    });
+
+    actionRegistry.registerAction ({
+        "mode.keyboard", "Toggle Virtual Keyboard", "Mode", "Ctrl+K",
+        [this]()
+        {
+            if (vimEngine->getMode() == VimEngine::Keyboard)
+                vimEngine->exitKeyboardMode();
+            else
+                vimEngine->enterKeyboardMode();
+        }, {}
     });
 
     // ─── View ────────────────────────────────────────────────
@@ -1673,6 +1716,7 @@ void AppController::valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueT
 
 void AppController::vimModeChanged (VimEngine::Mode)
 {
+    resized();
     repaint();
 }
 

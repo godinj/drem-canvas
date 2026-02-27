@@ -31,6 +31,7 @@
 #include "ui/browser/BrowserWidget.h"
 #include "ui/palette/CommandPaletteWidget.h"
 #include "vim/ActionRegistry.h"
+#include "ui/keyboard/VirtualKeyboardWidget.h"
 
 namespace dc
 {
@@ -49,6 +50,7 @@ public:
     void paintOverChildren (gfx::Canvas& canvas) override;
     void resized() override;
     bool keyDown (const gfx::KeyEvent& e) override;
+    bool keyUp (const gfx::KeyEvent& e) override;
 
     // Initialize the audio engine and all UI
     void initialise();
@@ -145,6 +147,7 @@ private:
     std::unique_ptr<PianoRollWidget> pianoRollWidget;
     std::unique_ptr<BrowserWidget> browserWidget;
     std::unique_ptr<CommandPaletteWidget> commandPalette;
+    std::unique_ptr<VirtualKeyboardWidget> keyboardWidget;
 
     bool browserVisible = false;
 

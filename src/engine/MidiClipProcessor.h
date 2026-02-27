@@ -53,6 +53,9 @@ public:
     // Lock-free snapshot update (called from message thread)
     void updateSnapshot (const MidiTrackSnapshot& snapshot);
 
+    // Inject a live MIDI message from the message thread (lock-free SPSC FIFO)
+    void injectLiveMidi (const juce::MidiMessage& msg);
+
     // Tempo (called from message thread)
     void setTempo (double bpm) { tempo.store (bpm); }
 
@@ -82,6 +85,13 @@ private:
     std::atomic<bool> muted { false };
     std::atomic<float> peakLeft  { 0.0f };
     std::atomic<float> peakRight { 0.0f };
+
+    // Live MIDI injection FIFO (SPSC: message thread → audio thread)
+    static constexpr int liveMidiFifoSize = 256;
+    juce::AbstractFifo liveMidiFifo { liveMidiFifoSize };
+    std::array<juce::MidiMessage, liveMidiFifoSize> liveMidiBuffer;
+
+    void drainLiveMidiFifo (juce::MidiBuffer& midiMessages);
 
     // Note-off tracking
     struct PendingNoteOff

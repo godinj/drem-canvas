@@ -7,6 +7,7 @@
 #include "model/StepSequencer.h"
 #include "engine/TransportController.h"
 #include "graphics/core/Event.h"
+#include "vim/VirtualKeyboardState.h"
 
 namespace dc
 {
@@ -14,7 +15,7 @@ namespace dc
 class VimEngine : public juce::KeyListener
 {
 public:
-    enum Mode { Normal, Insert, Command };
+    enum Mode { Normal, Insert, Command, Keyboard };
     enum Operator { OpNone, OpDelete, OpYank, OpChange };
 
     struct MotionRange
@@ -42,6 +43,9 @@ public:
 
     // New event path for graphics engine (converts to KeyPress internally)
     bool handleKeyEvent (const gfx::KeyEvent& event);
+
+    // Key-up event path (needed for Keyboard mode note-off)
+    bool handleKeyUp (const gfx::KeyEvent& event);
 
     Mode getMode() const { return mode; }
     bool hasPendingKey() const { return pendingKey != 0; }
@@ -83,6 +87,17 @@ public:
     std::function<void (int, int)> onPianoRollMoveCursor;  // dBeatCol, dNoteRow
     std::function<void()> onPianoRollAddNote;
     std::function<void (int, int)> onPianoRollJumpCursor;  // absolute beatCol, noteRow (-1 = no change)
+
+    // Live MIDI output callback (wired by AppController to selected MIDI track)
+    std::function<void (const juce::MidiMessage&)> onLiveMidiNote;
+
+    // Keyboard state (public for widget access)
+    VirtualKeyboardState& getKeyboardState() { return keyboardState; }
+    const VirtualKeyboardState& getKeyboardState() const { return keyboardState; }
+
+    // Keyboard mode transitions
+    void enterKeyboardMode();
+    void exitKeyboardMode();
 
     void addListener (Listener* l) { listeners.add (l); }
     void removeListener (Listener* l) { listeners.remove (l); }
@@ -154,6 +169,7 @@ private:
     bool handleNormalKey (const juce::KeyPress& key);
     bool handleInsertKey (const juce::KeyPress& key);
     bool handleCommandKey (const juce::KeyPress& key);
+    bool handleKeyboardKey (const juce::KeyPress& key);
     void executeCommand();
 
     bool handleSequencerNormalKey (const juce::KeyPress& key);
@@ -203,6 +219,8 @@ private:
     Operator pendingOperator = OpNone;
     int countAccumulator = 0;   // count typed before operator (e.g. the 3 in 3d2j)
     int operatorCount = 0;      // count typed after operator  (e.g. the 2 in 3d2j)
+
+    VirtualKeyboardState keyboardState;
 
     juce::ListenerList<Listener> listeners;
 

@@ -45,16 +45,44 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
 
     // ── Mode segment
     float modeWidth = 160.0f;
-    bool isNormal = engine.getMode() == VimEngine::Normal;
-    Color modeColor = isNormal ? Color::fromARGB (0xff50c878) : Color::fromARGB (0xff4a9eff);
-    canvas.fillRect (Rect (x, 0, modeWidth, h), modeColor);
+    Color modeColor;
+    const char* modeText;
 
-    auto modeText = isNormal ? "-- NORMAL --" : "-- INSERT --";
+    switch (engine.getMode())
+    {
+        case VimEngine::Normal:
+            modeColor = Color::fromARGB (0xff50c878);
+            modeText = "-- NORMAL --";
+            break;
+        case VimEngine::Insert:
+            modeColor = Color::fromARGB (0xff4a9eff);
+            modeText = "-- INSERT --";
+            break;
+        case VimEngine::Keyboard:
+            modeColor = Color::fromARGB (0xffff9933);
+            modeText = "-- KEYBOARD --";
+            break;
+        default:
+            modeColor = Color::fromARGB (0xff50c878);
+            modeText = "-- NORMAL --";
+            break;
+    }
+
+    canvas.fillRect (Rect (x, 0, modeWidth, h), modeColor);
     canvas.drawText (modeText, x + 6.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xff181825));
     x += modeWidth;
 
-    // ── Pending state indicator
-    if (engine.hasPendingState())
+    // ── Pending state indicator / keyboard info
+    if (engine.getMode() == VimEngine::Keyboard)
+    {
+        auto& kbState = engine.getKeyboardState();
+        auto kbInfo = "Oct:" + std::to_string (kbState.baseOctave)
+                    + " Vel:" + std::to_string (kbState.velocity);
+        float pendingWidth = 120.0f;
+        canvas.drawText (kbInfo, x + 4.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffffcc00));
+        x += pendingWidth;
+    }
+    else if (engine.hasPendingState())
     {
         float pendingWidth = 80.0f;
         canvas.drawText (engine.getPendingDisplay().toStdString(),

@@ -180,6 +180,9 @@ target_sources(DremCanvas PRIVATE
 
     # UI - Command Palette
     src/ui/palette/CommandPaletteWidget.cpp
+
+    # UI - Virtual Keyboard
+    src/ui/keyboard/VirtualKeyboardWidget.cpp
 )
 
 # ─── Platform-specific sources ────────────────────────────────

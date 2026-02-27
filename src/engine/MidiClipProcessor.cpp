@@ -21,10 +21,35 @@ void MidiClipProcessor::releaseResources()
 {
 }
 
+void MidiClipProcessor::injectLiveMidi (const juce::MidiMessage& msg)
+{
+    const auto scope = liveMidiFifo.write (1);
+    if (scope.blockSize1 > 0)
+        liveMidiBuffer[static_cast<size_t> (scope.startIndex1)] = msg;
+    else if (scope.blockSize2 > 0)
+        liveMidiBuffer[static_cast<size_t> (scope.startIndex2)] = msg;
+}
+
+void MidiClipProcessor::drainLiveMidiFifo (juce::MidiBuffer& midiMessages)
+{
+    int numReady = liveMidiFifo.getNumReady();
+    if (numReady == 0)
+        return;
+
+    const auto scope = liveMidiFifo.read (numReady);
+    for (int i = 0; i < scope.blockSize1; ++i)
+        midiMessages.addEvent (liveMidiBuffer[static_cast<size_t> (scope.startIndex1 + i)], 0);
+    for (int i = 0; i < scope.blockSize2; ++i)
+        midiMessages.addEvent (liveMidiBuffer[static_cast<size_t> (scope.startIndex2 + i)], 0);
+}
+
 void MidiClipProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                        juce::MidiBuffer& midiMessages)
 {
     buffer.clear();
+
+    // Always drain live MIDI — allows playing even when transport is stopped
+    drainLiveMidiFifo (midiMessages);
 
     if (! transportController.isPlaying())
     {
