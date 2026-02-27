@@ -70,6 +70,7 @@ void MidiClipProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         {
             int offset = static_cast<int> (evt.onSample - blockStart);
             int vel = juce::jlimit (1, 127, evt.velocity);
+
             midiMessages.addEvent (
                 juce::MidiMessage::noteOn (evt.channel, evt.noteNumber,
                                            static_cast<juce::uint8> (vel)),
