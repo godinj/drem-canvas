@@ -1863,19 +1863,134 @@ VimEngine::MotionRange VimEngine::getVisualRange() const
 
 void VimEngine::executeVisualOperator (Operator op)
 {
-    auto range = getVisualRange();
-    if (! range.valid)
+    auto& gridSel = context.getGridVisualSelection();
+    if (! gridSel.active)
     {
         exitVisualMode();
         return;
     }
 
+    if (gridSel.linewise)
+    {
+        // Linewise: use existing MotionRange path (operates on whole tracks)
+        auto range = getVisualRange();
+        if (! range.valid)
+        {
+            exitVisualMode();
+            return;
+        }
+
+        ScopedTransaction txn (project.getUndoSystem(),
+            op == OpDelete ? "Visual Delete" :
+            op == OpYank   ? "Visual Yank"   : "Visual Change");
+
+        executeOperator (op, range);
+        exitVisualMode();
+        return;
+    }
+
+    // Grid-based visual: use grid positions to find overlapping clips per track
     ScopedTransaction txn (project.getUndoSystem(),
         op == OpDelete ? "Visual Delete" :
         op == OpYank   ? "Visual Yank"   : "Visual Change");
 
-    executeOperator (op, range);
+    switch (op)
+    {
+        case OpDelete:
+            executeGridVisualYank(); // Vim always yanks before delete
+            executeGridVisualDelete();
+            break;
+        case OpYank:
+            executeGridVisualYank();
+            break;
+        case OpChange:
+            executeGridVisualYank();
+            executeGridVisualDelete();
+            enterInsertMode();
+            exitVisualMode();
+            return; // enterInsertMode already called, don't exit twice
+        case OpNone:
+            break;
+    }
+
     exitVisualMode();
+}
+
+void VimEngine::executeGridVisualDelete()
+{
+    auto& gridSel = context.getGridVisualSelection();
+    double sr = transport.getSampleRate();
+    if (sr <= 0.0)
+        return;
+
+    int64_t minPos = std::min (gridSel.startPos, gridSel.endPos);
+    int64_t maxPos = std::max (gridSel.startPos, gridSel.endPos);
+    maxPos += gridSystem.getGridUnitInSamples (sr); // include cursor's grid cell
+
+    int minTrack = std::min (gridSel.startTrack, gridSel.endTrack);
+    int maxTrack = std::max (gridSel.startTrack, gridSel.endTrack);
+
+    auto& um = project.getUndoManager();
+
+    for (int t = maxTrack; t >= minTrack; --t)
+    {
+        if (t < 0 || t >= arrangement.getNumTracks())
+            continue;
+
+        Track track = arrangement.getTrack (t);
+
+        // Remove clips overlapping [minPos, maxPos) — iterate backwards
+        for (int c = track.getNumClips() - 1; c >= 0; --c)
+        {
+            auto clip = track.getClip (c);
+            auto start = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+            auto length = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+
+            if (start < maxPos && start + length > minPos)
+                track.removeClip (c, &um);
+        }
+    }
+
+    updateClipIndexFromGridCursor();
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::executeGridVisualYank()
+{
+    auto& gridSel = context.getGridVisualSelection();
+    double sr = transport.getSampleRate();
+    if (sr <= 0.0)
+        return;
+
+    int64_t minPos = std::min (gridSel.startPos, gridSel.endPos);
+    int64_t maxPos = std::max (gridSel.startPos, gridSel.endPos);
+    maxPos += gridSystem.getGridUnitInSamples (sr);
+
+    int minTrack = std::min (gridSel.startTrack, gridSel.endTrack);
+    int maxTrack = std::max (gridSel.startTrack, gridSel.endTrack);
+
+    juce::Array<juce::ValueTree> clips;
+
+    for (int t = minTrack; t <= maxTrack; ++t)
+    {
+        if (t < 0 || t >= arrangement.getNumTracks())
+            continue;
+
+        Track track = arrangement.getTrack (t);
+
+        for (int c = 0; c < track.getNumClips(); ++c)
+        {
+            auto clip = track.getClip (c);
+            auto start = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+            auto length = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+
+            if (start < maxPos && start + length > minPos)
+                clips.add (clip);
+        }
+    }
+
+    context.setClipboardMulti (clips, false);
+    listeners.call (&Listener::vimContextChanged);
 }
 
 void VimEngine::executeVisualMute()

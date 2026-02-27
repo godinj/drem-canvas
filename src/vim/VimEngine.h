@@ -223,6 +223,8 @@ private:
     MotionRange getVisualRange() const;
     void updateVisualSelection();
     void executeVisualOperator (Operator op);
+    void executeGridVisualDelete();
+    void executeGridVisualYank();
     void executeVisualMute();
     void executeVisualSolo();
 
