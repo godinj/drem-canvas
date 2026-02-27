@@ -16,6 +16,7 @@
 
 #include <stdexcept>
 #include <algorithm>
+#include <iostream>
 
 namespace dc
 {
@@ -282,7 +283,7 @@ sk_sp<SkSurface> VulkanBackend::beginFrame()
     {
         if (++swapchainRetryCount > kMaxRetries)
         {
-            DBG ("VulkanBackend: swapchain retry limit reached, skipping frame");
+            std::cerr << "VulkanBackend: swapchain retry limit reached, skipping frame\n";
             swapchainRetryCount = 0;
             return nullptr;
         }
@@ -292,13 +293,13 @@ sk_sp<SkSurface> VulkanBackend::beginFrame()
 
     if (result == VK_TIMEOUT || result == VK_NOT_READY)
     {
-        DBG ("VulkanBackend: acquire timed out, skipping frame");
+        std::cerr << "VulkanBackend: acquire timed out, skipping frame\n";
         return nullptr;
     }
 
     if (result == VK_ERROR_DEVICE_LOST || result == VK_ERROR_SURFACE_LOST_KHR)
     {
-        DBG ("VulkanBackend: device/surface lost, skipping frame");
+        std::cerr << "VulkanBackend: device/surface lost, skipping frame\n";
         return nullptr;
     }
 
@@ -307,7 +308,7 @@ sk_sp<SkSurface> VulkanBackend::beginFrame()
 
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     {
-        DBG ("VulkanBackend: acquire failed with error " << static_cast<int> (result));
+        std::cerr << "VulkanBackend: acquire failed with error " << static_cast<int> (result) << "\n";
         return nullptr;
     }
 
@@ -317,7 +318,7 @@ sk_sp<SkSurface> VulkanBackend::beginFrame()
     VkResult fenceResult = vkWaitForFences (device, 1, &frameFence, VK_TRUE, kTimeoutNs);
     if (fenceResult == VK_TIMEOUT)
     {
-        DBG ("VulkanBackend: fence wait timed out, skipping frame");
+        std::cerr << "VulkanBackend: fence wait timed out, skipping frame\n";
         return nullptr;
     }
     vkResetFences (device, 1, &frameFence);
