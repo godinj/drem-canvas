@@ -16,6 +16,7 @@
 #include "model/Project.h"
 #include "model/Arrangement.h"
 #include "model/TempoMap.h"
+#include "model/GridSystem.h"
 #include "model/StepSequencer.h"
 #include "vim/VimEngine.h"
 #include "vim/VimContext.h"
@@ -135,6 +136,7 @@ private:
     Project project;
     Arrangement arrangement { project };
     TempoMap tempoMap;
+    GridSystem gridSystem { tempoMap };
     VimContext vimContext;
     std::unique_ptr<VimEngine> vimEngine;
     ActionRegistry actionRegistry;

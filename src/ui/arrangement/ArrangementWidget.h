@@ -7,6 +7,7 @@
 #include "model/Project.h"
 #include "model/Arrangement.h"
 #include "model/TempoMap.h"
+#include "model/GridSystem.h"
 #include "vim/VimEngine.h"
 #include "vim/VimContext.h"
 #include "engine/TransportController.h"
@@ -24,7 +25,7 @@ class ArrangementWidget : public gfx::Widget,
 public:
     ArrangementWidget (Project& project, TransportController& transport,
                        Arrangement& arrangement, VimContext& vimContext,
-                       const TempoMap& tempoMap);
+                       const TempoMap& tempoMap, GridSystem& gridSystem);
     ~ArrangementWidget() override;
 
     void paint (gfx::Canvas& canvas) override;
@@ -52,6 +53,7 @@ private:
     Arrangement& arrangement;
     VimContext& vimContext;
     const TempoMap& tempoMap;
+    GridSystem& gridSystem;
 
     TimeRulerWidget timeRuler;  // initialized in constructor
     gfx::ScrollViewWidget scrollView;

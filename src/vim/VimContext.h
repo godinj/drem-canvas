@@ -43,7 +43,26 @@ public:
     bool isClipInVisualSelection (int trackIndex, int clipIndex) const;
     bool isTrackInVisualSelection (int trackIndex) const;
 
-    // Clip selection
+    // Grid cursor position (in samples, always grid-snapped)
+    int64_t getGridCursorPosition() const { return gridCursorPosition; }
+    void setGridCursorPosition (int64_t pos) { gridCursorPosition = pos; }
+
+    // Grid visual selection (for grid-based visual mode)
+    struct GridVisualSelection
+    {
+        bool active = false;
+        bool linewise = false;
+        int startTrack = 0;
+        int endTrack = 0;
+        int64_t startPos = 0; // grid position in samples
+        int64_t endPos = 0;   // grid position in samples
+    };
+
+    void setGridVisualSelection (const GridVisualSelection& sel) { gridVisualSelection = sel; }
+    const GridVisualSelection& getGridVisualSelection() const { return gridVisualSelection; }
+    void clearGridVisualSelection() { gridVisualSelection = GridVisualSelection(); }
+
+    // Clip selection (derived from grid cursor position)
     int getSelectedClipIndex() const { return selectedClipIndex; }
     void setSelectedClipIndex (int index) { selectedClipIndex = index; }
 
@@ -67,12 +86,14 @@ private:
     Panel activePanel = Editor;
     MixerFocus mixerFocus = FocusNone;
     int selectedClipIndex = 0;
+    int64_t gridCursorPosition = 0;
     int seqRow  = 0;
     int seqStep = 0;
     juce::ValueTree clipboard;
     juce::Array<juce::ValueTree> clipboardMulti;
     bool clipboardLinewise = false;
     VisualSelection visualSelection;
+    GridVisualSelection gridVisualSelection;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VimContext)
 };

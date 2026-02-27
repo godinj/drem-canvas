@@ -5,6 +5,7 @@
 #include "vim/VimContext.h"
 #include "engine/TransportController.h"
 #include "model/Arrangement.h"
+#include "model/GridSystem.h"
 
 namespace dc
 {
@@ -18,7 +19,8 @@ public:
     static constexpr float preferredHeight = 24.0f;
 
     VimStatusBarWidget (VimEngine& engine, VimContext& context,
-                        Arrangement& arrangement, TransportController& transport);
+                        Arrangement& arrangement, TransportController& transport,
+                        const GridSystem& gridSystem);
     ~VimStatusBarWidget() override;
 
     void paint (gfx::Canvas& canvas) override;
@@ -33,6 +35,7 @@ private:
     VimContext& context;
     Arrangement& arrangement;
     TransportController& transport;
+    const GridSystem& gridSystem;
 };
 
 } // namespace ui

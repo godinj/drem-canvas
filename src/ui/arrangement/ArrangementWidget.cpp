@@ -10,9 +10,9 @@ namespace ui
 
 ArrangementWidget::ArrangementWidget (Project& proj, TransportController& transport,
                                       Arrangement& arr, VimContext& vc,
-                                      const TempoMap& tempo)
+                                      const TempoMap& tempo, GridSystem& gs)
     : project (proj), transportController (transport), arrangement (arr), vimContext (vc),
-      tempoMap (tempo), timeRuler (tempo)
+      tempoMap (tempo), gridSystem (gs), timeRuler (tempo)
 {
     addChild (&timeRuler);
     addChild (&scrollView);
@@ -136,12 +136,55 @@ void ArrangementWidget::updateSelectionVisuals()
     int selectedClip = vimContext.getSelectedClipIndex();
     auto& visualSel = vimContext.getVisualSelection();
 
+    double sr = transportController.getSampleRate();
+    int64_t gridUnit = (sr > 0.0) ? gridSystem.getGridUnitInSamples (sr) : 0;
+    int64_t gridPos = vimContext.getGridCursorPosition();
+
     for (size_t i = 0; i < trackLanes.size(); ++i)
     {
         bool isSelected = static_cast<int> (i) == selectedTrack;
         trackLanes[i]->setSelected (isSelected);
         trackLanes[i]->setSelectedClipIndex (isSelected ? selectedClip : -1);
         trackLanes[i]->setVisualSelection (visualSel, static_cast<int> (i));
+        trackLanes[i]->setGridCursorPosition (isSelected ? gridPos : -1);
+        trackLanes[i]->setGridUnitInSamples (gridUnit);
+
+        // Grid visual selection
+        auto& gridVisSel = vimContext.getGridVisualSelection();
+        if (gridVisSel.active)
+        {
+            int minTrack = std::min (gridVisSel.startTrack, gridVisSel.endTrack);
+            int maxTrack = std::max (gridVisSel.startTrack, gridVisSel.endTrack);
+            bool inRange = (static_cast<int> (i) >= minTrack && static_cast<int> (i) <= maxTrack);
+            trackLanes[i]->setGridVisualSelection (gridVisSel.startPos, gridVisSel.endPos, inRange);
+        }
+        else
+        {
+            trackLanes[i]->setGridVisualSelection (0, 0, false);
+        }
+    }
+
+    // Auto-scroll: keep grid cursor visible in viewport
+    if (selectedTrack >= 0 && sr > 0.0)
+    {
+        float cursorScreenX = static_cast<float> ((static_cast<double> (gridPos) / sr) * pixelsPerSecond)
+                            + 150.0f - scrollView.getScrollOffsetX();
+        float viewWidth = scrollView.getWidth();
+
+        if (cursorScreenX < 150.0f + 50.0f)
+        {
+            // Cursor is off the left edge — scroll left
+            float targetScrollX = static_cast<float> ((static_cast<double> (gridPos) / sr) * pixelsPerSecond)
+                                - 150.0f;
+            scrollView.setScrollOffset (std::max (0.0f, targetScrollX), scrollView.getScrollOffsetY());
+        }
+        else if (cursorScreenX > viewWidth - 50.0f)
+        {
+            // Cursor is off the right edge — scroll right
+            float targetScrollX = static_cast<float> ((static_cast<double> (gridPos) / sr) * pixelsPerSecond)
+                                + 150.0f - viewWidth + 150.0f;
+            scrollView.setScrollOffset (std::max (0.0f, targetScrollX), scrollView.getScrollOffsetY());
+        }
     }
 }
 

@@ -2,6 +2,8 @@
 #include "model/AudioClip.h"
 #include "model/MidiClip.h"
 #include "utils/UndoSystem.h"
+#include <vector>
+#include <algorithm>
 
 namespace dc
 {
@@ -25,8 +27,9 @@ static bool isEscapeOrCtrlC (const juce::KeyPress& key)
 }
 
 VimEngine::VimEngine (Project& p, TransportController& t,
-                      Arrangement& a, VimContext& c)
-    : project (p), transport (t), arrangement (a), context (c)
+                      Arrangement& a, VimContext& c,
+                      GridSystem& gs)
+    : project (p), transport (t), arrangement (a), context (c), gridSystem (gs)
 {
 }
 
@@ -157,7 +160,7 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
                     // gg with count: jump to track N (1-indexed)
                     int target = std::min (count, arrangement.getNumTracks()) - 1;
                     arrangement.selectTrack (target);
-                    context.setSelectedClipIndex (0);
+                    updateClipIndexFromGridCursor();
                     listeners.call (&Listener::vimContextChanged);
                 }
                 else
@@ -318,6 +321,28 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     if (keyChar == 'S') { toggleSolo();      return true; }
     if (keyChar == 'r') { toggleRecordArm(); return true; }
 
+    // Grid division change
+    if (keyChar == '[')
+    {
+        gridSystem.adjustGridDivision (-1);
+        double sr = transport.getSampleRate();
+        if (sr > 0.0)
+            context.setGridCursorPosition (gridSystem.snapFloor (context.getGridCursorPosition(), sr));
+        updateClipIndexFromGridCursor();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+    if (keyChar == ']')
+    {
+        gridSystem.adjustGridDivision (1);
+        double sr = transport.getSampleRate();
+        if (sr > 0.0)
+            context.setGridCursorPosition (gridSystem.snapFloor (context.getGridCursorPosition(), sr));
+        updateClipIndexFromGridCursor();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
     // Mode switch
     if (keyChar == 'i') { enterInsertMode(); return true; }
 
@@ -351,7 +376,8 @@ void VimEngine::moveSelectionUp()
     if (idx > 0)
     {
         arrangement.selectTrack (idx - 1);
-        context.setSelectedClipIndex (0);
+        // Preserve grid cursor position (don't reset to 0)
+        updateClipIndexFromGridCursor();
         listeners.call (&Listener::vimContextChanged);
     }
 }
@@ -362,35 +388,62 @@ void VimEngine::moveSelectionDown()
     if (idx < arrangement.getNumTracks() - 1)
     {
         arrangement.selectTrack (idx + 1);
-        context.setSelectedClipIndex (0);
+        // Preserve grid cursor position (don't reset to 0)
+        updateClipIndexFromGridCursor();
         listeners.call (&Listener::vimContextChanged);
     }
 }
 
 void VimEngine::moveSelectionLeft()
 {
-    int clipIdx = context.getSelectedClipIndex();
-    if (clipIdx > 0)
-    {
-        context.setSelectedClipIndex (clipIdx - 1);
-        listeners.call (&Listener::vimContextChanged);
-    }
+    double sr = transport.getSampleRate();
+    if (sr <= 0.0) return;
+
+    int64_t pos = context.getGridCursorPosition();
+    int64_t newPos = gridSystem.moveByGridUnits (pos, -1, sr);
+    context.setGridCursorPosition (newPos);
+    updateClipIndexFromGridCursor();
+    listeners.call (&Listener::vimContextChanged);
 }
 
 void VimEngine::moveSelectionRight()
 {
+    double sr = transport.getSampleRate();
+    if (sr <= 0.0) return;
+
+    int64_t pos = context.getGridCursorPosition();
+    int64_t newPos = gridSystem.moveByGridUnits (pos, 1, sr);
+    context.setGridCursorPosition (newPos);
+    updateClipIndexFromGridCursor();
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::updateClipIndexFromGridCursor()
+{
     int trackIdx = arrangement.getSelectedTrackIndex();
     if (trackIdx < 0 || trackIdx >= arrangement.getNumTracks())
+    {
+        context.setSelectedClipIndex (-1);
         return;
+    }
 
     Track track = arrangement.getTrack (trackIdx);
-    int clipIdx = context.getSelectedClipIndex();
+    int64_t cursorPos = context.getGridCursorPosition();
 
-    if (clipIdx < track.getNumClips() - 1)
+    for (int i = 0; i < track.getNumClips(); ++i)
     {
-        context.setSelectedClipIndex (clipIdx + 1);
-        listeners.call (&Listener::vimContextChanged);
+        auto clipState = track.getClip (i);
+        auto start = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+        auto length = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+
+        if (cursorPos >= start && cursorPos < start + length)
+        {
+            context.setSelectedClipIndex (i);
+            return;
+        }
     }
+
+    context.setSelectedClipIndex (-1);
 }
 
 // ── Track jumps ─────────────────────────────────────────────────────────────
@@ -400,7 +453,7 @@ void VimEngine::jumpToFirstTrack()
     if (arrangement.getNumTracks() > 0)
     {
         arrangement.selectTrack (0);
-        context.setSelectedClipIndex (0);
+        updateClipIndexFromGridCursor();
         listeners.call (&Listener::vimContextChanged);
     }
 }
@@ -411,7 +464,7 @@ void VimEngine::jumpToLastTrack()
     if (count > 0)
     {
         arrangement.selectTrack (count - 1);
-        context.setSelectedClipIndex (0);
+        updateClipIndexFromGridCursor();
         listeners.call (&Listener::vimContextChanged);
     }
 }
@@ -1128,12 +1181,37 @@ VimEngine::Operator VimEngine::charToOperator (juce_wchar c) const
     return OpNone;
 }
 
+// ── Clip edge helpers ────────────────────────────────────────────────────────
+
+// Collect all clip start/end positions on a track, sorted ascending
+static std::vector<int64_t> collectClipEdges (const Arrangement& arr, int trackIdx)
+{
+    std::vector<int64_t> edges;
+    if (trackIdx < 0 || trackIdx >= arr.getNumTracks())
+        return edges;
+
+    Track track = arr.getTrack (trackIdx);
+    for (int i = 0; i < track.getNumClips(); ++i)
+    {
+        auto clip = track.getClip (i);
+        auto start = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+        auto length = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+        edges.push_back (start);
+        edges.push_back (start + length);
+    }
+
+    std::sort (edges.begin(), edges.end());
+    edges.erase (std::unique (edges.begin(), edges.end()), edges.end());
+    return edges;
+}
+
 // ── Motion resolution ───────────────────────────────────────────────────────
 
 bool VimEngine::isMotionKey (juce_wchar c) const
 {
     return c == 'h' || c == 'j' || c == 'k' || c == 'l'
-        || c == '0' || c == '$' || c == 'G' || c == 'g';
+        || c == '0' || c == '$' || c == 'G' || c == 'g'
+        || c == 'w' || c == 'b' || c == 'e';
 }
 
 VimEngine::MotionRange VimEngine::resolveMotion (juce_wchar key, int count) const
@@ -1240,6 +1318,20 @@ VimEngine::MotionRange VimEngine::resolveMotion (juce_wchar key, int count) cons
             break;
         }
 
+        case 'w': // next clip boundary (clipwise range from cursor to next edge)
+        case 'b': // previous clip boundary
+        case 'e': // end of current/next clip
+        {
+            // For operator resolution, define range from current clip to target clip
+            range.linewise   = false;
+            range.startTrack = curTrack;
+            range.endTrack   = curTrack;
+            range.startClip  = curClip;
+            range.endClip    = curClip; // operators will use grid positions in Phase 6
+            range.valid      = true;
+            break;
+        }
+
         default:
             break;
     }
@@ -1308,7 +1400,7 @@ void VimEngine::executeDelete (const MotionRange& range)
         if (selectTrack >= 0)
             arrangement.selectTrack (selectTrack);
 
-        context.setSelectedClipIndex (0);
+        updateClipIndexFromGridCursor();
     }
     else if (range.startTrack == range.endTrack)
     {
@@ -1327,12 +1419,8 @@ void VimEngine::executeDelete (const MotionRange& range)
                 track.removeClip (c, &um);
         }
 
-        // Adjust clip selection
-        int remaining = track.getNumClips();
-        if (remaining > 0)
-            context.setSelectedClipIndex (std::min (range.startClip, remaining - 1));
-        else
-            context.setSelectedClipIndex (0);
+        // Re-derive clip index from grid cursor position
+        updateClipIndexFromGridCursor();
     }
     else
     {
@@ -1472,12 +1560,47 @@ void VimEngine::executeMotion (juce_wchar key, int count)
             break;
 
         case '0':
-            jumpToSessionStart();
+        {
+            // Move grid cursor to start of timeline
+            context.setGridCursorPosition (0);
+            updateClipIndexFromGridCursor();
+            listeners.call (&Listener::vimContextChanged);
             break;
+        }
 
         case '$':
-            jumpToSessionEnd();
+        {
+            // Move grid cursor to snapped end of last clip on current track
+            double sr = transport.getSampleRate();
+            int trackIdx = arrangement.getSelectedTrackIndex();
+            int64_t maxEnd = 0;
+
+            if (trackIdx >= 0 && trackIdx < arrangement.getNumTracks())
+            {
+                Track track = arrangement.getTrack (trackIdx);
+                for (int ci = 0; ci < track.getNumClips(); ++ci)
+                {
+                    auto clipState = track.getClip (ci);
+                    auto start = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+                    auto length = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+                    maxEnd = std::max (maxEnd, start + length);
+                }
+            }
+
+            if (sr > 0.0 && maxEnd > 0)
+            {
+                // Snap to last grid unit that's still within the last clip
+                int64_t snapped = gridSystem.snapFloor (maxEnd - 1, sr);
+                context.setGridCursorPosition (snapped);
+            }
+            else
+            {
+                context.setGridCursorPosition (maxEnd);
+            }
+            updateClipIndexFromGridCursor();
+            listeners.call (&Listener::vimContextChanged);
             break;
+        }
 
         case 'G':
             if (count > 1 || countAccumulator > 0)
@@ -1487,7 +1610,7 @@ void VimEngine::executeMotion (juce_wchar key, int count)
                 if (target >= 0)
                 {
                     arrangement.selectTrack (target);
-                    context.setSelectedClipIndex (0);
+                    updateClipIndexFromGridCursor();
                     listeners.call (&Listener::vimContextChanged);
                 }
             }
@@ -1504,6 +1627,111 @@ void VimEngine::executeMotion (juce_wchar key, int count)
             listeners.call (&Listener::vimContextChanged);
             break;
 
+        case 'w':
+        {
+            // Jump forward to next clip edge, count times
+            double sr = transport.getSampleRate();
+            int trackIdx = arrangement.getSelectedTrackIndex();
+            auto edges = collectClipEdges (arrangement, trackIdx);
+            int64_t cursorPos = context.getGridCursorPosition();
+
+            for (int n = 0; n < count; ++n)
+            {
+                // Find first edge strictly after cursor
+                auto it = std::upper_bound (edges.begin(), edges.end(), cursorPos);
+                if (it != edges.end())
+                    cursorPos = *it;
+                else
+                    break;
+            }
+
+            if (sr > 0.0)
+                cursorPos = gridSystem.snapFloor (cursorPos, sr);
+            context.setGridCursorPosition (cursorPos);
+            updateClipIndexFromGridCursor();
+            listeners.call (&Listener::vimContextChanged);
+            break;
+        }
+
+        case 'b':
+        {
+            // Jump backward to previous clip edge, count times
+            double sr = transport.getSampleRate();
+            int trackIdx = arrangement.getSelectedTrackIndex();
+            auto edges = collectClipEdges (arrangement, trackIdx);
+            int64_t cursorPos = context.getGridCursorPosition();
+
+            for (int n = 0; n < count; ++n)
+            {
+                // Find last edge strictly before cursor
+                auto it = std::lower_bound (edges.begin(), edges.end(), cursorPos);
+                if (it != edges.begin())
+                {
+                    --it;
+                    cursorPos = *it;
+                }
+                else
+                    break;
+            }
+
+            if (sr > 0.0)
+                cursorPos = gridSystem.snapFloor (cursorPos, sr);
+            context.setGridCursorPosition (cursorPos);
+            updateClipIndexFromGridCursor();
+            listeners.call (&Listener::vimContextChanged);
+            break;
+        }
+
+        case 'e':
+        {
+            // Jump to end of current/next clip, count times
+            double sr = transport.getSampleRate();
+            int trackIdx = arrangement.getSelectedTrackIndex();
+            int64_t cursorPos = context.getGridCursorPosition();
+
+            if (trackIdx >= 0 && trackIdx < arrangement.getNumTracks())
+            {
+                Track track = arrangement.getTrack (trackIdx);
+
+                // Collect just clip end positions
+                std::vector<int64_t> endEdges;
+                for (int ci = 0; ci < track.getNumClips(); ++ci)
+                {
+                    auto clip = track.getClip (ci);
+                    auto start = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+                    auto length = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+                    endEdges.push_back (start + length);
+                }
+                std::sort (endEdges.begin(), endEdges.end());
+
+                for (int n = 0; n < count; ++n)
+                {
+                    auto it = std::upper_bound (endEdges.begin(), endEdges.end(), cursorPos);
+                    if (it != endEdges.end())
+                    {
+                        // Move to grid position just before end (inside the clip)
+                        int64_t endPos = *it;
+                        if (sr > 0.0)
+                        {
+                            int64_t snapped = gridSystem.snapFloor (endPos - 1, sr);
+                            cursorPos = std::max (snapped, static_cast<int64_t> (0));
+                        }
+                        else
+                        {
+                            cursorPos = endPos;
+                        }
+                    }
+                    else
+                        break;
+                }
+            }
+
+            context.setGridCursorPosition (cursorPos);
+            updateClipIndexFromGridCursor();
+            listeners.call (&Listener::vimContextChanged);
+            break;
+        }
+
         default:
             break;
     }
@@ -1515,6 +1743,7 @@ void VimEngine::enterVisualMode()
 {
     visualAnchorTrack = arrangement.getSelectedTrackIndex();
     visualAnchorClip  = context.getSelectedClipIndex();
+    visualAnchorGridPos = context.getGridCursorPosition();
     mode = Visual;
 
     updateVisualSelection();
@@ -1525,6 +1754,7 @@ void VimEngine::enterVisualLineMode()
 {
     visualAnchorTrack = arrangement.getSelectedTrackIndex();
     visualAnchorClip  = context.getSelectedClipIndex();
+    visualAnchorGridPos = context.getGridCursorPosition();
     mode = VisualLine;
 
     updateVisualSelection();
@@ -1534,6 +1764,7 @@ void VimEngine::enterVisualLineMode()
 void VimEngine::exitVisualMode()
 {
     context.clearVisualSelection();
+    context.clearGridVisualSelection();
     mode = Normal;
     cancelOperator();
     clearPending();
@@ -1543,6 +1774,7 @@ void VimEngine::exitVisualMode()
 
 void VimEngine::updateVisualSelection()
 {
+    // Legacy clip-based visual selection (for rendering compatibility)
     VimContext::VisualSelection sel;
     sel.active     = true;
     sel.linewise   = (mode == VisualLine);
@@ -1551,38 +1783,78 @@ void VimEngine::updateVisualSelection()
     sel.endTrack   = arrangement.getSelectedTrackIndex();
     sel.endClip    = context.getSelectedClipIndex();
     context.setVisualSelection (sel);
+
+    // Grid-based visual selection
+    VimContext::GridVisualSelection gridSel;
+    gridSel.active     = true;
+    gridSel.linewise   = (mode == VisualLine);
+    gridSel.startTrack = visualAnchorTrack;
+    gridSel.endTrack   = arrangement.getSelectedTrackIndex();
+    gridSel.startPos   = visualAnchorGridPos;
+    gridSel.endPos     = context.getGridCursorPosition();
+    context.setGridVisualSelection (gridSel);
+
     listeners.call (&Listener::vimContextChanged);
 }
 
 VimEngine::MotionRange VimEngine::getVisualRange() const
 {
     MotionRange range;
-    auto& sel = context.getVisualSelection();
+    auto& gridSel = context.getGridVisualSelection();
 
-    if (! sel.active)
+    if (! gridSel.active)
         return range; // valid == false
 
-    range.linewise   = sel.linewise;
-    range.startTrack = std::min (sel.startTrack, sel.endTrack);
-    range.endTrack   = std::max (sel.startTrack, sel.endTrack);
+    range.linewise   = gridSel.linewise;
+    range.startTrack = std::min (gridSel.startTrack, gridSel.endTrack);
+    range.endTrack   = std::max (gridSel.startTrack, gridSel.endTrack);
 
-    if (sel.linewise)
+    if (gridSel.linewise)
     {
         range.startClip = 0;
         range.endClip   = 0;
     }
-    else if (range.startTrack == range.endTrack)
-    {
-        range.startClip = std::min (sel.startClip, sel.endClip);
-        range.endClip   = std::max (sel.startClip, sel.endClip);
-    }
     else
     {
-        // Multi-track clipwise: use full tracks for delete/yank
-        // Start from anchor clip to end of anchor track, end at cursor clip
-        bool startIsMin = (sel.startTrack <= sel.endTrack);
-        range.startClip = startIsMin ? sel.startClip : sel.endClip;
-        range.endClip   = startIsMin ? sel.endClip   : sel.startClip;
+        // For grid-based visual mode, find clips that overlap the grid range
+        // and set clip indices accordingly. Operators will delete/yank all
+        // clips that overlap the [minPos, maxPos) range.
+        int64_t minPos = std::min (gridSel.startPos, gridSel.endPos);
+        int64_t maxPos = std::max (gridSel.startPos, gridSel.endPos);
+        double sr = transport.getSampleRate();
+        if (sr > 0.0)
+            maxPos += gridSystem.getGridUnitInSamples (sr); // include cursor's grid unit
+
+        // Find first and last clip indices that overlap the grid range on the primary track
+        int primaryTrack = range.startTrack;
+        if (primaryTrack >= 0 && primaryTrack < arrangement.getNumTracks())
+        {
+            Track track = arrangement.getTrack (primaryTrack);
+            int firstClip = -1, lastClip = -1;
+
+            for (int i = 0; i < track.getNumClips(); ++i)
+            {
+                auto clip = track.getClip (i);
+                auto start = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+                auto length = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+
+                // Clip overlaps if clip range [start, start+length) intersects [minPos, maxPos)
+                if (start < maxPos && start + length > minPos)
+                {
+                    if (firstClip < 0)
+                        firstClip = i;
+                    lastClip = i;
+                }
+            }
+
+            range.startClip = (firstClip >= 0) ? firstClip : 0;
+            range.endClip   = (lastClip >= 0) ? lastClip : 0;
+        }
+        else
+        {
+            range.startClip = 0;
+            range.endClip   = 0;
+        }
     }
 
     range.valid = true;
@@ -1692,7 +1964,7 @@ bool VimEngine::handleVisualKey (const juce::KeyPress& key)
             {
                 int target = std::min (count, arrangement.getNumTracks()) - 1;
                 arrangement.selectTrack (target);
-                context.setSelectedClipIndex (0);
+                updateClipIndexFromGridCursor();
             }
             else
             {
@@ -1702,6 +1974,28 @@ bool VimEngine::handleVisualKey (const juce::KeyPress& key)
             return true;
         }
         clearPending();
+    }
+
+    // Grid division change in visual mode
+    if (keyChar == '[')
+    {
+        gridSystem.adjustGridDivision (-1);
+        double sr = transport.getSampleRate();
+        if (sr > 0.0)
+            context.setGridCursorPosition (gridSystem.snapFloor (context.getGridCursorPosition(), sr));
+        updateClipIndexFromGridCursor();
+        updateVisualSelection();
+        return true;
+    }
+    if (keyChar == ']')
+    {
+        gridSystem.adjustGridDivision (1);
+        double sr = transport.getSampleRate();
+        if (sr > 0.0)
+            context.setGridCursorPosition (gridSystem.snapFloor (context.getGridCursorPosition(), sr));
+        updateClipIndexFromGridCursor();
+        updateVisualSelection();
+        return true;
     }
 
     // Digit accumulation
@@ -1775,7 +2069,7 @@ bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
             {
                 int target = std::min (count, arrangement.getNumTracks()) - 1;
                 arrangement.selectTrack (target);
-                context.setSelectedClipIndex (0);
+                updateClipIndexFromGridCursor();
             }
             else
             {
@@ -1785,6 +2079,28 @@ bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
             return true;
         }
         clearPending();
+    }
+
+    // Grid division change in visual mode
+    if (keyChar == '[')
+    {
+        gridSystem.adjustGridDivision (-1);
+        double sr = transport.getSampleRate();
+        if (sr > 0.0)
+            context.setGridCursorPosition (gridSystem.snapFloor (context.getGridCursorPosition(), sr));
+        updateClipIndexFromGridCursor();
+        updateVisualSelection();
+        return true;
+    }
+    if (keyChar == ']')
+    {
+        gridSystem.adjustGridDivision (1);
+        double sr = transport.getSampleRate();
+        if (sr > 0.0)
+            context.setGridCursorPosition (gridSystem.snapFloor (context.getGridCursorPosition(), sr));
+        updateClipIndexFromGridCursor();
+        updateVisualSelection();
+        return true;
     }
 
     // Digit accumulation

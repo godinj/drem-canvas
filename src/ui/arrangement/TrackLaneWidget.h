@@ -30,6 +30,9 @@ public:
     void setSelected (bool sel);
     void setSelectedClipIndex (int idx);
     void setVisualSelection (const VimContext::VisualSelection& sel, int trackIndex);
+    void setGridCursorPosition (int64_t pos);
+    void setGridUnitInSamples (int64_t unit);
+    void setGridVisualSelection (int64_t startPos, int64_t endPos, bool active);
 
     bool isSelected() const { return selected; }
     const juce::ValueTree& getTrackState() const { return trackState; }
@@ -47,6 +50,12 @@ private:
     bool visualLinewise = false;
     int visualStartClip = -1;
     int visualEndClip = -1;
+
+    int64_t gridCursorPosition = -1;
+    int64_t gridUnitInSamples = 0;
+    bool gridVisualActive = false;
+    int64_t gridVisualStartPos = 0;
+    int64_t gridVisualEndPos = 0;
 
     static constexpr float headerWidth = 150.0f;
 

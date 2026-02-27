@@ -75,7 +75,7 @@ void AppController::initialise()
     pluginManager.loadPluginList (pluginManager.getDefaultPluginListFile());
 
     // Create vim engine
-    vimEngine = std::make_unique<VimEngine> (project, transportController, arrangement, vimContext);
+    vimEngine = std::make_unique<VimEngine> (project, transportController, arrangement, vimContext, gridSystem);
     vimEngine->addListener (this);
 
     // Wire :plugin command
@@ -331,13 +331,14 @@ void AppController::initialise()
 
     // Vim status bar
     vimStatusBar = std::make_unique<VimStatusBarWidget> (*vimEngine, vimContext,
-                                                          arrangement, transportController);
+                                                          arrangement, transportController,
+                                                          gridSystem);
     addChild (vimStatusBar.get());
 
     // Arrangement
     arrangementWidget = std::make_unique<ArrangementWidget> (project, transportController,
                                                                arrangement, vimContext,
-                                                               tempoMap);
+                                                               tempoMap, gridSystem);
     addChild (arrangementWidget.get());
     vimEngine->addListener (arrangementWidget.get());
 

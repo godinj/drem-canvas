@@ -63,37 +63,93 @@ void TrackLaneWidget::paintOverChildren (gfx::Canvas& canvas)
 {
     using namespace gfx;
     auto& theme = Theme::getDefault();
+    float h = getHeight();
+    float laneWidth = getWidth() - headerWidth;
+
+    // Draw subtle grid lines when zoom level makes them >= 8px apart
+    if (selected && gridUnitInSamples > 0 && sampleRate > 0.0 && laneWidth > 0)
+    {
+        double gridPixels = (static_cast<double> (gridUnitInSamples) / sampleRate) * pixelsPerSecond;
+        if (gridPixels >= 8.0)
+        {
+            Color gridColor = Color::fromARGB (0x18ffffff);
+            // Find first visible grid line
+            double startSample = 0.0;
+            for (double pos = startSample; ; pos += static_cast<double> (gridUnitInSamples))
+            {
+                float x = static_cast<float> ((pos / sampleRate) * pixelsPerSecond) + headerWidth;
+                if (x > getWidth())
+                    break;
+                if (x >= headerWidth)
+                    canvas.drawLine (x, 0, x, h, gridColor, 1.0f);
+            }
+        }
+    }
 
     // Visual selection highlight
     if (inVisualSelection)
     {
         Color highlightColor = Color::fromARGB (0xffff9944); // orange
 
-        auto drawClipHighlight = [&] (gfx::Widget* clip)
+        if (gridVisualActive && ! visualLinewise && sampleRate > 0.0)
         {
-            Rect clipBounds = clip->getBounds();
-            canvas.fillRoundedRect (clipBounds.reduced (-2.0f), 3.0f,
-                                    highlightColor.withAlpha ((uint8_t) 64));
-            canvas.strokeRect (clipBounds, highlightColor, 2.0f);
-        };
+            // Grid-based visual selection: draw continuous orange rectangle
+            int64_t minPos = std::min (gridVisualStartPos, gridVisualEndPos);
+            int64_t maxPos = std::max (gridVisualStartPos, gridVisualEndPos);
+            if (gridUnitInSamples > 0)
+                maxPos += gridUnitInSamples; // extend to cover cursor's grid cell
 
-        if (visualLinewise)
-        {
-            for (auto& cv : clipViews)
-                drawClipHighlight (cv.get());
+            float startX = static_cast<float> ((static_cast<double> (minPos) / sampleRate) * pixelsPerSecond) + headerWidth;
+            float endX   = static_cast<float> ((static_cast<double> (maxPos) / sampleRate) * pixelsPerSecond) + headerWidth;
+
+            canvas.fillRect (Rect (startX, 0, endX - startX, h),
+                             highlightColor.withAlpha ((uint8_t) 50));
+            canvas.drawLine (startX, 0, startX, h, highlightColor, 2.0f);
+            canvas.drawLine (endX, 0, endX, h, highlightColor, 2.0f);
         }
         else
         {
-            int start = std::max (0, visualStartClip);
-            int end   = std::min (static_cast<int> (clipViews.size()) - 1, visualEndClip);
-            for (int i = start; i <= end; ++i)
-                drawClipHighlight (clipViews[static_cast<size_t> (i)].get());
+            // Linewise or fallback: highlight all clips on track
+            auto drawClipHighlight = [&] (gfx::Widget* clip)
+            {
+                Rect clipBounds = clip->getBounds();
+                canvas.fillRoundedRect (clipBounds.reduced (-2.0f), 3.0f,
+                                        highlightColor.withAlpha ((uint8_t) 64));
+                canvas.strokeRect (clipBounds, highlightColor, 2.0f);
+            };
+
+            if (visualLinewise)
+            {
+                for (auto& cv : clipViews)
+                    drawClipHighlight (cv.get());
+            }
+            else
+            {
+                int start = std::max (0, visualStartClip);
+                int end   = std::min (static_cast<int> (clipViews.size()) - 1, visualEndClip);
+                for (int i = start; i <= end; ++i)
+                    drawClipHighlight (clipViews[static_cast<size_t> (i)].get());
+            }
         }
-        return;
     }
 
-    // Normal mode: single clip highlight
-    if (selected && selectedClipIndex >= 0 && selectedClipIndex < static_cast<int> (clipViews.size()))
+    // Grid cursor rectangle (drawn on selected track only)
+    if (selected && gridCursorPosition >= 0 && gridUnitInSamples > 0 && sampleRate > 0.0)
+    {
+        float cursorX = static_cast<float> ((static_cast<double> (gridCursorPosition) / sampleRate) * pixelsPerSecond) + headerWidth;
+        float cursorW = static_cast<float> ((static_cast<double> (gridUnitInSamples) / sampleRate) * pixelsPerSecond);
+
+        // Semi-transparent green rectangle (full track height)
+        Color cursorFill = theme.selection.withAlpha ((uint8_t) 40);
+        canvas.fillRect (Rect (cursorX, 0, cursorW, h), cursorFill);
+
+        // Thin solid green line on left edge (the "position" line)
+        canvas.drawLine (cursorX, 0, cursorX, h, theme.selection, 2.0f);
+    }
+
+    // Clip-under-cursor indicator (green border around clip containing cursor)
+    if (selected && selectedClipIndex >= 0 && selectedClipIndex < static_cast<int> (clipViews.size())
+        && ! inVisualSelection)
     {
         auto* clip = clipViews[static_cast<size_t> (selectedClipIndex)].get();
         Rect clipBounds = clip->getBounds();
@@ -205,6 +261,32 @@ void TrackLaneWidget::setVisualSelection (const VimContext::VisualSelection& sel
 
     if (wasInVisual != inVisualSelection)
         repaint();
+}
+
+void TrackLaneWidget::setGridCursorPosition (int64_t pos)
+{
+    if (gridCursorPosition != pos)
+    {
+        gridCursorPosition = pos;
+        repaint();
+    }
+}
+
+void TrackLaneWidget::setGridUnitInSamples (int64_t unit)
+{
+    if (gridUnitInSamples != unit)
+    {
+        gridUnitInSamples = unit;
+        repaint();
+    }
+}
+
+void TrackLaneWidget::setGridVisualSelection (int64_t startPos, int64_t endPos, bool active)
+{
+    gridVisualActive = active;
+    gridVisualStartPos = startPos;
+    gridVisualEndPos = endPos;
+    repaint();
 }
 
 void TrackLaneWidget::rebuildClipViews()

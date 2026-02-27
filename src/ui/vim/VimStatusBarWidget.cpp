@@ -10,8 +10,9 @@ namespace ui
 {
 
 VimStatusBarWidget::VimStatusBarWidget (VimEngine& e, VimContext& c,
-                                        Arrangement& a, TransportController& t)
-    : engine (e), context (c), arrangement (a), transport (t)
+                                        Arrangement& a, TransportController& t,
+                                        const GridSystem& gs)
+    : engine (e), context (c), arrangement (a), transport (t), gridSystem (gs)
 {
     engine.addListener (this);
     setAnimating (true);
@@ -113,16 +114,27 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
             }
             else
             {
-                int minC = std::min (visSel.startClip, visSel.endClip) + 1;
-                int maxC = std::max (visSel.startClip, visSel.endClip) + 1;
+                // Show grid position range for visual selection
+                double sr = transport.getSampleRate();
+                std::string posStr = (sr > 0.0)
+                    ? gridSystem.formatGridPosition (context.getGridCursorPosition(), sr).toStdString()
+                    : "0.0.0";
                 breadcrumb = "> T" + std::to_string (minT) + "-T" + std::to_string (maxT)
-                           + " > C" + std::to_string (minC) + "-C" + std::to_string (maxC);
+                           + " @ " + posStr;
             }
         }
         else if (panel == VimContext::Editor)
         {
-            breadcrumb = "> " + trackInfo + " > C"
-                       + std::to_string (context.getSelectedClipIndex() + 1);
+            double sr = transport.getSampleRate();
+            std::string posStr = (sr > 0.0)
+                ? gridSystem.formatGridPosition (context.getGridCursorPosition(), sr).toStdString()
+                : "0.0.0";
+
+            int clipIdx = context.getSelectedClipIndex();
+            if (clipIdx >= 0)
+                breadcrumb = "> " + trackInfo + " @ " + posStr + " [C" + std::to_string (clipIdx + 1) + "]";
+            else
+                breadcrumb = "> " + trackInfo + " @ " + posStr;
         }
         else if (panel == VimContext::Mixer)
         {
@@ -143,6 +155,13 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
     }
 
     canvas.drawText (breadcrumb, x + 6.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffa6adc8));
+
+    // ── Grid division indicator (right-aligned, before playhead time)
+    {
+        auto gridStr = "Grid: " + gridSystem.getGridDivisionName().toStdString();
+        Rect gridArea (totalWidth - 400.0f, 0, 120.0f, h);
+        canvas.drawTextRight (gridStr, gridArea, fm.getMonoFont(), Color::fromARGB (0xff7f849c));
+    }
 
     // ── Playhead info (right-aligned)
     auto timeStr = transport.getTimeString().toStdString();

@@ -8,6 +8,7 @@
 #include "engine/TransportController.h"
 #include "graphics/core/Event.h"
 #include "vim/VirtualKeyboardState.h"
+#include "model/GridSystem.h"
 
 namespace dc
 {
@@ -37,7 +38,8 @@ public:
     };
 
     VimEngine (Project& project, TransportController& transport,
-               Arrangement& arrangement, VimContext& context);
+               Arrangement& arrangement, VimContext& context,
+               GridSystem& gridSystem);
 
     bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override;
 
@@ -224,10 +226,13 @@ private:
     void executeVisualMute();
     void executeVisualSolo();
 
+    void updateClipIndexFromGridCursor();
+
     Project& project;
     TransportController& transport;
     Arrangement& arrangement;
     VimContext& context;
+    GridSystem& gridSystem;
 
     Mode mode = Normal;
     juce::String commandBuffer;
@@ -245,6 +250,7 @@ private:
     // Visual mode anchor
     int visualAnchorTrack = 0;
     int visualAnchorClip  = 0;
+    int64_t visualAnchorGridPos = 0;
 
     juce::ListenerList<Listener> listeners;
 
