@@ -14,6 +14,15 @@ PluginSlotList::~PluginSlotList()
     trackState.removeListener (this);
 }
 
+void PluginSlotList::setSelectedSlotIndex (int index)
+{
+    if (selectedSlotIndex != index)
+    {
+        selectedSlotIndex = index;
+        repaint();
+    }
+}
+
 void PluginSlotList::paint (juce::Graphics& g)
 {
     auto chain = getPluginChain();
@@ -27,6 +36,15 @@ void PluginSlotList::paint (juce::Graphics& g)
         g.setColour (i % 2 == 0 ? juce::Colour (0xff2a2a3a) : juce::Colour (0xff262636));
         g.fillRect (slotBounds);
 
+        // Selected slot highlight
+        if (i == selectedSlotIndex)
+        {
+            g.setColour (juce::Colour (0xff50c878).withAlpha (0.15f));
+            g.fillRect (slotBounds);
+            g.setColour (juce::Colour (0xff50c878));
+            g.drawRect (slotBounds, 1);
+        }
+
         if (i < numPlugins)
         {
             auto plugin = chain.getChild (i);
@@ -37,6 +55,13 @@ void PluginSlotList::paint (juce::Graphics& g)
             g.setColour (enabled ? juce::Colour (0xffc0c0d0) : juce::Colour (0xff606070));
             g.setFont (juce::Font (juce::FontOptions (11.0f)));
             g.drawText (name, slotBounds.reduced (4, 0), juce::Justification::centredLeft, true);
+        }
+        else if (i == selectedSlotIndex)
+        {
+            // "Add" slot indicator when selected
+            g.setColour (juce::Colour (0xff50c878));
+            g.setFont (juce::Font (juce::FontOptions (11.0f)));
+            g.drawText ("[+]", slotBounds.reduced (4, 0), juce::Justification::centredLeft, true);
         }
     }
 }

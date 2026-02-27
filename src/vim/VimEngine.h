@@ -75,6 +75,13 @@ public:
     // Browser toggle callback (gp keybinding)
     std::function<void()> onToggleBrowser;
 
+    // Mixer plugin callbacks (wired by MainComponent)
+    std::function<void (int trackIndex, int pluginIndex)> onMixerPluginOpen;
+    std::function<void (int trackIndex)> onMixerPluginAdd;
+    std::function<void (int trackIndex, int pluginIndex)> onMixerPluginRemove;
+    std::function<void (int trackIndex, int pluginIndex)> onMixerPluginBypass;
+    std::function<void (int trackIndex, int fromIndex, int toIndex)> onMixerPluginReorder;
+
     // Plugin menu callbacks (wired by MainComponent)
     std::function<void (int)> onPluginMenuMove;     // delta: +1 down, -1 up
     std::function<void (int)> onPluginMenuScroll;    // direction: +1 half-page down, -1 half-page up
@@ -192,6 +199,9 @@ private:
 
     bool handleSequencerNormalKey (const juce::KeyPress& key);
     bool handlePianoRollNormalKey (const juce::KeyPress& key);
+    bool handleMixerNormalKey (const juce::KeyPress& key);
+
+    int getMixerPluginCount() const;
 
     void openFocusedItem();
     void closePianoRoll();

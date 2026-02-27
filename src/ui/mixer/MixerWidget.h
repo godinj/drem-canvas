@@ -28,6 +28,7 @@ public:
     void setActiveContext (bool active);
     void setSelectedStripIndex (int index);
     void setMixerFocus (VimContext::MixerFocus focus);
+    void setSelectedPluginSlot (int slotIndex);
 
     // Access strips for meter wiring
     std::vector<std::unique_ptr<ChannelStripWidget>>& getStrips() { return strips; }

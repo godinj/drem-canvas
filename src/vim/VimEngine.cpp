@@ -150,6 +150,9 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     if (context.getPanel() == VimContext::Sequencer)
         return handleSequencerNormalKey (key);
 
+    if (context.getPanel() == VimContext::Mixer)
+        return handleMixerNormalKey (key);
+
     auto keyChar = key.getTextCharacter();
     auto modifiers = key.getModifiers();
 
@@ -3067,6 +3070,281 @@ bool VimEngine::handleKeyUp (const gfx::KeyEvent& event)
             onLiveMidiNote (juce::MidiMessage::noteOff (keyboardState.midiChannel, note));
 
         keyboardState.notifyListeners();
+        return true;
+    }
+
+    return false;
+}
+
+// ── Mixer panel ─────────────────────────────────────────────────────────────
+
+int VimEngine::getMixerPluginCount() const
+{
+    if (context.isMasterStripSelected())
+    {
+        auto masterBus = project.getState().getChildWithName (IDs::MASTER_BUS);
+        if (masterBus.isValid())
+        {
+            auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+            return chain.isValid() ? chain.getNumChildren() : 0;
+        }
+        return 0;
+    }
+
+    int trackIdx = arrangement.getSelectedTrackIndex();
+    if (trackIdx < 0 || trackIdx >= arrangement.getNumTracks())
+        return 0;
+
+    Track track = arrangement.getTrack (trackIdx);
+    return track.getNumPlugins();
+}
+
+bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
+{
+    auto keyChar = key.getTextCharacter();
+    auto modifiers = key.getModifiers();
+
+    // ── Escape / Ctrl-C
+    if (isEscapeOrCtrlC (key))
+    {
+        cancelOperator();
+        clearPending();
+        return true;
+    }
+
+    // ── g-prefix: gp toggles browser
+    if (pendingKey == 'g')
+    {
+        if (keyChar == 'p'
+            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+        {
+            clearPending();
+            if (onToggleBrowser) onToggleBrowser();
+            return true;
+        }
+        if (keyChar == 'k'
+            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+        {
+            clearPending();
+            enterKeyboardMode();
+            return true;
+        }
+        clearPending();
+    }
+
+    if (keyChar == 'g')
+    {
+        pendingKey = 'g';
+        pendingTimestamp = juce::Time::currentTimeMillis();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // ── h/l: move between strips
+    if (keyChar == 'h')
+    {
+        if (context.isMasterStripSelected())
+        {
+            // Move from master to last regular track
+            context.setMasterStripSelected (false);
+            int numTracks = arrangement.getNumTracks();
+            if (numTracks > 0)
+                arrangement.selectTrack (numTracks - 1);
+        }
+        else
+        {
+            int idx = arrangement.getSelectedTrackIndex();
+            if (idx > 0)
+                arrangement.selectTrack (idx - 1);
+        }
+        context.setSelectedPluginSlot (0);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    if (keyChar == 'l')
+    {
+        if (! context.isMasterStripSelected())
+        {
+            int idx = arrangement.getSelectedTrackIndex();
+            int numTracks = arrangement.getNumTracks();
+
+            if (idx < numTracks - 1)
+            {
+                arrangement.selectTrack (idx + 1);
+            }
+            else
+            {
+                // Past last track → select master
+                context.setMasterStripSelected (true);
+            }
+        }
+        context.setSelectedPluginSlot (0);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // ── j/k: focus cycling and plugin slot navigation
+    auto focus = context.getMixerFocus();
+
+    if (keyChar == 'j')
+    {
+        if (focus == VimContext::FocusPlugins)
+        {
+            // Navigate plugin slots downward
+            int numPlugins = getMixerPluginCount();
+            int slot = context.getSelectedPluginSlot();
+            if (slot < numPlugins) // allow one past for "add" slot
+            {
+                context.setSelectedPluginSlot (slot + 1);
+                listeners.call (&Listener::vimContextChanged);
+            }
+        }
+        else if (focus == VimContext::FocusVolume)
+        {
+            context.setMixerFocus (VimContext::FocusPan);
+            listeners.call (&Listener::vimContextChanged);
+        }
+        else if (focus == VimContext::FocusPan)
+        {
+            context.setMixerFocus (VimContext::FocusPlugins);
+            listeners.call (&Listener::vimContextChanged);
+        }
+        return true;
+    }
+
+    if (keyChar == 'k')
+    {
+        if (focus == VimContext::FocusPlugins)
+        {
+            int slot = context.getSelectedPluginSlot();
+            if (slot > 0)
+            {
+                context.setSelectedPluginSlot (slot - 1);
+                listeners.call (&Listener::vimContextChanged);
+            }
+            else
+            {
+                // At slot 0, exit back to Pan focus
+                context.setMixerFocus (VimContext::FocusPan);
+                listeners.call (&Listener::vimContextChanged);
+            }
+        }
+        else if (focus == VimContext::FocusPan)
+        {
+            context.setMixerFocus (VimContext::FocusVolume);
+            listeners.call (&Listener::vimContextChanged);
+        }
+        else if (focus == VimContext::FocusPlugins)
+        {
+            context.setMixerFocus (VimContext::FocusPan);
+            listeners.call (&Listener::vimContextChanged);
+        }
+        return true;
+    }
+
+    // ── Return: open plugin editor or add plugin
+    if (key == juce::KeyPress::returnKey && focus == VimContext::FocusPlugins)
+    {
+        int trackIdx = context.isMasterStripSelected() ? -1 : arrangement.getSelectedTrackIndex();
+        int slot = context.getSelectedPluginSlot();
+        int numPlugins = getMixerPluginCount();
+
+        if (slot < numPlugins)
+        {
+            if (onMixerPluginOpen)
+                onMixerPluginOpen (trackIdx, slot);
+        }
+        else
+        {
+            if (onMixerPluginAdd)
+                onMixerPluginAdd (trackIdx);
+        }
+        return true;
+    }
+
+    // ── x: remove plugin
+    if (keyChar == 'x' && focus == VimContext::FocusPlugins)
+    {
+        int trackIdx = context.isMasterStripSelected() ? -1 : arrangement.getSelectedTrackIndex();
+        int slot = context.getSelectedPluginSlot();
+        int numPlugins = getMixerPluginCount();
+
+        if (slot < numPlugins && onMixerPluginRemove)
+        {
+            onMixerPluginRemove (trackIdx, slot);
+            // Clamp slot index after removal
+            int newNum = getMixerPluginCount();
+            if (context.getSelectedPluginSlot() > newNum)
+                context.setSelectedPluginSlot (newNum);
+            listeners.call (&Listener::vimContextChanged);
+        }
+        return true;
+    }
+
+    // ── b: toggle bypass
+    if (keyChar == 'b' && focus == VimContext::FocusPlugins)
+    {
+        int trackIdx = context.isMasterStripSelected() ? -1 : arrangement.getSelectedTrackIndex();
+        int slot = context.getSelectedPluginSlot();
+        int numPlugins = getMixerPluginCount();
+
+        if (slot < numPlugins && onMixerPluginBypass)
+            onMixerPluginBypass (trackIdx, slot);
+        return true;
+    }
+
+    // ── J/K (shift): reorder plugins
+    if (keyChar == 'J' && focus == VimContext::FocusPlugins)
+    {
+        int trackIdx = context.isMasterStripSelected() ? -1 : arrangement.getSelectedTrackIndex();
+        int slot = context.getSelectedPluginSlot();
+        int numPlugins = getMixerPluginCount();
+
+        if (slot < numPlugins - 1 && onMixerPluginReorder)
+        {
+            onMixerPluginReorder (trackIdx, slot, slot + 1);
+            context.setSelectedPluginSlot (slot + 1);
+            listeners.call (&Listener::vimContextChanged);
+        }
+        return true;
+    }
+
+    if (keyChar == 'K' && focus == VimContext::FocusPlugins)
+    {
+        int trackIdx = context.isMasterStripSelected() ? -1 : arrangement.getSelectedTrackIndex();
+        int slot = context.getSelectedPluginSlot();
+
+        if (slot > 0 && onMixerPluginReorder)
+        {
+            onMixerPluginReorder (trackIdx, slot, slot - 1);
+            context.setSelectedPluginSlot (slot - 1);
+            listeners.call (&Listener::vimContextChanged);
+        }
+        return true;
+    }
+
+    // ── Track state toggles
+    if (keyChar == 'M') { toggleMute();      return true; }
+    if (keyChar == 'S') { toggleSolo();      return true; }
+    if (keyChar == 'r') { toggleRecordArm(); return true; }
+
+    // ── Mode switch
+    if (keyChar == 'i') { enterInsertMode(); return true; }
+
+    // ── Transport
+    if (key == juce::KeyPress::spaceKey) { togglePlayStop(); return true; }
+
+    // ── Panel cycling
+    if (key == juce::KeyPress::tabKey) { cycleFocusPanel(); return true; }
+
+    // ── Command mode
+    if (keyChar == ':')
+    {
+        mode = Command;
+        commandBuffer.clear();
+        listeners.call (&Listener::vimModeChanged, Command);
+        listeners.call (&Listener::vimContextChanged);
         return true;
     }
 

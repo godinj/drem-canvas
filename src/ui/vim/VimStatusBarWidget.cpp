@@ -136,17 +136,58 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
             else
                 breadcrumb = "> " + trackInfo + " @ " + posStr;
         }
-        else if (panel == VimContext::Mixer)
+        else if (panel == VimContext::Mixer && ! context.isMasterStripSelected())
         {
             auto focusName = context.getMixerFocusName().toStdString();
             breadcrumb = "> " + trackInfo;
             if (! focusName.empty())
                 breadcrumb += " > " + focusName;
+
+            if (context.getMixerFocus() == VimContext::FocusPlugins)
+            {
+                int slot = context.getSelectedPluginSlot();
+                if (slot < track.getNumPlugins())
+                {
+                    auto pluginState = track.getPlugin (slot);
+                    juce::String name = pluginState.getProperty (IDs::pluginName, "Plugin");
+                    breadcrumb += " > " + name.toStdString();
+                }
+                else
+                {
+                    breadcrumb += " > [+]";
+                }
+            }
         }
         else if (panel == VimContext::Sequencer)
         {
             breadcrumb = "> R" + std::to_string (context.getSeqRow() + 1)
                        + " > S" + std::to_string (context.getSeqStep() + 1);
+        }
+    }
+    else if (context.getPanel() == VimContext::Mixer && context.isMasterStripSelected())
+    {
+        auto focusName = context.getMixerFocusName().toStdString();
+        breadcrumb = "> Master";
+        if (! focusName.empty())
+            breadcrumb += " > " + focusName;
+
+        if (context.getMixerFocus() == VimContext::FocusPlugins)
+        {
+            auto masterBus = arrangement.getProject().getState().getChildWithName (IDs::MASTER_BUS);
+            auto chain = masterBus.isValid() ? masterBus.getChildWithName (IDs::PLUGIN_CHAIN) : juce::ValueTree();
+            int numPlugins = chain.isValid() ? chain.getNumChildren() : 0;
+            int slot = context.getSelectedPluginSlot();
+
+            if (slot < numPlugins)
+            {
+                auto pluginState = chain.getChild (slot);
+                juce::String name = pluginState.getProperty (IDs::pluginName, "Plugin");
+                breadcrumb += " > " + name.toStdString();
+            }
+            else
+            {
+                breadcrumb += " > [+]";
+            }
         }
     }
     else

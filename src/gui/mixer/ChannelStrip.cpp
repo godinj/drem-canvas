@@ -186,6 +186,11 @@ void ChannelStrip::setMixerFocus (VimContext::MixerFocus focus)
     }
 }
 
+void ChannelStrip::setSelectedPluginSlot (int slotIndex)
+{
+    pluginSlotList.setSelectedSlotIndex (slotIndex);
+}
+
 void ChannelStrip::resized()
 {
     auto area = getLocalBounds().reduced (2);

@@ -19,6 +19,12 @@ void Project::createDefaultState()
     state.setProperty (IDs::timeSigNumerator, 4, nullptr);
     state.setProperty (IDs::timeSigDenominator, 4, nullptr);
     state.setProperty (IDs::sampleRate, 44100.0, nullptr);
+    // Master bus with volume and empty plugin chain
+    auto masterBus = juce::ValueTree (IDs::MASTER_BUS);
+    masterBus.setProperty (IDs::volume, 1.0, nullptr);
+    masterBus.appendChild (juce::ValueTree (IDs::PLUGIN_CHAIN), nullptr);
+    state.appendChild (masterBus, nullptr);
+
     state.appendChild (StepSequencer::createDefaultState(), nullptr);
 }
 
@@ -72,6 +78,20 @@ int Project::getNumTracks() const
 juce::ValueTree Project::getTrack (int index) const
 {
     return state.getChildWithName (IDs::TRACKS).getChild (index);
+}
+
+juce::ValueTree Project::getMasterBusState()
+{
+    auto masterBus = state.getChildWithName (IDs::MASTER_BUS);
+    if (! masterBus.isValid())
+    {
+        // Create on demand for backward compatibility with old sessions
+        masterBus = juce::ValueTree (IDs::MASTER_BUS);
+        masterBus.setProperty (IDs::volume, 1.0, nullptr);
+        masterBus.appendChild (juce::ValueTree (IDs::PLUGIN_CHAIN), nullptr);
+        state.appendChild (masterBus, nullptr);
+    }
+    return masterBus;
 }
 
 double Project::getTempo() const

@@ -26,6 +26,9 @@ public:
     // Solo logic - returns true if a given track should be audible
     bool isTrackAudible (int index) const;
 
+    Project& getProject() { return project; }
+    const Project& getProject() const { return project; }
+
 private:
     Project& project;
     int selectedTrackIndex = -1;

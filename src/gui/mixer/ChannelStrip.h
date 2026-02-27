@@ -28,6 +28,9 @@ public:
     // Mixer parameter focus
     void setMixerFocus (VimContext::MixerFocus focus);
 
+    // Plugin slot selection
+    void setSelectedPluginSlot (int slotIndex);
+
     // Callback when volume/pan/mute/solo changes
     std::function<void()> onStateChanged;
 

@@ -27,6 +27,7 @@ public:
     void setSelected (bool sel);
     bool isSelected() const { return selected; }
     void setMixerFocus (VimContext::MixerFocus focus);
+    void setSelectedPluginSlot (int slotIndex);
 
     MeterWidget& getMeter() { return meter; }
     gfx::SliderWidget& getFader() { return fader; }
