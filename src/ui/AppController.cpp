@@ -26,8 +26,7 @@ AppController::~AppController()
             vimEngine->removeListener (arrangementWidget.get());
     }
 
-    project.getState().getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
-    project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
+    project.getState().removeListener (this);
 
     stopTimer();
     midiEngine.shutdown();
@@ -350,9 +349,9 @@ void AppController::initialise()
         renderer->addAnimatingWidget (mixerWidget.get());
     }
 
-    // Listen to model changes
-    project.getState().getChildWithName (IDs::TRACKS).addListener (this);
-    project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+    // Listen to model changes — register on the project root so we receive
+    // all descendant notifications (TRACKS, TRACK, MIDI_CLIP, etc.)
+    project.getState().addListener (this);
 
     // Sync tempo
     tempoMap.setTempo (project.getTempo());
