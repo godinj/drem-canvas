@@ -79,7 +79,10 @@ bool VimEngine::handleKeyEvent (const gfx::KeyEvent& event)
     if (event.command) modFlags |= juce::ModifierKeys::commandModifier;
     mods = juce::ModifierKeys (modFlags);
 
-    juce::KeyPress key (juceKeyCode, mods, static_cast<juce_wchar> (event.character));
+    // Use unmodifiedCharacter so Ctrl+key checks (e.g. Ctrl+P == 'p') work correctly;
+    // event.character is a control code when modifiers are held on macOS.
+    auto textChar = event.unmodifiedCharacter ? event.unmodifiedCharacter : event.character;
+    juce::KeyPress key (juceKeyCode, mods, static_cast<juce_wchar> (textChar));
     return keyPressed (key, nullptr);
 }
 
