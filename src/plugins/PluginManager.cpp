@@ -11,6 +11,7 @@ PluginManager::PluginManager()
 void PluginManager::scanForPlugins()
 {
     scanDefaultPaths();
+    savePluginList (getDefaultPluginListFile());
 }
 
 void PluginManager::scanDefaultPaths()
