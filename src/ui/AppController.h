@@ -10,7 +10,9 @@
 #include "engine/TrackProcessor.h"
 #include "engine/StepSequencerProcessor.h"
 #include "engine/MidiClipProcessor.h"
+#include "engine/MeterTapProcessor.h"
 #include "engine/MidiEngine.h"
+#include "engine/SimpleSynthProcessor.h"
 #include "model/Project.h"
 #include "model/Arrangement.h"
 #include "model/TempoMap.h"
@@ -36,7 +38,8 @@ namespace ui
 {
 
 class AppController : public gfx::Widget,
-                      private VimEngine::Listener
+                      private VimEngine::Listener,
+                      private juce::Timer
 {
 public:
     AppController();
@@ -63,6 +66,9 @@ private:
     // VimEngine::Listener
     void vimModeChanged (VimEngine::Mode newMode) override;
     void vimContextChanged() override;
+
+    // Timer — pushes meter levels from audio engine to UI widgets
+    void timerCallback() override;
 
     // Audio graph management
     void rebuildAudioGraph();
@@ -113,6 +119,9 @@ private:
     juce::Array<MidiClipProcessor*> midiClipProcessors;
     juce::Array<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
     juce::Array<juce::Array<PluginNodeInfo>> trackPluginChains;
+    juce::Array<MeterTapProcessor*> meterTapProcessors;
+    juce::Array<juce::AudioProcessorGraph::Node::Ptr> meterTapNodes;
+    juce::Array<juce::AudioProcessorGraph::Node::Ptr> fallbackSynthNodes;
     StepSequencerProcessor* sequencerProcessor = nullptr;
     juce::AudioProcessorGraph::Node::Ptr sequencerNode;
     MidiEngine midiEngine;

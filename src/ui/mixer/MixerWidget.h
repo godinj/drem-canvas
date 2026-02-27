@@ -29,6 +29,10 @@ public:
     void setSelectedStripIndex (int index);
     void setMixerFocus (VimContext::MixerFocus focus);
 
+    // Access strips for meter wiring
+    std::vector<std::unique_ptr<ChannelStripWidget>>& getStrips() { return strips; }
+    ChannelStripWidget* getMasterStrip() { return masterStrip.get(); }
+
     // Callback: (trackIndex, pluginIndex) when a plugin slot is clicked
     std::function<void (int, int)> onPluginClicked;
 

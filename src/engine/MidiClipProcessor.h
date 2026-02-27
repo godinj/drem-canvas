@@ -35,7 +35,7 @@ public:
     void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
 
     double getTailLengthSeconds() const override { return 0.0; }
-    bool acceptsMidi() const override  { return false; }
+    bool acceptsMidi() const override  { return true; }
     bool producesMidi() const override { return true; }
 
     juce::AudioProcessorEditor* createEditor() override { return nullptr; }

@@ -161,6 +161,8 @@ MainComponent::~MainComponent()
     setLookAndFeel (nullptr);
     pluginWindowManager.closeAll();
     trackPluginChains.clear();
+    meterTapProcessors.clear();
+    meterTapNodes.clear();
     trackProcessors.clear();
     midiClipProcessors.clear();
     trackNodes.clear();
@@ -276,6 +278,13 @@ void MainComponent::rebuildAudioGraph()
                 audioEngine.removeProcessor (info.node->nodeID);
     trackPluginChains.clear();
 
+    // Remove existing meter tap nodes
+    for (auto& node : meterTapNodes)
+        if (node != nullptr)
+            audioEngine.removeProcessor (node->nodeID);
+    meterTapProcessors.clear();
+    meterTapNodes.clear();
+
     // Remove existing track nodes
     for (auto& node : trackNodes)
         if (node != nullptr)
@@ -374,7 +383,14 @@ void MainComponent::rebuildAudioGraph()
 
         trackPluginChains.add (pluginChain);
 
-        // Wire chain: TrackNode → Plugin1 → Plugin2 → ... → MixBus
+        // Create meter tap for this track (sits at end of chain, before MixBus)
+        auto meterTap = std::make_unique<MeterTapProcessor>();
+        auto* meterTapPtr = meterTap.get();
+        auto meterTapNode = audioEngine.addProcessor (std::move (meterTap));
+        meterTapProcessors.add (meterTapPtr);
+        meterTapNodes.add (meterTapNode);
+
+        // Wire chain: TrackNode → Plugin1 → Plugin2 → ... → MeterTap → MixBus
         connectTrackPluginChain (i);
 
         // Push initial MIDI clip data if this is a MIDI track
@@ -392,20 +408,14 @@ void MainComponent::rebuildAudioGraph()
     {
         mixerPanel->onWireMeter = [this] (int trackIndex, ChannelStrip& strip)
         {
-            if (trackIndex < trackProcessors.size())
+            if (trackIndex < meterTapProcessors.size())
             {
-                auto* proc = trackProcessors[trackIndex];
-                auto* midiProc = (trackIndex < midiClipProcessors.size()) ? midiClipProcessors[trackIndex] : nullptr;
+                auto* tap = meterTapProcessors[trackIndex];
 
-                if (proc != nullptr)
+                if (tap != nullptr)
                 {
-                    strip.getMeter().getLeftLevel  = [proc] { return proc->getPeakLevelLeft(); };
-                    strip.getMeter().getRightLevel = [proc] { return proc->getPeakLevelRight(); };
-                }
-                else if (midiProc != nullptr)
-                {
-                    strip.getMeter().getLeftLevel  = [midiProc] { return midiProc->getPeakLevelLeft(); };
-                    strip.getMeter().getRightLevel = [midiProc] { return midiProc->getPeakLevelRight(); };
+                    strip.getMeter().getLeftLevel  = [tap] { return tap->getPeakLevelLeft(); };
+                    strip.getMeter().getRightLevel = [tap] { return tap->getPeakLevelRight(); };
                 }
 
                 // Wire fader/pan/mute changes to push directly to the track processor
@@ -864,6 +874,15 @@ void MainComponent::connectTrackPluginChain (int trackIndex)
         prevNode = pluginNode;
     }
 
+    // Route through meter tap (if available) before mix bus
+    if (trackIndex < meterTapNodes.size() && meterTapNodes[trackIndex] != nullptr)
+    {
+        auto tapNode = meterTapNodes[trackIndex];
+        audioEngine.connectNodes (prevNode->nodeID, 0, tapNode->nodeID, 0);
+        audioEngine.connectNodes (prevNode->nodeID, 1, tapNode->nodeID, 1);
+        prevNode = tapNode;
+    }
+
     // Final connection to mix bus
     audioEngine.connectNodes (prevNode->nodeID, 0, mixBusNode->nodeID, 0);
     audioEngine.connectNodes (prevNode->nodeID, 1, mixBusNode->nodeID, 1);
@@ -904,6 +923,16 @@ void MainComponent::disconnectTrackPluginChain (int trackIndex)
         for (auto& conn : graph.getConnections())
         {
             if (conn.source.nodeID == info.node->nodeID)
+                graph.removeConnection (conn);
+        }
+    }
+
+    // Remove all connections from the meter tap node
+    if (trackIndex < meterTapNodes.size() && meterTapNodes[trackIndex] != nullptr)
+    {
+        for (auto& conn : graph.getConnections())
+        {
+            if (conn.source.nodeID == meterTapNodes[trackIndex]->nodeID)
                 graph.removeConnection (conn);
         }
     }

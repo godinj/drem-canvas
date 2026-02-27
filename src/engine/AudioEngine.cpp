@@ -69,7 +69,21 @@ void AudioEngine::removeProcessor (juce::AudioProcessorGraph::NodeID nodeId)
 void AudioEngine::connectNodes (juce::AudioProcessorGraph::NodeID source, int sourceChannel,
                                 juce::AudioProcessorGraph::NodeID dest, int destChannel)
 {
-    graph->addConnection ({ { source, sourceChannel }, { dest, destChannel } });
+    bool ok = graph->addConnection ({ { source, sourceChannel }, { dest, destChannel } });
+
+    if (! ok)
+    {
+        juce::String srcName = "?", dstName = "?";
+        if (auto* srcNode = graph->getNodeForId (source))
+            srcName = srcNode->getProcessor()->getName();
+        if (auto* dstNode = graph->getNodeForId (dest))
+            dstName = dstNode->getProcessor()->getName();
+
+        fprintf (stderr, "AudioEngine: FAILED connection %s[%d] -> %s[%d]\n",
+                 srcName.toRawUTF8(), sourceChannel,
+                 dstName.toRawUTF8(), destChannel);
+        fflush (stderr);
+    }
 }
 
 } // namespace dc

@@ -6,6 +6,7 @@
 #include "model/StepSequencer.h"
 #include "platform/NativeDialogs.h"
 #include "utils/UndoSystem.h"
+#include <cmath>
 
 namespace dc
 {
@@ -28,9 +29,13 @@ AppController::~AppController()
     project.getState().getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
     project.getState().getChildWithName (IDs::TRACKS).removeListener (this);
 
+    stopTimer();
     midiEngine.shutdown();
     pluginWindowManager.closeAll();
     trackPluginChains.clear();
+    meterTapProcessors.clear();
+    meterTapNodes.clear();
+    fallbackSynthNodes.clear();
     trackProcessors.clear();
     midiClipProcessors.clear();
     trackNodes.clear();
@@ -342,6 +347,7 @@ void AppController::initialise()
         renderer->addAnimatingWidget (vimStatusBar.get());
         renderer->addAnimatingWidget (arrangementWidget.get());
         renderer->addAnimatingWidget (pianoRollWidget.get());
+        renderer->addAnimatingWidget (mixerWidget.get());
     }
 
     // Listen to model changes
@@ -354,6 +360,9 @@ void AppController::initialise()
     // Select first track
     if (arrangement.getNumTracks() > 0)
         arrangement.selectTrack (0);
+
+    // Start meter polling timer (30 Hz)
+    startTimerHz (30);
 
     resized();
 }
@@ -875,6 +884,19 @@ void AppController::rebuildAudioGraph()
                 audioEngine.removeProcessor (info.node->nodeID);
     trackPluginChains.clear();
 
+    // Remove existing meter tap nodes
+    for (auto& node : meterTapNodes)
+        if (node != nullptr)
+            audioEngine.removeProcessor (node->nodeID);
+    meterTapProcessors.clear();
+    meterTapNodes.clear();
+
+    // Remove existing fallback synth nodes
+    for (auto& node : fallbackSynthNodes)
+        if (node != nullptr)
+            audioEngine.removeProcessor (node->nodeID);
+    fallbackSynthNodes.clear();
+
     // Remove existing track nodes
     for (auto& node : trackNodes)
         if (node != nullptr)
@@ -976,11 +998,49 @@ void AppController::rebuildAudioGraph()
         }
 
         trackPluginChains.add (pluginChain);
+
+        // Create meter tap for this track (sits at end of chain, before MixBus)
+        auto meterTap = std::make_unique<MeterTapProcessor>();
+        auto* meterTapPtr = meterTap.get();
+        auto meterTapNode = audioEngine.addProcessor (std::move (meterTap));
+        meterTapProcessors.add (meterTapPtr);
+        meterTapNodes.add (meterTapNode);
+
+        // For MIDI tracks, create a fallback sine-wave synth so there is
+        // always an instrument in the chain.  If the user has loaded a real
+        // plugin the fallback is bypassed by connectTrackPluginChain().
+        if (midiClipProcessors[i] != nullptr)
+        {
+            auto synth = std::make_unique<SimpleSynthProcessor>();
+            auto synthNode = audioEngine.addProcessor (std::move (synth));
+            fallbackSynthNodes.add (synthNode);
+        }
+        else
+        {
+            fallbackSynthNodes.add (nullptr);
+        }
+
         connectTrackPluginChain (i);
 
         // Push initial MIDI clip data if this is a MIDI track
         if (midiClipProcessors[i] != nullptr)
             syncMidiClipFromModel (i);
+    }
+
+    // Connect step sequencer MIDI to all MIDI tracks so sequencer
+    // patterns reach the instrument plugins on those tracks.
+    if (sequencerNode != nullptr)
+    {
+        for (int i = 0; i < trackNodes.size(); ++i)
+        {
+            if (midiClipProcessors[i] != nullptr)
+            {
+                audioEngine.connectNodes (sequencerNode->nodeID,
+                    juce::AudioProcessorGraph::midiChannelIndex,
+                    trackNodes[i]->nodeID,
+                    juce::AudioProcessorGraph::midiChannelIndex);
+            }
+        }
     }
 
     audioEngine.getGraph().suspendProcessing (false);
@@ -1165,6 +1225,8 @@ void AppController::connectTrackPluginChain (int trackIndex)
     auto trackState = project.getTrack (trackIndex);
     Track track (trackState);
 
+    bool isMidi = (trackIndex < midiClipProcessors.size() && midiClipProcessors[trackIndex] != nullptr);
+
     juce::Array<juce::AudioProcessorGraph::Node::Ptr> enabledNodes;
     for (int p = 0; p < chain.size(); ++p)
     {
@@ -1172,27 +1234,75 @@ void AppController::connectTrackPluginChain (int trackIndex)
             enabledNodes.add (chain[p].node);
     }
 
-    // Wire audio: TrackNode → Plugin1 → Plugin2 → ... → MixBus
-    auto prevNode = trackNode;
+    // Determine the instrument node: prefer real plugins, fall back to built-in synth.
+    // The fallback synth is used when no instrument plugin is loaded so that
+    // MIDI tracks always produce audible output.
+    bool hasInstrumentPlugin = false;
     for (auto& pluginNode : enabledNodes)
     {
-        audioEngine.connectNodes (prevNode->nodeID, 0, pluginNode->nodeID, 0);
-        audioEngine.connectNodes (prevNode->nodeID, 1, pluginNode->nodeID, 1);
-        prevNode = pluginNode;
+        if (auto* proc = pluginNode->getProcessor())
+        {
+            if (proc->acceptsMidi())
+            {
+                hasInstrumentPlugin = true;
+                break;
+            }
+        }
     }
 
-    audioEngine.connectNodes (prevNode->nodeID, 0, mixBusNode->nodeID, 0);
-    audioEngine.connectNodes (prevNode->nodeID, 1, mixBusNode->nodeID, 1);
+    auto fallbackNode = (trackIndex < fallbackSynthNodes.size())
+                            ? fallbackSynthNodes[trackIndex]
+                            : nullptr;
 
-    // Wire MIDI through the plugin chain (for MIDI tracks with instrument plugins)
-    auto prevNodeForMidi = trackNode;
-    for (auto& pluginNode : enabledNodes)
+    // Helper: route prevNode through the meter tap (if present) into MixBus
+    auto connectToMixBusViaMeterTap = [&] (juce::AudioProcessorGraph::Node::Ptr prevNode)
     {
-        audioEngine.connectNodes (prevNodeForMidi->nodeID,
+        if (trackIndex < meterTapNodes.size() && meterTapNodes[trackIndex] != nullptr)
+        {
+            auto tapNode = meterTapNodes[trackIndex];
+            audioEngine.connectNodes (prevNode->nodeID, 0, tapNode->nodeID, 0);
+            audioEngine.connectNodes (prevNode->nodeID, 1, tapNode->nodeID, 1);
+            prevNode = tapNode;
+        }
+        audioEngine.connectNodes (prevNode->nodeID, 0, mixBusNode->nodeID, 0);
+        audioEngine.connectNodes (prevNode->nodeID, 1, mixBusNode->nodeID, 1);
+    };
+
+    bool useFallback = isMidi && ! hasInstrumentPlugin && fallbackNode != nullptr;
+
+    if (useFallback)
+    {
+        // MIDI track with no instrument plugin: route through fallback synth.
+        //   MidiClipProcessor --MIDI--> SimpleSynth --audio--> MeterTap → MixBus
+        audioEngine.connectNodes (trackNode->nodeID,
             juce::AudioProcessorGraph::midiChannelIndex,
-            pluginNode->nodeID,
+            fallbackNode->nodeID,
             juce::AudioProcessorGraph::midiChannelIndex);
-        prevNodeForMidi = pluginNode;
+        connectToMixBusViaMeterTap (fallbackNode);
+    }
+    else
+    {
+        // Wire audio: TrackNode → Plugin1 → Plugin2 → ... → MeterTap → MixBus
+        auto prevNode = trackNode;
+        for (auto& pluginNode : enabledNodes)
+        {
+            audioEngine.connectNodes (prevNode->nodeID, 0, pluginNode->nodeID, 0);
+            audioEngine.connectNodes (prevNode->nodeID, 1, pluginNode->nodeID, 1);
+            prevNode = pluginNode;
+        }
+
+        connectToMixBusViaMeterTap (prevNode);
+
+        // Wire MIDI through the plugin chain (for MIDI tracks with instrument plugins)
+        auto prevNodeForMidi = trackNode;
+        for (auto& pluginNode : enabledNodes)
+        {
+            audioEngine.connectNodes (prevNodeForMidi->nodeID,
+                juce::AudioProcessorGraph::midiChannelIndex,
+                pluginNode->nodeID,
+                juce::AudioProcessorGraph::midiChannelIndex);
+            prevNodeForMidi = pluginNode;
+        }
     }
 }
 
@@ -1206,18 +1316,42 @@ void AppController::disconnectTrackPluginChain (int trackIndex)
     auto trackNode = trackNodes[trackIndex];
     auto& chain = trackPluginChains.getReference (trackIndex);
 
+    // Disconnect outgoing connections from the track node
     for (auto& conn : graph.getConnections())
     {
         if (conn.source.nodeID == trackNode->nodeID)
             graph.removeConnection (conn);
     }
 
+    // Disconnect outgoing connections from each plugin in the chain
     for (auto& info : chain)
     {
         if (info.node == nullptr) continue;
         for (auto& conn : graph.getConnections())
         {
             if (conn.source.nodeID == info.node->nodeID)
+                graph.removeConnection (conn);
+        }
+    }
+
+    // Remove connections from the meter tap node
+    if (trackIndex < meterTapNodes.size() && meterTapNodes[trackIndex] != nullptr)
+    {
+        auto tapId = meterTapNodes[trackIndex]->nodeID;
+        for (auto& conn : graph.getConnections())
+        {
+            if (conn.source.nodeID == tapId || conn.destination.nodeID == tapId)
+                graph.removeConnection (conn);
+        }
+    }
+
+    // Disconnect fallback synth if present
+    if (trackIndex < fallbackSynthNodes.size() && fallbackSynthNodes[trackIndex] != nullptr)
+    {
+        auto fallbackId = fallbackSynthNodes[trackIndex]->nodeID;
+        for (auto& conn : graph.getConnections())
+        {
+            if (conn.source.nodeID == fallbackId || conn.destination.nodeID == fallbackId)
                 graph.removeConnection (conn);
         }
     }
@@ -1568,6 +1702,46 @@ void AppController::vimContextChanged()
     if (panel != VimContext::PianoRoll && pianoRollWidget && pianoRollWidget->isVisible())
     {
         pianoRollWidget->loadClip (juce::ValueTree());
+    }
+}
+
+void AppController::timerCallback()
+{
+    if (! mixerWidget)
+        return;
+
+    auto& strips = mixerWidget->getStrips();
+
+    // Convert linear amplitude to dB for MeterWidget (which expects dB)
+    auto linearToDb = [] (float linear) -> float
+    {
+        if (linear <= 0.0f) return -60.0f;
+        float db = 20.0f * std::log10 (linear);
+        return std::max (db, -60.0f);
+    };
+
+    // Push track meter levels
+    for (int i = 0; i < static_cast<int> (strips.size()) && i < meterTapProcessors.size(); ++i)
+    {
+        if (auto* tap = meterTapProcessors[i])
+        {
+            float leftDb  = linearToDb (tap->getPeakLevelLeft());
+            float rightDb = linearToDb (tap->getPeakLevelRight());
+            strips[static_cast<size_t> (i)]->getMeter().setLevel (leftDb, rightDb);
+        }
+    }
+
+    // Push master meter levels from mix bus
+    auto* masterStrip = mixerWidget->getMasterStrip();
+    if (masterStrip != nullptr && mixBusNode != nullptr)
+    {
+        auto* mixBus = dynamic_cast<MixBusProcessor*> (mixBusNode->getProcessor());
+        if (mixBus != nullptr)
+        {
+            float leftDb  = linearToDb (mixBus->getPeakLevelLeft());
+            float rightDb = linearToDb (mixBus->getPeakLevelRight());
+            masterStrip->getMeter().setLevel (leftDb, rightDb);
+        }
     }
 }
 

@@ -7,6 +7,7 @@
 #include "engine/StepSequencerProcessor.h"
 #include "engine/MidiClipProcessor.h"
 #include "engine/MetronomeProcessor.h"
+#include "engine/MeterTapProcessor.h"
 #include "model/Project.h"
 #include "model/Arrangement.h"
 #include "model/StepSequencer.h"
@@ -92,6 +93,8 @@ private:
     MetronomeProcessor* metronomeProcessor = nullptr;          // non-owning; graph owns
     juce::AudioProcessorGraph::Node::Ptr metronomeNode;
     juce::Array<juce::Array<PluginNodeInfo>> trackPluginChains;
+    juce::Array<MeterTapProcessor*> meterTapProcessors;              // non-owning; graph owns
+    juce::Array<juce::AudioProcessorGraph::Node::Ptr> meterTapNodes;
 
     // Model
     Project project;

@@ -77,6 +77,7 @@ target_sources(DremCanvas PRIVATE
     src/engine/BounceProcessor.cpp
     src/engine/StepSequencerProcessor.cpp
     src/engine/MidiClipProcessor.cpp
+    src/engine/MeterTapProcessor.cpp
 
     # Model
     src/model/Project.cpp

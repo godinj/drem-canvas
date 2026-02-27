@@ -118,6 +118,45 @@ void MeterWidget::setLevel (float leftDb, float rightDb)
 {
     leftLevel = leftDb;
     rightLevel = rightDb;
+
+    // Convert dB to linear for direct display update
+    auto dbToLinear = [] (float db) -> float
+    {
+        if (db <= -60.0f) return 0.0f;
+        return std::pow (10.0f, db / 20.0f);
+    };
+
+    float targetLeft = dbToLinear (leftDb);
+    float targetRight = dbToLinear (rightDb);
+
+    // Smooth fall-off
+    float decay = 0.92f;
+    displayLeft = std::max (targetLeft, displayLeft * decay);
+    displayRight = std::max (targetRight, displayRight * decay);
+
+    // Peak hold (use simple monotonic clock)
+    double now = juce::Time::getMillisecondCounterHiRes();
+    if (targetLeft > peakHoldLeft)
+    {
+        peakHoldLeft = targetLeft;
+        peakHoldTimerLeft = now;
+    }
+    else if (now - peakHoldTimerLeft > 2000.0)
+    {
+        peakHoldLeft *= 0.95f;
+    }
+
+    if (targetRight > peakHoldRight)
+    {
+        peakHoldRight = targetRight;
+        peakHoldTimerRight = now;
+    }
+    else if (now - peakHoldTimerRight > 2000.0)
+    {
+        peakHoldRight *= 0.95f;
+    }
+
+    repaint();
 }
 
 void MeterWidget::setPeakHold (float lp, float rp)
