@@ -69,6 +69,24 @@ case "$OS" in
 
         pkg-config --exists alsa 2>/dev/null
         check "alsa (pkg-config)" $?
+
+        # Wine version check — must be < 9.22 for yabridge plugin UIs
+        if command -v wine &>/dev/null; then
+            wine_ver="$(wine --version 2>/dev/null || echo 'unknown')"
+            wine_major="$(echo "$wine_ver" | sed -n 's/^wine-\([0-9]*\)\..*/\1/p')"
+            wine_minor="$(echo "$wine_ver" | sed -n 's/^wine-[0-9]*\.\([0-9]*\).*/\1/p')"
+            if [ -n "$wine_major" ] && [ -n "$wine_minor" ]; then
+                if [ "$wine_major" -gt 9 ] || { [ "$wine_major" -eq 9 ] && [ "$wine_minor" -ge 22 ]; }; then
+                    check "Wine <= 9.21 (found $wine_ver — broken mouse coords in plugin UIs)" 1
+                else
+                    check "Wine <= 9.21 (found $wine_ver)" 0
+                fi
+            else
+                check "Wine (found $wine_ver, could not parse version)" 0
+            fi
+        else
+            check "Wine (not installed — needed for VST plugins via yabridge)" 1
+        fi
         ;;
 esac
 

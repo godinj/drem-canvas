@@ -79,6 +79,30 @@ case "$OS" in
             echo "        vulkan-devel glfw-devel fontconfig-devel alsa-lib-devel"
             exit 1
         fi
+
+        # Wine version check — Wine >= 9.22 breaks mouse coordinates in yabridge plugin UIs
+        if command -v wine &>/dev/null; then
+            wine_ver="$(wine --version 2>/dev/null || echo 'unknown')"
+            wine_major="$(echo "$wine_ver" | sed -n 's/^wine-\([0-9]*\)\..*/\1/p')"
+            wine_minor="$(echo "$wine_ver" | sed -n 's/^wine-[0-9]*\.\([0-9]*\).*/\1/p')"
+            if [ -n "$wine_major" ] && [ -n "$wine_minor" ]; then
+                if [ "$wine_major" -gt 9 ] || { [ "$wine_major" -eq 9 ] && [ "$wine_minor" -ge 22 ]; }; then
+                    echo ""
+                    echo "  WARNING: Wine $wine_ver is installed but >= 9.22."
+                    echo "  Wine >= 9.22 has a regression that breaks mouse coordinates in"
+                    echo "  yabridge-bridged VST plugin UIs. Pin to 9.21 with:"
+                    echo ""
+                    echo "    scripts/install-kilohearts.sh   (handles Wine pinning automatically)"
+                    echo ""
+                    echo "  Or manually:"
+                    echo "    sudo apt install --allow-downgrades winehq-staging=9.21~\$(lsb_release -cs)-1 \\"
+                    echo "        wine-staging=9.21~\$(lsb_release -cs)-1 \\"
+                    echo "        wine-staging-amd64=9.21~\$(lsb_release -cs)-1 \\"
+                    echo "        wine-staging-i386:i386=9.21~\$(lsb_release -cs)-1"
+                    echo "    sudo apt-mark hold winehq-staging wine-staging wine-staging-amd64 wine-staging-i386"
+                fi
+            fi
+        fi
         ;;
     *)
         echo "Error: Unsupported OS: $OS"
