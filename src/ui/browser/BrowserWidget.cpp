@@ -168,7 +168,7 @@ void BrowserWidget::selectPlugin (int index)
     int numRows = displayedPlugins.size();
     if (numRows == 0) return;
 
-    index = juce::jlimit (0, numRows - 1, index);
+    index = ((index % numRows) + numRows) % numRows;
     pluginList.setSelectedIndex (index);
 }
 

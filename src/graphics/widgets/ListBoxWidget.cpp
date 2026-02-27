@@ -89,10 +89,28 @@ void ListBoxWidget::setSelectedIndex (int index)
     if (index != selectedIndex)
     {
         selectedIndex = index;
+        scrollToEnsureIndexVisible (index);
         repaint();
         if (onSelectionChanged)
             onSelectionChanged (index);
     }
+}
+
+void ListBoxWidget::scrollToEnsureIndexVisible (int index)
+{
+    if (index < 0 || index >= static_cast<int> (items.size()))
+        return;
+
+    float rowTop = index * rowHeight;
+    float rowBottom = rowTop + rowHeight;
+    float maxScroll = std::max (0.0f, static_cast<float> (items.size()) * rowHeight - getHeight());
+
+    if (rowTop < scrollOffset)
+        scrollOffset = rowTop;
+    else if (rowBottom > scrollOffset + getHeight())
+        scrollOffset = rowBottom - getHeight();
+
+    scrollOffset = std::clamp (scrollOffset, 0.0f, maxScroll);
 }
 
 int ListBoxWidget::getVisibleRowStart() const

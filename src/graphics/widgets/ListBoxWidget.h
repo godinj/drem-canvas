@@ -44,6 +44,7 @@ public:
 private:
     int getVisibleRowStart() const;
     int getVisibleRowCount() const;
+    void scrollToEnsureIndexVisible (int index);
 
     std::vector<std::string> items;
     int selectedIndex = -1;

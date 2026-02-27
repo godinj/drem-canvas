@@ -65,7 +65,7 @@ void BrowserPanel::selectPlugin (int index)
     int numRows = getNumPlugins();
     if (numRows == 0) return;
 
-    index = juce::jlimit (0, numRows - 1, index);
+    index = ((index % numRows) + numRows) % numRows;
     pluginListBox.selectRow (index);
     pluginListBox.scrollToEnsureRowIsOnscreen (index);
 }
