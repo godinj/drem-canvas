@@ -34,6 +34,15 @@ void VimStatusBar::paint (juce::Graphics& g)
         return;
     }
 
+    // ── Plugin search — full-width search line ──────────────────────────
+    if (engine.getMode() == VimEngine::PluginMenu && engine.isPluginSearchActive())
+    {
+        g.setColour (juce::Colour (0xffcdd6f4));
+        g.drawText ("/" + engine.getPluginSearchBuffer(), area.reduced (6, 0),
+                    juce::Justification::centredLeft);
+        return;
+    }
+
     // ── Mode segment ────────────────────────────────────────────────────
     auto modeArea = area.removeFromLeft (160);
     juce::Colour modeColour;

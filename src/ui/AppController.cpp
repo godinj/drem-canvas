@@ -143,6 +143,18 @@ void AppController::initialise()
         repaint();
     };
 
+    vimEngine->onPluginMenuFilter = [this] (const juce::String& query)
+    {
+        if (browserWidget)
+            browserWidget->setSearchFilter (query);
+    };
+
+    vimEngine->onPluginMenuClearFilter = [this]
+    {
+        if (browserWidget)
+            browserWidget->clearSearchFilter();
+    };
+
     // Wire piano roll open
     vimEngine->onOpenPianoRoll = [this] (const juce::ValueTree& clipState)
     {
@@ -1707,6 +1719,8 @@ void AppController::toggleBrowser()
     }
     else
     {
+        if (browserWidget)
+            browserWidget->clearSearchFilter();
         // Return to normal mode if we were in plugin menu
         if (vimEngine && vimEngine->getMode() == VimEngine::PluginMenu)
             vimEngine->enterNormalMode();
