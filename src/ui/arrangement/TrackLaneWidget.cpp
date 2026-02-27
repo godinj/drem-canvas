@@ -24,11 +24,12 @@ void TrackLaneWidget::paint (gfx::Canvas& canvas)
 
     // Header background
     Rect headerRect (0, 0, headerWidth, h);
-    if (selected)
+    if (selected || inVisualSelection)
     {
         canvas.fillRect (headerRect, Color::fromARGB (0xff353545));
-        // Green accent strip
-        canvas.fillRect (Rect (0, 0, 3.0f, h), theme.selection);
+        // Orange accent strip for visual, green for normal
+        auto accentColor = inVisualSelection ? Color::fromARGB (0xffff9944) : theme.selection;
+        canvas.fillRect (Rect (0, 0, 3.0f, h), accentColor);
     }
     else
     {
@@ -45,9 +46,13 @@ void TrackLaneWidget::paint (gfx::Canvas& canvas)
     {
         canvas.fillRect (Rect (headerWidth, 0, laneWidth, h), theme.panelBackground);
 
-        // Subtle green tint over lane body when selected
-        if (selected)
-            canvas.fillRect (Rect (headerWidth, 0, laneWidth, h), theme.selection.withAlpha ((uint8_t) 15));
+        // Subtle tint over lane body when selected or in visual selection
+        if (selected || inVisualSelection)
+        {
+            auto tintColor = inVisualSelection ? Color::fromARGB (0xffff9944).withAlpha ((uint8_t) 15)
+                                               : theme.selection.withAlpha ((uint8_t) 15);
+            canvas.fillRect (Rect (headerWidth, 0, laneWidth, h), tintColor);
+        }
     }
 
     // Bottom separator
@@ -59,16 +64,42 @@ void TrackLaneWidget::paintOverChildren (gfx::Canvas& canvas)
     using namespace gfx;
     auto& theme = Theme::getDefault();
 
-    // Draw selection highlight around selected clip
+    // Visual selection highlight
+    if (inVisualSelection)
+    {
+        Color highlightColor = Color::fromARGB (0xffff9944); // orange
+
+        auto drawClipHighlight = [&] (gfx::Widget* clip)
+        {
+            Rect clipBounds = clip->getBounds();
+            canvas.fillRoundedRect (clipBounds.reduced (-2.0f), 3.0f,
+                                    highlightColor.withAlpha ((uint8_t) 64));
+            canvas.strokeRect (clipBounds, highlightColor, 2.0f);
+        };
+
+        if (visualLinewise)
+        {
+            for (auto& cv : clipViews)
+                drawClipHighlight (cv.get());
+        }
+        else
+        {
+            int start = std::max (0, visualStartClip);
+            int end   = std::min (static_cast<int> (clipViews.size()) - 1, visualEndClip);
+            for (int i = start; i <= end; ++i)
+                drawClipHighlight (clipViews[static_cast<size_t> (i)].get());
+        }
+        return;
+    }
+
+    // Normal mode: single clip highlight
     if (selected && selectedClipIndex >= 0 && selectedClipIndex < static_cast<int> (clipViews.size()))
     {
         auto* clip = clipViews[static_cast<size_t> (selectedClipIndex)].get();
         Rect clipBounds = clip->getBounds();
 
-        // Green glow
         canvas.fillRoundedRect (clipBounds.reduced (-2.0f), 3.0f,
                                 theme.selection.withAlpha ((uint8_t) 64));
-        // Green border
         canvas.strokeRect (clipBounds, theme.selection, 2.0f);
     }
 }
@@ -115,6 +146,65 @@ void TrackLaneWidget::setSelectedClipIndex (int idx)
         selectedClipIndex = idx;
         repaint();
     }
+}
+
+void TrackLaneWidget::setVisualSelection (const VimContext::VisualSelection& sel, int trackIndex)
+{
+    bool wasInVisual = inVisualSelection;
+
+    if (sel.active)
+    {
+        int minTrack = std::min (sel.startTrack, sel.endTrack);
+        int maxTrack = std::max (sel.startTrack, sel.endTrack);
+        inVisualSelection = (trackIndex >= minTrack && trackIndex <= maxTrack);
+        visualLinewise = sel.linewise;
+
+        if (inVisualSelection && ! sel.linewise)
+        {
+            if (minTrack == maxTrack)
+            {
+                visualStartClip = std::min (sel.startClip, sel.endClip);
+                visualEndClip   = std::max (sel.startClip, sel.endClip);
+            }
+            else if (trackIndex > minTrack && trackIndex < maxTrack)
+            {
+                visualStartClip = 0;
+                visualEndClip   = static_cast<int> (clipViews.size()) - 1;
+            }
+            else
+            {
+                bool startIsMin = (sel.startTrack <= sel.endTrack);
+                int anchorClip  = startIsMin ? sel.startClip : sel.endClip;
+                int cursorClip  = startIsMin ? sel.endClip   : sel.startClip;
+
+                if (trackIndex == minTrack)
+                {
+                    visualStartClip = anchorClip;
+                    visualEndClip   = static_cast<int> (clipViews.size()) - 1;
+                }
+                else
+                {
+                    visualStartClip = 0;
+                    visualEndClip   = cursorClip;
+                }
+            }
+        }
+        else
+        {
+            visualStartClip = 0;
+            visualEndClip   = static_cast<int> (clipViews.size()) - 1;
+        }
+    }
+    else
+    {
+        inVisualSelection = false;
+        visualLinewise = false;
+        visualStartClip = -1;
+        visualEndClip = -1;
+    }
+
+    if (wasInVisual != inVisualSelection)
+        repaint();
 }
 
 void TrackLaneWidget::rebuildClipViews()

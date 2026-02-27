@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include "WaveformView.h"
 #include "model/Project.h"
+#include "vim/VimContext.h"
 
 namespace dc
 {
@@ -26,6 +27,7 @@ public:
     // Vim cursor selection
     void setSelected (bool shouldBeSelected);
     void setSelectedClipIndex (int index);
+    void setVisualSelection (const VimContext::VisualSelection& sel, int trackIndex);
 
 private:
     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
@@ -40,6 +42,10 @@ private:
     double sampleRate = 44100.0;
     bool selected = false;
     int selectedClipIndex = -1;
+    bool inVisualSelection = false;
+    bool visualLinewise = false;
+    int visualStartClip = -1;
+    int visualEndClip = -1;
 
     static constexpr int headerWidth = 150;
 

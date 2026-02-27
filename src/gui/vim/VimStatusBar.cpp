@@ -36,24 +36,17 @@ void VimStatusBar::paint (juce::Graphics& g)
 
     // ── Mode segment ────────────────────────────────────────────────────
     auto modeArea = area.removeFromLeft (160);
-    auto currentMode = engine.getMode();
     juce::Colour modeColour;
     const char* modeText;
 
-    switch (currentMode)
+    switch (engine.getMode())
     {
-        case VimEngine::Normal:
-            modeColour = juce::Colour (0xff50c878);  // green
-            modeText = "-- NORMAL --";
-            break;
-        case VimEngine::PluginMenu:
-            modeColour = juce::Colour (0xffcba6f7);  // mauve/purple
-            modeText = "-- PLUGIN --";
-            break;
-        default: // Insert
-            modeColour = juce::Colour (0xff4a9eff);  // blue
-            modeText = "-- INSERT --";
-            break;
+        case VimEngine::Normal:     modeColour = juce::Colour (0xff50c878); modeText = "-- NORMAL --"; break;
+        case VimEngine::Insert:     modeColour = juce::Colour (0xff4a9eff); modeText = "-- INSERT --"; break;
+        case VimEngine::PluginMenu: modeColour = juce::Colour (0xffcba6f7); modeText = "-- PLUGIN --"; break;
+        case VimEngine::Visual:     modeColour = juce::Colour (0xffff9944); modeText = "-- VISUAL --"; break;
+        case VimEngine::VisualLine: modeColour = juce::Colour (0xffff9944); modeText = "-- V-LINE --"; break;
+        default:                    modeColour = juce::Colour (0xff50c878); modeText = "-- NORMAL --"; break;
     }
 
     g.setColour (modeColour);
@@ -91,7 +84,25 @@ void VimStatusBar::paint (juce::Graphics& g)
                                + track.getName();
 
         auto panel = context.getPanel();
-        if (panel == VimContext::Editor)
+        auto& visSel = context.getVisualSelection();
+        if (panel == VimContext::Editor && visSel.active)
+        {
+            int minT = std::min (visSel.startTrack, visSel.endTrack) + 1;
+            int maxT = std::max (visSel.startTrack, visSel.endTrack) + 1;
+
+            if (visSel.linewise)
+            {
+                breadcrumb = "> T" + juce::String (minT) + "-T" + juce::String (maxT);
+            }
+            else
+            {
+                int minC = std::min (visSel.startClip, visSel.endClip) + 1;
+                int maxC = std::max (visSel.startClip, visSel.endClip) + 1;
+                breadcrumb = "> T" + juce::String (minT) + "-T" + juce::String (maxT)
+                           + " > C" + juce::String (minC) + "-C" + juce::String (maxC);
+            }
+        }
+        else if (panel == VimContext::Editor)
         {
             breadcrumb = "> " + trackInfo + " > C"
                        + juce::String (context.getSelectedClipIndex() + 1);

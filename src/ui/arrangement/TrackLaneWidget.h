@@ -5,6 +5,7 @@
 #include "graphics/rendering/WaveformCache.h"
 #include "WaveformWidget.h"
 #include "MidiClipWidget.h"
+#include "vim/VimContext.h"
 #include <JuceHeader.h>
 #include <vector>
 #include <memory>
@@ -28,6 +29,7 @@ public:
     void setTempo (double bpm);
     void setSelected (bool sel);
     void setSelectedClipIndex (int idx);
+    void setVisualSelection (const VimContext::VisualSelection& sel, int trackIndex);
 
     bool isSelected() const { return selected; }
     const juce::ValueTree& getTrackState() const { return trackState; }
@@ -41,6 +43,10 @@ private:
     double tempo = 120.0;
     bool selected = false;
     int selectedClipIndex = -1;
+    bool inVisualSelection = false;
+    bool visualLinewise = false;
+    int visualStartClip = -1;
+    int visualEndClip = -1;
 
     static constexpr float headerWidth = 150.0f;
 

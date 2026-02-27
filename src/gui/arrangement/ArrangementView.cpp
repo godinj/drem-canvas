@@ -161,7 +161,8 @@ void ArrangementView::valueTreeChildRemoved (juce::ValueTree& parent, juce::Valu
 
 void ArrangementView::vimModeChanged (VimEngine::Mode)
 {
-    // Could change visual style per mode in the future
+    updateSelectionVisuals();
+    repaint();
 }
 
 void ArrangementView::vimContextChanged()
@@ -174,12 +175,14 @@ void ArrangementView::updateSelectionVisuals()
 {
     int selectedTrack = arrangement.getSelectedTrackIndex();
     int selectedClip  = vimContext.getSelectedClipIndex();
+    auto& visualSel   = vimContext.getVisualSelection();
 
     for (int i = 0; i < trackLanes.size(); ++i)
     {
         bool isSelected = (i == selectedTrack);
         trackLanes[i]->setSelected (isSelected);
         trackLanes[i]->setSelectedClipIndex (isSelected ? selectedClip : -1);
+        trackLanes[i]->setVisualSelection (visualSel, i);
     }
 }
 

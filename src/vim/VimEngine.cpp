@@ -49,6 +49,12 @@ bool VimEngine::keyPressed (const juce::KeyPress& key, juce::Component*)
     if (mode == Command)
         return handleCommandKey (key);
 
+    if (mode == Visual)
+        return handleVisualKey (key);
+
+    if (mode == VisualLine)
+        return handleVisualLineKey (key);
+
     if (mode == Normal)
         return handleNormalKey (key);
 
@@ -284,6 +290,18 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     }
 
     resetCounts();
+
+    // Visual modes (Editor panel only)
+    if (keyChar == 'v' && context.getPanel() == VimContext::Editor)
+    {
+        enterVisualMode();
+        return true;
+    }
+    if (keyChar == 'V' && context.getPanel() == VimContext::Editor)
+    {
+        enterVisualLineMode();
+        return true;
+    }
 
     if (keyChar == 's') { splitRegionAtPlayhead(); return true; }
 
@@ -701,6 +719,7 @@ void VimEngine::enterNormalMode()
     mode = Normal;
     cancelOperator();
     clearPending();
+    context.clearVisualSelection();
     listeners.call (&Listener::vimModeChanged, Normal);
 
     if (wasPluginMenu && onPluginMenuCancel)
@@ -1291,7 +1310,7 @@ void VimEngine::executeDelete (const MotionRange& range)
 
         context.setSelectedClipIndex (0);
     }
-    else
+    else if (range.startTrack == range.endTrack)
     {
         // Clipwise — remove clips in range on a single track
         int t = range.startTrack;
@@ -1315,6 +1334,44 @@ void VimEngine::executeDelete (const MotionRange& range)
         else
             context.setSelectedClipIndex (0);
     }
+    else
+    {
+        // Multi-track clipwise — boundary tracks have partial range, intermediate tracks all clips
+        for (int t = range.endTrack; t >= range.startTrack; --t)
+        {
+            if (t < 0 || t >= arrangement.getNumTracks())
+                continue;
+
+            Track track = arrangement.getTrack (t);
+
+            if (t > range.startTrack && t < range.endTrack)
+            {
+                // Intermediate track — remove all clips
+                for (int c = track.getNumClips() - 1; c >= 0; --c)
+                    track.removeClip (c, &um);
+            }
+            else if (t == range.startTrack)
+            {
+                // Start track — from startClip to end
+                for (int c = track.getNumClips() - 1; c >= range.startClip; --c)
+                {
+                    if (c >= 0 && c < track.getNumClips())
+                        track.removeClip (c, &um);
+                }
+            }
+            else // t == range.endTrack
+            {
+                // End track — from beginning to endClip
+                int end = std::min (range.endClip, track.getNumClips() - 1);
+                for (int c = end; c >= 0; --c)
+                    track.removeClip (c, &um);
+            }
+        }
+
+        arrangement.selectTrack (range.startTrack);
+        int remaining = arrangement.getTrack (range.startTrack).getNumClips();
+        context.setSelectedClipIndex (remaining > 0 ? std::min (range.startClip, remaining - 1) : 0);
+    }
 
     listeners.call (&Listener::vimContextChanged);
 }
@@ -1336,7 +1393,7 @@ void VimEngine::executeYank (const MotionRange& range)
                 clips.add (track.getClip (c));
         }
     }
-    else
+    else if (range.startTrack == range.endTrack)
     {
         int t = range.startTrack;
         if (t < 0 || t >= arrangement.getNumTracks())
@@ -1349,6 +1406,34 @@ void VimEngine::executeYank (const MotionRange& range)
         {
             if (c >= 0 && c < track.getNumClips())
                 clips.add (track.getClip (c));
+        }
+    }
+    else
+    {
+        // Multi-track clipwise
+        for (int t = range.startTrack; t <= range.endTrack; ++t)
+        {
+            if (t < 0 || t >= arrangement.getNumTracks())
+                continue;
+
+            Track track = arrangement.getTrack (t);
+
+            if (t > range.startTrack && t < range.endTrack)
+            {
+                for (int c = 0; c < track.getNumClips(); ++c)
+                    clips.add (track.getClip (c));
+            }
+            else if (t == range.startTrack)
+            {
+                for (int c = range.startClip; c < track.getNumClips(); ++c)
+                    clips.add (track.getClip (c));
+            }
+            else // t == range.endTrack
+            {
+                int end = std::min (range.endClip, track.getNumClips() - 1);
+                for (int c = 0; c <= end; ++c)
+                    clips.add (track.getClip (c));
+            }
         }
     }
 
@@ -1422,6 +1507,328 @@ void VimEngine::executeMotion (juce_wchar key, int count)
         default:
             break;
     }
+}
+
+// ── Visual mode ─────────────────────────────────────────────────────────────
+
+void VimEngine::enterVisualMode()
+{
+    visualAnchorTrack = arrangement.getSelectedTrackIndex();
+    visualAnchorClip  = context.getSelectedClipIndex();
+    mode = Visual;
+
+    updateVisualSelection();
+    listeners.call (&Listener::vimModeChanged, Visual);
+}
+
+void VimEngine::enterVisualLineMode()
+{
+    visualAnchorTrack = arrangement.getSelectedTrackIndex();
+    visualAnchorClip  = context.getSelectedClipIndex();
+    mode = VisualLine;
+
+    updateVisualSelection();
+    listeners.call (&Listener::vimModeChanged, VisualLine);
+}
+
+void VimEngine::exitVisualMode()
+{
+    context.clearVisualSelection();
+    mode = Normal;
+    cancelOperator();
+    clearPending();
+    listeners.call (&Listener::vimModeChanged, Normal);
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::updateVisualSelection()
+{
+    VimContext::VisualSelection sel;
+    sel.active     = true;
+    sel.linewise   = (mode == VisualLine);
+    sel.startTrack = visualAnchorTrack;
+    sel.startClip  = visualAnchorClip;
+    sel.endTrack   = arrangement.getSelectedTrackIndex();
+    sel.endClip    = context.getSelectedClipIndex();
+    context.setVisualSelection (sel);
+    listeners.call (&Listener::vimContextChanged);
+}
+
+VimEngine::MotionRange VimEngine::getVisualRange() const
+{
+    MotionRange range;
+    auto& sel = context.getVisualSelection();
+
+    if (! sel.active)
+        return range; // valid == false
+
+    range.linewise   = sel.linewise;
+    range.startTrack = std::min (sel.startTrack, sel.endTrack);
+    range.endTrack   = std::max (sel.startTrack, sel.endTrack);
+
+    if (sel.linewise)
+    {
+        range.startClip = 0;
+        range.endClip   = 0;
+    }
+    else if (range.startTrack == range.endTrack)
+    {
+        range.startClip = std::min (sel.startClip, sel.endClip);
+        range.endClip   = std::max (sel.startClip, sel.endClip);
+    }
+    else
+    {
+        // Multi-track clipwise: use full tracks for delete/yank
+        // Start from anchor clip to end of anchor track, end at cursor clip
+        bool startIsMin = (sel.startTrack <= sel.endTrack);
+        range.startClip = startIsMin ? sel.startClip : sel.endClip;
+        range.endClip   = startIsMin ? sel.endClip   : sel.startClip;
+    }
+
+    range.valid = true;
+    return range;
+}
+
+void VimEngine::executeVisualOperator (Operator op)
+{
+    auto range = getVisualRange();
+    if (! range.valid)
+    {
+        exitVisualMode();
+        return;
+    }
+
+    ScopedTransaction txn (project.getUndoSystem(),
+        op == OpDelete ? "Visual Delete" :
+        op == OpYank   ? "Visual Yank"   : "Visual Change");
+
+    executeOperator (op, range);
+    exitVisualMode();
+}
+
+void VimEngine::executeVisualMute()
+{
+    auto& sel = context.getVisualSelection();
+    if (! sel.active)
+    {
+        exitVisualMode();
+        return;
+    }
+
+    int minTrack = std::min (sel.startTrack, sel.endTrack);
+    int maxTrack = std::max (sel.startTrack, sel.endTrack);
+
+    ScopedTransaction txn (project.getUndoSystem(), "Visual Mute");
+
+    for (int t = minTrack; t <= maxTrack; ++t)
+    {
+        if (t < 0 || t >= arrangement.getNumTracks())
+            continue;
+
+        Track track = arrangement.getTrack (t);
+        track.setMuted (! track.isMuted(), &project.getUndoManager());
+    }
+
+    exitVisualMode();
+}
+
+void VimEngine::executeVisualSolo()
+{
+    auto& sel = context.getVisualSelection();
+    if (! sel.active)
+    {
+        exitVisualMode();
+        return;
+    }
+
+    int minTrack = std::min (sel.startTrack, sel.endTrack);
+    int maxTrack = std::max (sel.startTrack, sel.endTrack);
+
+    ScopedTransaction txn (project.getUndoSystem(), "Visual Solo");
+
+    for (int t = minTrack; t <= maxTrack; ++t)
+    {
+        if (t < 0 || t >= arrangement.getNumTracks())
+            continue;
+
+        Track track = arrangement.getTrack (t);
+        track.setSolo (! track.isSolo(), &project.getUndoManager());
+    }
+
+    exitVisualMode();
+}
+
+bool VimEngine::handleVisualKey (const juce::KeyPress& key)
+{
+    auto keyChar = key.getTextCharacter();
+
+    // Escape or Ctrl-C exits visual mode
+    if (isEscapeOrCtrlC (key) || keyChar == 'v')
+    {
+        exitVisualMode();
+        return true;
+    }
+
+    // Switch to VisualLine
+    if (keyChar == 'V')
+    {
+        mode = VisualLine;
+        updateVisualSelection();
+        listeners.call (&Listener::vimModeChanged, VisualLine);
+        return true;
+    }
+
+    // Pending 'g' for gg
+    if (pendingKey == 'g')
+    {
+        if (keyChar == 'g'
+            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+        {
+            clearPending();
+            int count = getEffectiveCount();
+            resetCounts();
+
+            if (count > 1)
+            {
+                int target = std::min (count, arrangement.getNumTracks()) - 1;
+                arrangement.selectTrack (target);
+                context.setSelectedClipIndex (0);
+            }
+            else
+            {
+                jumpToFirstTrack();
+            }
+            updateVisualSelection();
+            return true;
+        }
+        clearPending();
+    }
+
+    // Digit accumulation
+    if (isDigitForCount (keyChar))
+    {
+        accumulateDigit (keyChar);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // Motion keys
+    if (isMotionKey (keyChar))
+    {
+        int count = getEffectiveCount();
+        resetCounts();
+        executeMotion (keyChar, count);
+        updateVisualSelection();
+        return true;
+    }
+
+    // Operators
+    if (keyChar == 'd' || keyChar == 'x') { executeVisualOperator (OpDelete); return true; }
+    if (keyChar == 'y')                   { executeVisualOperator (OpYank);   return true; }
+    if (keyChar == 'c')                   { executeVisualOperator (OpChange); return true; }
+    if (keyChar == 'p')
+    {
+        // Visual paste: delete selection, then paste
+        executeVisualOperator (OpDelete);
+        pasteAfterPlayhead();
+        return true;
+    }
+
+    // Track state toggles
+    if (keyChar == 'M') { executeVisualMute(); return true; }
+    if (keyChar == 'S') { executeVisualSolo(); return true; }
+
+    return true; // consume all keys in visual mode
+}
+
+bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
+{
+    auto keyChar = key.getTextCharacter();
+
+    // Escape or Ctrl-C or re-pressing V exits
+    if (isEscapeOrCtrlC (key) || keyChar == 'V')
+    {
+        exitVisualMode();
+        return true;
+    }
+
+    // Switch to clipwise Visual
+    if (keyChar == 'v')
+    {
+        mode = Visual;
+        updateVisualSelection();
+        listeners.call (&Listener::vimModeChanged, Visual);
+        return true;
+    }
+
+    // Pending 'g' for gg
+    if (pendingKey == 'g')
+    {
+        if (keyChar == 'g'
+            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+        {
+            clearPending();
+            int count = getEffectiveCount();
+            resetCounts();
+
+            if (count > 1)
+            {
+                int target = std::min (count, arrangement.getNumTracks()) - 1;
+                arrangement.selectTrack (target);
+                context.setSelectedClipIndex (0);
+            }
+            else
+            {
+                jumpToFirstTrack();
+            }
+            updateVisualSelection();
+            return true;
+        }
+        clearPending();
+    }
+
+    // Digit accumulation
+    if (isDigitForCount (keyChar))
+    {
+        accumulateDigit (keyChar);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // Only j/k/G/gg motions are meaningful in line mode
+    if (keyChar == 'j' || keyChar == 'k' || keyChar == 'G')
+    {
+        int count = getEffectiveCount();
+        resetCounts();
+        executeMotion (keyChar, count);
+        updateVisualSelection();
+        return true;
+    }
+
+    if (keyChar == 'g')
+    {
+        pendingKey = 'g';
+        pendingTimestamp = juce::Time::currentTimeMillis();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // Operators
+    if (keyChar == 'd' || keyChar == 'x') { executeVisualOperator (OpDelete); return true; }
+    if (keyChar == 'y')                   { executeVisualOperator (OpYank);   return true; }
+    if (keyChar == 'c')                   { executeVisualOperator (OpChange); return true; }
+    if (keyChar == 'p')
+    {
+        executeVisualOperator (OpDelete);
+        pasteAfterPlayhead();
+        return true;
+    }
+
+    // Track state toggles
+    if (keyChar == 'M') { executeVisualMute(); return true; }
+    if (keyChar == 'S') { executeVisualSolo(); return true; }
+
+    return true; // consume all keys in visual-line mode
 }
 
 // ── Pending display (for status bar) ────────────────────────────────────────

@@ -50,26 +50,13 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
 
     switch (engine.getMode())
     {
-        case VimEngine::Normal:
-            modeColor = Color::fromARGB (0xff50c878);
-            modeText = "-- NORMAL --";
-            break;
-        case VimEngine::Insert:
-            modeColor = Color::fromARGB (0xff4a9eff);
-            modeText = "-- INSERT --";
-            break;
-        case VimEngine::Keyboard:
-            modeColor = Color::fromARGB (0xffff9933);
-            modeText = "-- KEYBOARD --";
-            break;
-        case VimEngine::PluginMenu:
-            modeColor = Color::fromARGB (0xffcba6f7);
-            modeText = "-- PLUGIN --";
-            break;
-        default:
-            modeColor = Color::fromARGB (0xff50c878);
-            modeText = "-- NORMAL --";
-            break;
+        case VimEngine::Normal:     modeColor = Color::fromARGB (0xff50c878); modeText = "-- NORMAL --"; break;
+        case VimEngine::Insert:     modeColor = Color::fromARGB (0xff4a9eff); modeText = "-- INSERT --"; break;
+        case VimEngine::Keyboard:   modeColor = Color::fromARGB (0xffff9933); modeText = "-- KEYBOARD --"; break;
+        case VimEngine::PluginMenu: modeColor = Color::fromARGB (0xffcba6f7); modeText = "-- PLUGIN --"; break;
+        case VimEngine::Visual:     modeColor = Color::fromARGB (0xffff9944); modeText = "-- VISUAL --"; break;
+        case VimEngine::VisualLine: modeColor = Color::fromARGB (0xffff9944); modeText = "-- V-LINE --"; break;
+        default:                    modeColor = Color::fromARGB (0xff50c878); modeText = "-- NORMAL --"; break;
     }
 
     canvas.fillRect (Rect (x, 0, modeWidth, h), modeColor);
@@ -114,7 +101,25 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
                               + track.getName().toStdString();
 
         auto panel = context.getPanel();
-        if (panel == VimContext::Editor)
+        auto& visSel = context.getVisualSelection();
+        if (panel == VimContext::Editor && visSel.active)
+        {
+            int minT = std::min (visSel.startTrack, visSel.endTrack) + 1;
+            int maxT = std::max (visSel.startTrack, visSel.endTrack) + 1;
+
+            if (visSel.linewise)
+            {
+                breadcrumb = "> T" + std::to_string (minT) + "-T" + std::to_string (maxT);
+            }
+            else
+            {
+                int minC = std::min (visSel.startClip, visSel.endClip) + 1;
+                int maxC = std::max (visSel.startClip, visSel.endClip) + 1;
+                breadcrumb = "> T" + std::to_string (minT) + "-T" + std::to_string (maxT)
+                           + " > C" + std::to_string (minC) + "-C" + std::to_string (maxC);
+            }
+        }
+        else if (panel == VimContext::Editor)
         {
             breadcrumb = "> " + trackInfo + " > C"
                        + std::to_string (context.getSelectedClipIndex() + 1);

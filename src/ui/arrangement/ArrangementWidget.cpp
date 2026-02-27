@@ -134,12 +134,14 @@ void ArrangementWidget::updateSelectionVisuals()
 {
     int selectedTrack = arrangement.getSelectedTrackIndex();
     int selectedClip = vimContext.getSelectedClipIndex();
+    auto& visualSel = vimContext.getVisualSelection();
 
     for (size_t i = 0; i < trackLanes.size(); ++i)
     {
         bool isSelected = static_cast<int> (i) == selectedTrack;
         trackLanes[i]->setSelected (isSelected);
         trackLanes[i]->setSelectedClipIndex (isSelected ? selectedClip : -1);
+        trackLanes[i]->setVisualSelection (visualSel, static_cast<int> (i));
     }
 }
 
@@ -156,6 +158,7 @@ void ArrangementWidget::setActiveContext (bool active)
 
 void ArrangementWidget::vimModeChanged (VimEngine::Mode)
 {
+    updateSelectionVisuals();
     repaint();
 }
 

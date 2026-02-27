@@ -55,6 +55,65 @@ juce::String VimContext::getMixerFocusName() const
     return "";
 }
 
+void VimContext::setVisualSelection (const VisualSelection& sel)
+{
+    visualSelection = sel;
+}
+
+void VimContext::clearVisualSelection()
+{
+    visualSelection = VisualSelection();
+}
+
+bool VimContext::isTrackInVisualSelection (int trackIndex) const
+{
+    if (! visualSelection.active)
+        return false;
+
+    int minTrack = std::min (visualSelection.startTrack, visualSelection.endTrack);
+    int maxTrack = std::max (visualSelection.startTrack, visualSelection.endTrack);
+    return trackIndex >= minTrack && trackIndex <= maxTrack;
+}
+
+bool VimContext::isClipInVisualSelection (int trackIndex, int clipIndex) const
+{
+    if (! visualSelection.active)
+        return false;
+
+    if (! isTrackInVisualSelection (trackIndex))
+        return false;
+
+    // Linewise — all clips on selected tracks
+    if (visualSelection.linewise)
+        return true;
+
+    int minTrack = std::min (visualSelection.startTrack, visualSelection.endTrack);
+    int maxTrack = std::max (visualSelection.startTrack, visualSelection.endTrack);
+
+    if (minTrack == maxTrack)
+    {
+        // Single track — clip range
+        int minClip = std::min (visualSelection.startClip, visualSelection.endClip);
+        int maxClip = std::max (visualSelection.startClip, visualSelection.endClip);
+        return clipIndex >= minClip && clipIndex <= maxClip;
+    }
+
+    // Multi-track clipwise: boundary tracks have partial ranges, intermediate tracks select all
+    if (trackIndex > minTrack && trackIndex < maxTrack)
+        return true; // intermediate track — all clips
+
+    // Determine which end is start vs end based on original order
+    bool startIsMin = (visualSelection.startTrack <= visualSelection.endTrack);
+    int anchorClip = startIsMin ? visualSelection.startClip : visualSelection.endClip;
+    int cursorClip = startIsMin ? visualSelection.endClip : visualSelection.startClip;
+
+    if (trackIndex == minTrack)
+        return clipIndex >= anchorClip;
+
+    // trackIndex == maxTrack
+    return clipIndex <= cursorClip;
+}
+
 void VimContext::setClipboardMulti (const juce::Array<juce::ValueTree>& clips, bool linewise)
 {
     clipboardMulti.clear();

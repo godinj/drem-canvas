@@ -15,7 +15,7 @@ namespace dc
 class VimEngine : public juce::KeyListener
 {
 public:
-    enum Mode { Normal, Insert, Command, Keyboard, PluginMenu };
+    enum Mode { Normal, Insert, Command, Keyboard, PluginMenu, Visual, VisualLine };
     enum Operator { OpNone, OpDelete, OpYank, OpChange };
 
     struct MotionRange
@@ -142,6 +142,9 @@ public:
     void enterInsertMode();
     void enterNormalMode();
     void enterPluginMenuMode();
+    void enterVisualMode();
+    void enterVisualLineMode();
+    void exitVisualMode();
 
     // Panel
     void cycleFocusPanel();
@@ -178,6 +181,8 @@ private:
     bool handleCommandKey (const juce::KeyPress& key);
     bool handleKeyboardKey (const juce::KeyPress& key);
     bool handlePluginMenuKey (const juce::KeyPress& key);
+    bool handleVisualKey (const juce::KeyPress& key);
+    bool handleVisualLineKey (const juce::KeyPress& key);
     void executeCommand();
 
     bool handleSequencerNormalKey (const juce::KeyPress& key);
@@ -212,6 +217,13 @@ private:
     void executeChange (const MotionRange& range);
     void executeMotion (juce_wchar key, int count);
 
+    // Visual mode helpers
+    MotionRange getVisualRange() const;
+    void updateVisualSelection();
+    void executeVisualOperator (Operator op);
+    void executeVisualMute();
+    void executeVisualSolo();
+
     Project& project;
     TransportController& transport;
     Arrangement& arrangement;
@@ -229,6 +241,10 @@ private:
     int operatorCount = 0;      // count typed after operator  (e.g. the 2 in 3d2j)
 
     VirtualKeyboardState keyboardState;
+
+    // Visual mode anchor
+    int visualAnchorTrack = 0;
+    int visualAnchorClip  = 0;
 
     juce::ListenerList<Listener> listeners;
 

@@ -24,14 +24,14 @@ void TrackLane::paint (juce::Graphics& g)
 
     auto trackColour = juce::Colour (static_cast<juce::uint32> (static_cast<int> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4488aa)))));
 
-    if (selected)
+    if (selected || inVisualSelection)
     {
         // Brighter header when selected
         g.setColour (trackColour.darker (0.2f));
         g.fillRect (headerArea);
 
-        // Accent strip on left edge
-        g.setColour (juce::Colour (0xff50c878));
+        // Accent strip on left edge — orange for visual, green for normal
+        g.setColour (inVisualSelection ? juce::Colour (0xffff9944) : juce::Colour (0xff50c878));
         g.fillRect (headerArea.removeFromLeft (3));
     }
     else
@@ -47,10 +47,11 @@ void TrackLane::paint (juce::Graphics& g)
                 juce::Justification::centredLeft,
                 true);
 
-    // Subtle green tint over lane body when selected
-    if (selected)
+    // Subtle tint over lane body when selected or in visual selection
+    if (selected || inVisualSelection)
     {
-        g.setColour (juce::Colour (0xff50c878).withAlpha (0.06f));
+        auto tintColour = inVisualSelection ? juce::Colour (0xffff9944) : juce::Colour (0xff50c878);
+        g.setColour (tintColour.withAlpha (0.06f));
         g.fillRect (bounds);
     }
 
@@ -61,10 +62,46 @@ void TrackLane::paint (juce::Graphics& g)
 
 void TrackLane::paintOverChildren (juce::Graphics& g)
 {
+    // Visual selection highlight
+    if (inVisualSelection)
+    {
+        auto highlightColour = juce::Colour (0xffff9944); // orange
+
+        if (visualLinewise)
+        {
+            // Linewise: highlight all clips
+            for (auto* clipView : clipViews)
+            {
+                auto clipBounds = clipView->getBounds().toFloat();
+                g.setColour (highlightColour.withAlpha (0.25f));
+                g.fillRoundedRectangle (clipBounds.expanded (2.0f), 3.0f);
+                g.setColour (highlightColour);
+                g.drawRoundedRectangle (clipBounds, 3.0f, 2.0f);
+            }
+        }
+        else
+        {
+            // Clipwise: highlight clips in visual range
+            int start = std::max (0, visualStartClip);
+            int end   = std::min (clipViews.size() - 1, visualEndClip);
+
+            for (int i = start; i <= end; ++i)
+            {
+                auto* clipView = clipViews[i];
+                auto clipBounds = clipView->getBounds().toFloat();
+                g.setColour (highlightColour.withAlpha (0.25f));
+                g.fillRoundedRectangle (clipBounds.expanded (2.0f), 3.0f);
+                g.setColour (highlightColour);
+                g.drawRoundedRectangle (clipBounds, 3.0f, 2.0f);
+            }
+        }
+        return;
+    }
+
+    // Normal mode: single clip highlight
     if (! selected || selectedClipIndex < 0 || selectedClipIndex >= clipViews.size())
         return;
 
-    // Draw selection highlight around the selected clip
     auto* clipView = clipViews[selectedClipIndex];
     auto clipBounds = clipView->getBounds().toFloat();
 
@@ -134,6 +171,66 @@ void TrackLane::rebuildClipViews()
     }
 
     resized();
+}
+
+void TrackLane::setVisualSelection (const VimContext::VisualSelection& sel, int trackIndex)
+{
+    bool wasInVisual = inVisualSelection;
+
+    if (sel.active)
+    {
+        int minTrack = std::min (sel.startTrack, sel.endTrack);
+        int maxTrack = std::max (sel.startTrack, sel.endTrack);
+        inVisualSelection = (trackIndex >= minTrack && trackIndex <= maxTrack);
+        visualLinewise = sel.linewise;
+
+        if (inVisualSelection && ! sel.linewise)
+        {
+            if (minTrack == maxTrack)
+            {
+                visualStartClip = std::min (sel.startClip, sel.endClip);
+                visualEndClip   = std::max (sel.startClip, sel.endClip);
+            }
+            else if (trackIndex > minTrack && trackIndex < maxTrack)
+            {
+                // Intermediate track — all clips
+                visualStartClip = 0;
+                visualEndClip   = clipViews.size() - 1;
+            }
+            else
+            {
+                bool startIsMin = (sel.startTrack <= sel.endTrack);
+                int anchorClip  = startIsMin ? sel.startClip : sel.endClip;
+                int cursorClip  = startIsMin ? sel.endClip   : sel.startClip;
+
+                if (trackIndex == minTrack)
+                {
+                    visualStartClip = anchorClip;
+                    visualEndClip   = clipViews.size() - 1;
+                }
+                else // trackIndex == maxTrack
+                {
+                    visualStartClip = 0;
+                    visualEndClip   = cursorClip;
+                }
+            }
+        }
+        else
+        {
+            visualStartClip = 0;
+            visualEndClip   = clipViews.size() - 1;
+        }
+    }
+    else
+    {
+        inVisualSelection = false;
+        visualLinewise = false;
+        visualStartClip = -1;
+        visualEndClip = -1;
+    }
+
+    if (wasInVisual != inVisualSelection)
+        repaint();
 }
 
 void TrackLane::setSelected (bool shouldBeSelected)

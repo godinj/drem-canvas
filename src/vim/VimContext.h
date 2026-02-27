@@ -26,6 +26,23 @@ public:
     void setMixerFocus (MixerFocus focus) { mixerFocus = focus; }
     juce::String getMixerFocusName() const;
 
+    // Visual selection
+    struct VisualSelection
+    {
+        bool active = false;
+        bool linewise = false;
+        int startTrack = 0;
+        int startClip = 0;
+        int endTrack = 0;
+        int endClip = 0;
+    };
+
+    void setVisualSelection (const VisualSelection& sel);
+    const VisualSelection& getVisualSelection() const { return visualSelection; }
+    void clearVisualSelection();
+    bool isClipInVisualSelection (int trackIndex, int clipIndex) const;
+    bool isTrackInVisualSelection (int trackIndex) const;
+
     // Clip selection
     int getSelectedClipIndex() const { return selectedClipIndex; }
     void setSelectedClipIndex (int index) { selectedClipIndex = index; }
@@ -55,6 +72,7 @@ private:
     juce::ValueTree clipboard;
     juce::Array<juce::ValueTree> clipboardMulti;
     bool clipboardLinewise = false;
+    VisualSelection visualSelection;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VimContext)
 };
