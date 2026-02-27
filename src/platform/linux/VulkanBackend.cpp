@@ -255,23 +255,71 @@ void VulkanBackend::resize (int newWidth, int newHeight, float newScale)
     height = newHeight;
     scale = newScale;
 
-    vkDeviceWaitIdle (device);
+    // Wait only for the in-flight frame (bounded) instead of stalling the entire device
+    static constexpr uint64_t kTimeoutNs = 1'000'000'000; // 1 second
+    vkWaitForFences (device, 1, &frameFence, VK_TRUE, kTimeoutNs);
     createSwapchain();
 }
 
 sk_sp<SkSurface> VulkanBackend::beginFrame()
 {
+    static constexpr uint64_t kTimeoutNs = 1'000'000'000; // 1 second
+    static constexpr int kMaxRetries = 3;
+
+    // Deferred swapchain recreation from previous frame
+    if (needsSwapchainRecreation)
+    {
+        needsSwapchainRecreation = false;
+        createSwapchain();
+    }
+
     // Acquire next swapchain image, using fence for CPU-side sync
-    VkResult result = vkAcquireNextImageKHR (device, swapchain, UINT64_MAX,
+    VkResult result = vkAcquireNextImageKHR (device, swapchain, kTimeoutNs,
                                               VK_NULL_HANDLE, frameFence,
                                               &currentImageIndex);
+
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
+        if (++swapchainRetryCount > kMaxRetries)
+        {
+            DBG ("VulkanBackend: swapchain retry limit reached, skipping frame");
+            swapchainRetryCount = 0;
+            return nullptr;
+        }
         createSwapchain();
         return nullptr;
     }
 
-    vkWaitForFences (device, 1, &frameFence, VK_TRUE, UINT64_MAX);
+    if (result == VK_TIMEOUT || result == VK_NOT_READY)
+    {
+        DBG ("VulkanBackend: acquire timed out, skipping frame");
+        return nullptr;
+    }
+
+    if (result == VK_ERROR_DEVICE_LOST || result == VK_ERROR_SURFACE_LOST_KHR)
+    {
+        DBG ("VulkanBackend: device/surface lost, skipping frame");
+        return nullptr;
+    }
+
+    if (result == VK_SUBOPTIMAL_KHR)
+        needsSwapchainRecreation = true;
+
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+    {
+        DBG ("VulkanBackend: acquire failed with error " << static_cast<int> (result));
+        return nullptr;
+    }
+
+    swapchainRetryCount = 0;
+
+    // Wait for the fence signalled by acquire (bounded)
+    VkResult fenceResult = vkWaitForFences (device, 1, &frameFence, VK_TRUE, kTimeoutNs);
+    if (fenceResult == VK_TIMEOUT)
+    {
+        DBG ("VulkanBackend: fence wait timed out, skipping frame");
+        return nullptr;
+    }
     vkResetFences (device, 1, &frameFence);
 
     // Get framebuffer dimensions
@@ -322,7 +370,7 @@ void VulkanBackend::endFrame (sk_sp<SkSurface>& surface)
 
     VkResult result = vkQueuePresentKHR (graphicsQueue, &presentInfo);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-        createSwapchain();
+        needsSwapchainRecreation = true;
 }
 
 sk_sp<SkSurface> VulkanBackend::createOffscreenSurface (int w, int h)

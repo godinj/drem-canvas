@@ -64,6 +64,10 @@ private:
     VkSemaphore renderFinishedSemaphore = VK_NULL_HANDLE;
     VkFence frameFence = VK_NULL_HANDLE;
 
+    // Swapchain recreation state
+    bool needsSwapchainRecreation = false;
+    int swapchainRetryCount = 0;
+
     // Device features (kept alive for Skia backend context)
     VkPhysicalDeviceFeatures deviceFeatures{};
 
