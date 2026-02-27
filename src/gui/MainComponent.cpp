@@ -130,6 +130,9 @@ MainComponent::MainComponent()
         }
     };
 
+    // Wire browser toggle (gp keybinding)
+    vimEngine->onToggleBrowser = [this] { toggleBrowser(); };
+
     // Wire plugin menu callbacks
     vimEngine->onPluginMenuMove = [this] (int delta)
     {

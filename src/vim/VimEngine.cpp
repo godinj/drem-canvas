@@ -125,6 +125,24 @@ bool VimEngine::handleInsertKey (const juce::KeyPress& key)
 
 bool VimEngine::handleNormalKey (const juce::KeyPress& key)
 {
+    // gp/gk — global g-prefix commands (work from any panel context)
+    if (pendingKey == 'g')
+    {
+        auto kc = key.getTextCharacter();
+        if (kc == 'p')
+        {
+            clearPending();
+            if (onToggleBrowser) onToggleBrowser();
+            return true;
+        }
+        if (kc == 'k')
+        {
+            clearPending();
+            enterKeyboardMode();
+            return true;
+        }
+    }
+
     // Dispatch to panel-specific handlers
     if (context.getPanel() == VimContext::PianoRoll)
         return handlePianoRollNormalKey (key);

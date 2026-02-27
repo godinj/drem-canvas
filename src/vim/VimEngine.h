@@ -72,6 +72,9 @@ public:
     // Piano roll open callback
     std::function<void (const juce::ValueTree&)> onOpenPianoRoll;
 
+    // Browser toggle callback (gp keybinding)
+    std::function<void()> onToggleBrowser;
+
     // Plugin menu callbacks (wired by MainComponent)
     std::function<void (int)> onPluginMenuMove;     // delta: +1 down, -1 up
     std::function<void (int)> onPluginMenuScroll;    // direction: +1 half-page down, -1 half-page up

@@ -105,6 +105,9 @@ void AppController::initialise()
                 proc->injectLiveMidi (msg);
     };
 
+    // Wire browser toggle (gp keybinding)
+    vimEngine->onToggleBrowser = [this]() { toggleBrowser(); };
+
     // Wire plugin menu callbacks
     vimEngine->onPluginMenuMove = [this] (int delta)
     {
@@ -756,7 +759,7 @@ void AppController::registerAllActions()
     });
 
     actionRegistry.registerAction ({
-        "mode.keyboard", "Toggle Virtual Keyboard", "Mode", "Ctrl+K",
+        "mode.keyboard", "Toggle Virtual Keyboard", "Mode", "gk / Ctrl+K",
         [this]()
         {
             if (vimEngine->getMode() == VimEngine::Keyboard)
@@ -768,7 +771,7 @@ void AppController::registerAllActions()
 
     // ─── View ────────────────────────────────────────────────
     actionRegistry.registerAction ({
-        "view.toggle_browser", "Toggle Browser", "View", "",
+        "view.toggle_browser", "Toggle Browser", "View", "gp",
         [this]() { toggleBrowser(); }, {}
     });
 
