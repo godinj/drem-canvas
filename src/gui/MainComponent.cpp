@@ -608,6 +608,18 @@ void MainComponent::syncMidiClipFromModel (int trackIndex)
 
         MidiClip clip (clipState);
         int64_t clipStartSample = clip.getStartPosition();
+        int64_t clipLength = clip.getLength();
+        int64_t trimStart = static_cast<int64_t> (
+            static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0)));
+
+        // Convert trimStart to beats for filtering
+        double trimStartBeats = (sr > 0.0 && currentTempo > 0.0)
+            ? (static_cast<double> (trimStart) / sr) * currentTempo / 60.0
+            : 0.0;
+        double clipLengthBeats = (sr > 0.0 && currentTempo > 0.0)
+            ? (static_cast<double> (clipLength) / sr) * currentTempo / 60.0
+            : 1e12;
+
         auto seq = clip.getMidiSequence();
 
         // Match note-on/off pairs and convert to absolute sample positions
@@ -624,23 +636,30 @@ void MainComponent::syncMidiClipFromModel (int trackIndex)
             if (snapshot.numEvents >= MidiClipProcessor::MidiTrackSnapshot::maxEvents)
                 break;
 
-            // Timestamps are in beats
+            // Timestamps are in beats (relative to original clip start)
             double onBeat = msg.getTimeStamp();
-            int64_t onSample = clipStartSample
-                + static_cast<int64_t> (onBeat * 60.0 / currentTempo * sr);
 
-            int64_t offSample = onSample;
+            // Skip notes outside the trimmed region
+            double offBeat = onBeat + 0.25;
             if (event->noteOffObject != nullptr)
-            {
-                double offBeat = event->noteOffObject->message.getTimeStamp();
-                offSample = clipStartSample
-                    + static_cast<int64_t> (offBeat * 60.0 / currentTempo * sr);
-            }
-            else
-            {
-                // Default note length: 1/4 beat
-                offSample = onSample + static_cast<int64_t> (0.25 * 60.0 / currentTempo * sr);
-            }
+                offBeat = event->noteOffObject->message.getTimeStamp();
+
+            if (offBeat <= trimStartBeats || onBeat >= trimStartBeats + clipLengthBeats)
+                continue;
+
+            // Offset by trimStart: beat position relative to the trimmed clip start
+            double adjustedOnBeat = onBeat - trimStartBeats;
+            double adjustedOffBeat = offBeat - trimStartBeats;
+
+            // Clamp to clip boundaries
+            if (adjustedOnBeat < 0.0) adjustedOnBeat = 0.0;
+            if (adjustedOffBeat > clipLengthBeats) adjustedOffBeat = clipLengthBeats;
+
+            int64_t onSample = clipStartSample
+                + static_cast<int64_t> (adjustedOnBeat * 60.0 / currentTempo * sr);
+
+            int64_t offSample = clipStartSample
+                + static_cast<int64_t> (adjustedOffBeat * 60.0 / currentTempo * sr);
 
             auto& evt = snapshot.events[snapshot.numEvents++];
             evt.noteNumber = msg.getNoteNumber();
@@ -661,6 +680,36 @@ void MainComponent::syncMidiClipFromModel (int trackIndex)
                });
 
     midiProc->updateSnapshot (snapshot);
+}
+
+void MainComponent::syncAudioClipFromModel (int trackIndex)
+{
+    if (trackIndex < 0 || trackIndex >= trackProcessors.size())
+        return;
+
+    auto* proc = trackProcessors[trackIndex];
+    if (proc == nullptr)
+        return;
+
+    auto trackState = project.getTrack (trackIndex);
+    Track track (trackState);
+
+    // Find the first audio clip on this track
+    bool hasAudioClip = false;
+    for (int c = 0; c < track.getNumClips(); ++c)
+    {
+        auto clipState = track.getClip (c);
+        if (clipState.hasType (IDs::AUDIO_CLIP))
+        {
+            AudioClip clip (clipState);
+            proc->loadFile (clip.getSourceFile());
+            hasAudioClip = true;
+            break;
+        }
+    }
+
+    if (! hasAudioClip)
+        proc->clearFile();
 }
 
 void MainComponent::saveSession()
@@ -777,7 +826,7 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
         tempoMap.setTimeSig (project.getTimeSigNumerator(), project.getTimeSigDenominator());
     }
 
-    // MIDI clip property changed (e.g. midiData, startPosition, length)
+    // MIDI clip property changed (e.g. midiData, startPosition, length, trimStart)
     if (tree.hasType (IDs::MIDI_CLIP))
     {
         auto trackState = tree.getParent();
@@ -787,6 +836,19 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
             int trackIndex = tracksNode.indexOf (trackState);
             if (trackIndex >= 0)
                 syncMidiClipFromModel (trackIndex);
+        }
+    }
+
+    // Audio clip property changed (e.g. startPosition, length, trimStart)
+    if (tree.hasType (IDs::AUDIO_CLIP))
+    {
+        auto trackState = tree.getParent();
+        if (trackState.hasType (IDs::TRACK))
+        {
+            auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+            int trackIndex = tracksNode.indexOf (trackState);
+            if (trackIndex >= 0)
+                syncAudioClipFromModel (trackIndex);
         }
     }
 
@@ -812,6 +874,15 @@ void MainComponent::valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTre
             syncMidiClipFromModel (trackIndex);
     }
 
+    // Audio clip added to a track
+    if (parent.hasType (IDs::TRACK) && child.hasType (IDs::AUDIO_CLIP))
+    {
+        auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+        int trackIndex = tracksNode.indexOf (parent);
+        if (trackIndex >= 0)
+            syncAudioClipFromModel (trackIndex);
+    }
+
     if (parent.hasType (IDs::STEP_SEQUENCER) || parent.hasType (IDs::STEP_PATTERN)
         || parent.hasType (IDs::STEP_ROW))
         syncSequencerFromModel();
@@ -829,6 +900,15 @@ void MainComponent::valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueT
         int trackIndex = tracksNode.indexOf (parent);
         if (trackIndex >= 0)
             syncMidiClipFromModel (trackIndex);
+    }
+
+    // Audio clip removed from a track
+    if (parent.hasType (IDs::TRACK) && child.hasType (IDs::AUDIO_CLIP))
+    {
+        auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+        int trackIndex = tracksNode.indexOf (parent);
+        if (trackIndex >= 0)
+            syncAudioClipFromModel (trackIndex);
     }
 
     if (parent.hasType (IDs::STEP_SEQUENCER) || parent.hasType (IDs::STEP_PATTERN)

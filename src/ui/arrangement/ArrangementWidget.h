@@ -43,7 +43,7 @@ public:
     // ValueTree::Listener
     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
     void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override {}
+    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
 
 private:
     void updateSelectionVisuals();
@@ -63,6 +63,7 @@ private:
 
     double pixelsPerSecond = 100.0;
     bool activeContext = true;
+    bool needsRebuild = false;
     static constexpr float rulerHeight = 30.0f;
     static constexpr float trackHeight = 100.0f;
 };

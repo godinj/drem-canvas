@@ -18,11 +18,13 @@ public:
     void setWaveformCache (gfx::WaveformCache* cache) { waveformCache = cache; repaint(); }
     void setPixelsPerSecond (double pps) { pixelsPerSecond = pps; repaint(); }
     void setSampleRate (double sr) { sampleRate = sr; repaint(); }
+    void setTrimStartSamples (int64_t samples) { trimStartSamples = samples; repaint(); }
 
 private:
     gfx::WaveformCache* waveformCache = nullptr;
     double pixelsPerSecond = 100.0;
     double sampleRate = 44100.0;
+    int64_t trimStartSamples = 0;
 };
 
 } // namespace ui

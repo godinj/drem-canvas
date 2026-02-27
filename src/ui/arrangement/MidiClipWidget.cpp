@@ -49,8 +49,12 @@ void MidiClipWidget::paint (gfx::Canvas& canvas)
                 continue;
 
             int noteNum = static_cast<int> (note.getProperty ("noteNumber", 60));
-            auto startBeat = static_cast<double> (note.getProperty ("startBeat", 0.0));
+            auto startBeat = static_cast<double> (note.getProperty ("startBeat", 0.0)) - trimOffsetBeats;
             auto lengthBeats = static_cast<double> (note.getProperty ("lengthBeats", 0.25));
+
+            // Skip notes entirely before or after visible range
+            if (startBeat + lengthBeats <= 0.0 || startBeat >= clipLengthBeats)
+                continue;
 
             float noteY = h - (static_cast<float> (noteNum) / 127.0f) * h;
             float noteX = static_cast<float> (startBeat / clipLengthBeats) * w;
@@ -76,13 +80,17 @@ void MidiClipWidget::paint (gfx::Canvas& canvas)
                 continue;
 
             int noteNum = msg.getNoteNumber();
-            double startBeat = msg.getTimeStamp();
+            double startBeat = msg.getTimeStamp() - trimOffsetBeats;
             double lengthBeats = 0.25;
 
             if (event->noteOffObject != nullptr)
-                lengthBeats = event->noteOffObject->message.getTimeStamp() - startBeat;
+                lengthBeats = event->noteOffObject->message.getTimeStamp() - msg.getTimeStamp();
             if (lengthBeats <= 0.0)
                 lengthBeats = 0.25;
+
+            // Skip notes entirely before or after visible range
+            if (startBeat + lengthBeats <= 0.0 || startBeat >= clipLengthBeats)
+                continue;
 
             float noteY = h - (static_cast<float> (noteNum) / 127.0f) * h;
             float noteX = static_cast<float> (startBeat / clipLengthBeats) * w;

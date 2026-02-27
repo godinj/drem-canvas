@@ -316,6 +316,8 @@ void TrackLaneWidget::rebuildClipViews()
 
         std::unique_ptr<gfx::Widget> widget;
 
+        auto trimStart = static_cast<int64_t> (static_cast<juce::int64> (child.getProperty (IDs::trimStart, 0)));
+
         if (isAudio)
         {
             // Create waveform cache and load audio data
@@ -332,6 +334,7 @@ void TrackLaneWidget::rebuildClipViews()
             waveformWidget->setWaveformCache (cache.get());
             waveformWidget->setPixelsPerSecond (pixelsPerSecond);
             waveformWidget->setSampleRate (sampleRate);
+            waveformWidget->setTrimStartSamples (trimStart);
             waveformCaches.push_back (std::move (cache));
             widget = std::move (waveformWidget);
         }
@@ -342,6 +345,12 @@ void TrackLaneWidget::rebuildClipViews()
             double clipSeconds = static_cast<double> (clipLength) / sampleRate;
             double clipBeats = clipSeconds * tempo / 60.0;
             midiWidget->setClipLengthInBeats (clipBeats);
+
+            // Convert trim start from samples to beats for MIDI rendering offset
+            double trimSeconds = static_cast<double> (trimStart) / sampleRate;
+            double trimBeats = trimSeconds * tempo / 60.0;
+            midiWidget->setTrimOffsetBeats (trimBeats);
+
             widget = std::move (midiWidget);
         }
 

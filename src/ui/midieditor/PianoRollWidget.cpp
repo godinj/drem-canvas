@@ -45,7 +45,7 @@ PianoRollWidget::PianoRollWidget (Project& p, TransportController& t)
         if (! clipState.isValid())
             return;
 
-        double snappedBeat = snapBeat (beat);
+        double snappedBeat = snapBeat (beat) + trimOffsetBeats;
         double defaultLength = 1.0 / gridDivision;
 
         ScopedTransaction txn (project.getUndoSystem(), "Add Note");
@@ -58,6 +58,9 @@ PianoRollWidget::PianoRollWidget (Project& p, TransportController& t)
         if (! clipState.isValid())
             return;
 
+        // Convert display beat back to stored beat
+        double storedBeat = beat + trimOffsetBeats;
+
         // Find note at this position
         for (int i = 0; i < clipState.getNumChildren(); ++i)
         {
@@ -69,7 +72,7 @@ PianoRollWidget::PianoRollWidget (Project& p, TransportController& t)
             double sb = static_cast<double> (child.getProperty ("startBeat", 0.0));
             double lb = static_cast<double> (child.getProperty ("lengthBeats", 0.25));
 
-            if (nn == noteNumber && beat >= sb && beat < sb + lb)
+            if (nn == noteNumber && storedBeat >= sb && storedBeat < sb + lb)
             {
                 ScopedTransaction txn (project.getUndoSystem(), "Erase Note");
                 MidiClip clip (clipState);
@@ -228,13 +231,21 @@ void PianoRollWidget::loadClip (const juce::ValueTree& state)
         // Compute beat offset so ruler bar numbers match the arrangement
         int64_t clipStart = static_cast<int64_t> (
             static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+        int64_t trimStart = static_cast<int64_t> (
+            static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0)));
         double sr = project.getSampleRate();
         double tempo = project.getTempo();
+
+        trimOffsetBeats = (sr > 0.0 && tempo > 0.0)
+            ? (static_cast<double> (trimStart) / sr) * tempo / 60.0
+            : 0.0;
+
         double clipStartBeats = (static_cast<double> (clipStart) / sr) * tempo / 60.0;
-        ruler.setBeatOffset (clipStartBeats);
+        ruler.setBeatOffset (clipStartBeats + trimOffsetBeats);
     }
     else
     {
+        trimOffsetBeats = 0.0;
         ruler.setBeatOffset (0.0);
     }
 
@@ -250,6 +261,15 @@ void PianoRollWidget::rebuildNotes()
     if (! clipState.isValid())
         return;
 
+    // Compute visible beat range from clip length
+    double sr = project.getSampleRate();
+    double tempo = project.getTempo();
+    int64_t clipLength = static_cast<int64_t> (
+        static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+    double clipLengthBeats = (sr > 0.0 && tempo > 0.0)
+        ? (static_cast<double> (clipLength) / sr) * tempo / 60.0
+        : 1e12;
+
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
         auto note = clipState.getChild (i);
@@ -257,9 +277,20 @@ void PianoRollWidget::rebuildNotes()
             continue;
 
         int noteNum = static_cast<int> (note.getProperty ("noteNumber", 60));
-        auto startBeat = static_cast<double> (note.getProperty ("startBeat", 0.0));
+        auto startBeat = static_cast<double> (note.getProperty ("startBeat", 0.0)) - trimOffsetBeats;
         auto lengthBeats = static_cast<double> (note.getProperty ("lengthBeats", 0.25));
         int velocity = static_cast<int> (note.getProperty ("velocity", 100));
+
+        // Skip notes outside the visible clip region
+        if (startBeat + lengthBeats <= 0.0 || startBeat >= clipLengthBeats)
+            continue;
+
+        // Clamp note to visible region
+        if (startBeat < 0.0)
+        {
+            lengthBeats += startBeat;
+            startBeat = 0.0;
+        }
 
         float x = noteGrid.beatsToX (startBeat);
         float y = noteGrid.noteToY (noteNum);
@@ -518,8 +549,8 @@ void PianoRollWidget::pasteNotes()
         minBeat = std::min (minBeat, sb);
     }
 
-    // Paste at current cursor position
-    double pasteOffset = static_cast<double> (prBeatCol) / gridDivision - minBeat;
+    // Paste at current cursor position (convert display beat back to stored beat)
+    double pasteOffset = static_cast<double> (prBeatCol) / gridDivision + trimOffsetBeats - minBeat;
 
     selectedNoteIndices.clear();
 

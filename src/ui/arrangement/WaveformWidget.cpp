@@ -35,13 +35,15 @@ void WaveformWidget::paint (gfx::Canvas& canvas)
     std::vector<Canvas::WaveformSample> samples (static_cast<size_t> (numPixels));
 
     int64_t totalSamples = waveformCache->getTotalSamples();
-    double samplesPerPixel = (totalSamples > 0) ? static_cast<double> (totalSamples) / static_cast<double> (numPixels) : 1.0;
+    int64_t visibleSamples = totalSamples - trimStartSamples;
+    if (visibleSamples <= 0) return;
+    double samplesPerPixel = static_cast<double> (visibleSamples) / static_cast<double> (numPixels);
     int spb = lod->samplesPerBucket;
 
     for (int px = 0; px < numPixels; ++px)
     {
-        int64_t sampleStart = static_cast<int64_t> (px * samplesPerPixel);
-        int64_t sampleEnd = static_cast<int64_t> ((px + 1) * samplesPerPixel);
+        int64_t sampleStart = trimStartSamples + static_cast<int64_t> (px * samplesPerPixel);
+        int64_t sampleEnd = trimStartSamples + static_cast<int64_t> ((px + 1) * samplesPerPixel);
         int bucketStart = static_cast<int> (sampleStart / spb);
         int bucketEnd = static_cast<int> (sampleEnd / spb);
 

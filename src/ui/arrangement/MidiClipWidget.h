@@ -17,6 +17,7 @@ public:
     void paint (gfx::Canvas& canvas) override;
 
     void setClipLengthInBeats (double beats) { clipLengthBeats = beats; repaint(); }
+    void setTrimOffsetBeats (double beats) { trimOffsetBeats = beats; repaint(); }
 
     // ValueTree::Listener — repaint when notes or midiData change
     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override { repaint(); }
@@ -26,6 +27,7 @@ public:
 private:
     juce::ValueTree clipState;
     double clipLengthBeats = 4.0;
+    double trimOffsetBeats = 0.0;
 };
 
 } // namespace ui

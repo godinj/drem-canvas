@@ -99,6 +99,13 @@ void ArrangementWidget::resized()
 
 void ArrangementWidget::animationTick (double /*timestampMs*/)
 {
+    // Deferred rebuild — coalesces multiple ValueTree changes into a single rebuild
+    if (needsRebuild)
+    {
+        needsRebuild = false;
+        rebuildTrackLanes();
+    }
+
     // Sync scroll offset to time ruler
     timeRuler.setScrollOffset (static_cast<double> (scrollView.getScrollOffsetX()));
 
@@ -215,12 +222,17 @@ void ArrangementWidget::vimContextChanged()
 
 void ArrangementWidget::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&)
 {
-    rebuildTrackLanes();
+    needsRebuild = true;
 }
 
 void ArrangementWidget::valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int)
 {
-    rebuildTrackLanes();
+    needsRebuild = true;
+}
+
+void ArrangementWidget::valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&)
+{
+    needsRebuild = true;
 }
 
 } // namespace ui

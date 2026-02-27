@@ -141,6 +141,9 @@ private:
     int prBeatCol = 0;
     int prNoteRow = 60;
 
+    // Trim offset (for split clips)
+    double trimOffsetBeats = 0.0;
+
     // Velocity / CC lane state
     bool velocityLaneVisible = false;
     bool ccLaneVisible = false;

@@ -4,7 +4,6 @@
 #include "utils/UndoSystem.h"
 #include <vector>
 #include <algorithm>
-
 namespace dc
 {
 
@@ -309,10 +308,18 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     if (keyChar == 's') { splitRegionAtPlayhead(); return true; }
 
     // Undo/redo
-    if (keyChar == 'u') { project.getUndoSystem().undo(); return true; }
+    if (keyChar == 'u' || (modifiers.isCtrlDown() && keyChar == 'z'))
+    {
+        project.getUndoSystem().undo();
+        updateClipIndexFromGridCursor();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
     if (keyChar == 'r' && modifiers.isCtrlDown())
     {
         project.getUndoSystem().redo();
+        updateClipIndexFromGridCursor();
+        listeners.call (&Listener::vimContextChanged);
         return true;
     }
 
@@ -541,9 +548,68 @@ void VimEngine::yankSelectedRegions()
     }
 }
 
+// Carve a gap [gapStart, gapEnd) in existing clips on the given track,
+// splitting any clip that overlaps those boundaries.
+static void carveGap (Track& track, int64_t gapStart, int64_t gapEnd, juce::UndoManager& um)
+{
+    juce::Array<juce::ValueTree> newClips;
+
+    for (int c = track.getNumClips() - 1; c >= 0; --c)
+    {
+        auto clip = track.getClip (c);
+        auto clipStart  = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+        auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+        auto clipEnd    = clipStart + clipLength;
+
+        // Skip non-overlapping clips
+        if (clipStart >= gapEnd || clipEnd <= gapStart)
+            continue;
+
+        bool keepLeft  = clipStart < gapStart;
+        bool keepRight = clipEnd > gapEnd;
+
+        if (! keepLeft && ! keepRight)
+        {
+            track.removeClip (c, &um);
+        }
+        else if (keepLeft && keepRight)
+        {
+            auto origTrimStart = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::trimStart, 0)));
+            int64_t leftLength = gapStart - clipStart;
+            clip.setProperty (IDs::length, static_cast<juce::int64> (leftLength), &um);
+
+            auto rightClip = clip.createCopy();
+            int64_t rightOffset = gapEnd - clipStart;
+            rightClip.setProperty (IDs::startPosition, static_cast<juce::int64> (gapEnd), nullptr);
+            rightClip.setProperty (IDs::length, static_cast<juce::int64> (clipEnd - gapEnd), nullptr);
+            rightClip.setProperty (IDs::trimStart, static_cast<juce::int64> (origTrimStart + rightOffset), nullptr);
+            newClips.add (rightClip);
+        }
+        else if (keepLeft)
+        {
+            int64_t leftLength = gapStart - clipStart;
+            clip.setProperty (IDs::length, static_cast<juce::int64> (leftLength), &um);
+        }
+        else // keepRight
+        {
+            auto origTrimStart = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::trimStart, 0)));
+            int64_t rightOffset = gapEnd - clipStart;
+            clip.setProperty (IDs::startPosition, static_cast<juce::int64> (gapEnd), &um);
+            clip.setProperty (IDs::length, static_cast<juce::int64> (clipEnd - gapEnd), &um);
+            clip.setProperty (IDs::trimStart, static_cast<juce::int64> (origTrimStart + rightOffset), &um);
+        }
+    }
+
+    for (auto& nc : newClips)
+        track.getState().appendChild (nc, &um);
+}
+
 void VimEngine::pasteAfterPlayhead()
 {
-    if (! context.hasClipboardContent())
+    auto& multi = context.getClipboardMulti();
+    bool hasMulti = ! multi.isEmpty();
+
+    if (! hasMulti && ! context.hasClipboardContent())
         return;
 
     int trackIdx = arrangement.getSelectedTrackIndex();
@@ -553,19 +619,61 @@ void VimEngine::pasteAfterPlayhead()
     ScopedTransaction txn (project.getUndoSystem(), "Paste Clip");
     auto& um = project.getUndoManager();
 
-    auto clipData = context.getClipboard().createCopy();
-    clipData.setProperty (IDs::startPosition,
-                          static_cast<juce::int64> (transport.getPositionInSamples()),
-                          &um);
-
+    int64_t pastePos = context.getGridCursorPosition();
     Track track = arrangement.getTrack (trackIdx);
-    track.getState().appendChild (clipData, &um);
+
+    if (hasMulti)
+    {
+        // Find the earliest start position in the clipboard to compute offsets
+        int64_t basePos = std::numeric_limits<int64_t>::max();
+        int64_t totalEnd = 0;
+        for (auto& c : multi)
+        {
+            auto s = static_cast<int64_t> (static_cast<juce::int64> (c.getProperty (IDs::startPosition, 0)));
+            auto l = static_cast<int64_t> (static_cast<juce::int64> (c.getProperty (IDs::length, 0)));
+            basePos = std::min (basePos, s);
+            totalEnd = std::max (totalEnd, s + l);
+        }
+
+        int64_t totalSpan = totalEnd - basePos;
+
+        // Carve a gap in existing clips to make room for the pasted material
+        carveGap (track, pastePos, pastePos + totalSpan, um);
+
+        for (auto& c : multi)
+        {
+            auto copy = c.createCopy();
+            auto origStart = static_cast<int64_t> (static_cast<juce::int64> (copy.getProperty (IDs::startPosition, 0)));
+            int64_t offset = origStart - basePos;
+            int64_t finalPos = pastePos + offset;
+            copy.setProperty (IDs::startPosition,
+                              static_cast<juce::int64> (finalPos), nullptr);
+            track.getState().appendChild (copy, &um);
+        }
+    }
+    else
+    {
+        auto clipData = context.getClipboard().createCopy();
+        auto pasteLen = static_cast<int64_t> (static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
+
+        // Carve a gap in existing clips to make room
+        carveGap (track, pastePos, pastePos + pasteLen, um);
+
+        clipData.setProperty (IDs::startPosition,
+                              static_cast<juce::int64> (pastePos), nullptr);
+        track.getState().appendChild (clipData, &um);
+    }
+
+    updateClipIndexFromGridCursor();
     listeners.call (&Listener::vimContextChanged);
 }
 
 void VimEngine::pasteBeforePlayhead()
 {
-    if (! context.hasClipboardContent())
+    auto& multi = context.getClipboardMulti();
+    bool hasMulti = ! multi.isEmpty();
+
+    if (! hasMulti && ! context.hasClipboardContent())
         return;
 
     int trackIdx = arrangement.getSelectedTrackIndex();
@@ -575,16 +683,52 @@ void VimEngine::pasteBeforePlayhead()
     ScopedTransaction txn (project.getUndoSystem(), "Paste Clip");
     auto& um = project.getUndoManager();
 
-    auto clipData = context.getClipboard().createCopy();
-    auto length = static_cast<int64_t> (static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
-    auto pastePos = transport.getPositionInSamples() - length;
-    if (pastePos < 0) pastePos = 0;
-
-    clipData.setProperty (IDs::startPosition,
-                          static_cast<juce::int64> (pastePos), &um);
-
     Track track = arrangement.getTrack (trackIdx);
-    track.getState().appendChild (clipData, &um);
+
+    if (hasMulti)
+    {
+        // Find earliest start and latest end to compute total span
+        int64_t basePos = std::numeric_limits<int64_t>::max();
+        int64_t maxEnd = 0;
+        for (auto& c : multi)
+        {
+            auto s = static_cast<int64_t> (static_cast<juce::int64> (c.getProperty (IDs::startPosition, 0)));
+            auto l = static_cast<int64_t> (static_cast<juce::int64> (c.getProperty (IDs::length, 0)));
+            basePos = std::min (basePos, s);
+            maxEnd  = std::max (maxEnd, s + l);
+        }
+
+        int64_t totalSpan = maxEnd - basePos;
+        int64_t pastePos = context.getGridCursorPosition() - totalSpan;
+        if (pastePos < 0) pastePos = 0;
+
+        carveGap (track, pastePos, pastePos + totalSpan, um);
+
+        for (auto& c : multi)
+        {
+            auto copy = c.createCopy();
+            auto origStart = static_cast<int64_t> (static_cast<juce::int64> (copy.getProperty (IDs::startPosition, 0)));
+            int64_t offset = origStart - basePos;
+            copy.setProperty (IDs::startPosition,
+                              static_cast<juce::int64> (pastePos + offset), nullptr);
+            track.getState().appendChild (copy, &um);
+        }
+    }
+    else
+    {
+        auto clipData = context.getClipboard().createCopy();
+        auto pasteLen = static_cast<int64_t> (static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
+        auto pastePos = context.getGridCursorPosition() - pasteLen;
+        if (pastePos < 0) pastePos = 0;
+
+        carveGap (track, pastePos, pastePos + pasteLen, um);
+
+        clipData.setProperty (IDs::startPosition,
+                              static_cast<juce::int64> (pastePos), nullptr);
+        track.getState().appendChild (clipData, &um);
+    }
+
+    updateClipIndexFromGridCursor();
     listeners.call (&Listener::vimContextChanged);
 }
 
@@ -962,10 +1106,18 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     }
 
     // Undo/redo
-    if (keyChar == 'u') { project.getUndoSystem().undo(); return true; }
+    if (keyChar == 'u' || (modifiers.isCtrlDown() && keyChar == 'z'))
+    {
+        project.getUndoSystem().undo();
+        updateClipIndexFromGridCursor();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
     if (keyChar == 'r' && modifiers.isCtrlDown())
     {
         project.getUndoSystem().redo();
+        updateClipIndexFromGridCursor();
+        listeners.call (&Listener::vimContextChanged);
         return true;
     }
 
@@ -1939,18 +2091,74 @@ void VimEngine::executeGridVisualDelete()
 
         Track track = arrangement.getTrack (t);
 
-        // Remove clips overlapping [minPos, maxPos) — iterate backwards
+        // Collect new clips to add (from splits) after iterating
+        juce::Array<juce::ValueTree> newClips;
+
+        // Process clips overlapping [minPos, maxPos) — iterate backwards for safe removal
         for (int c = track.getNumClips() - 1; c >= 0; --c)
         {
             auto clip = track.getClip (c);
-            auto start = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-            auto length = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+            auto clipStart  = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+            auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+            auto clipEnd    = clipStart + clipLength;
 
-            if (start < maxPos && start + length > minPos)
+            // Skip non-overlapping clips
+            if (clipStart >= maxPos || clipEnd <= minPos)
+                continue;
+
+            bool keepLeft  = clipStart < minPos;
+            bool keepRight = clipEnd > maxPos;
+
+            if (! keepLeft && ! keepRight)
+            {
+                // Fully inside selection — remove entirely
                 track.removeClip (c, &um);
+            }
+            else if (keepLeft && keepRight)
+            {
+                // Selection is in the middle — split into left and right parts
+                auto origTrimStart = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::trimStart, 0)));
+
+                // Truncate original clip to be the left part [clipStart, minPos)
+                int64_t leftLength = minPos - clipStart;
+                clip.setProperty (IDs::length, static_cast<juce::int64> (leftLength), &um);
+
+                // Create right part [maxPos, clipEnd)
+                // Use nullptr for properties on detached tree — appendChild with &um
+                // handles undo of the whole subtree addition in one transaction
+                auto rightClip = clip.createCopy();
+                int64_t rightOffset = maxPos - clipStart;
+                rightClip.setProperty (IDs::startPosition, static_cast<juce::int64> (maxPos), nullptr);
+                rightClip.setProperty (IDs::length, static_cast<juce::int64> (clipEnd - maxPos), nullptr);
+                rightClip.setProperty (IDs::trimStart, static_cast<juce::int64> (origTrimStart + rightOffset), nullptr);
+                newClips.add (rightClip);
+            }
+            else if (keepLeft)
+            {
+                // Selection covers the right side — truncate to [clipStart, minPos)
+                int64_t leftLength = minPos - clipStart;
+                clip.setProperty (IDs::length, static_cast<juce::int64> (leftLength), &um);
+            }
+            else // keepRight
+            {
+                // Selection covers the left side — shrink to [maxPos, clipEnd)
+                auto origTrimStart = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::trimStart, 0)));
+                int64_t rightOffset = maxPos - clipStart;
+
+                clip.setProperty (IDs::startPosition, static_cast<juce::int64> (maxPos), &um);
+                clip.setProperty (IDs::length, static_cast<juce::int64> (clipEnd - maxPos), &um);
+                clip.setProperty (IDs::trimStart, static_cast<juce::int64> (origTrimStart + rightOffset), &um);
+            }
         }
+
+        // Append any new clips created from splits
+        for (auto& nc : newClips)
+            track.getState().appendChild (nc, &um);
     }
 
+    // Move cursor to start of deleted range (like vim's d motion)
+    context.setGridCursorPosition (minPos);
+    arrangement.selectTrack (minTrack);
     updateClipIndexFromGridCursor();
     listeners.call (&Listener::vimContextChanged);
 }
@@ -1981,11 +2189,30 @@ void VimEngine::executeGridVisualYank()
         for (int c = 0; c < track.getNumClips(); ++c)
         {
             auto clip = track.getClip (c);
-            auto start = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-            auto length = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+            auto clipStart  = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
+            auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+            auto clipEnd    = clipStart + clipLength;
 
-            if (start < maxPos && start + length > minPos)
-                clips.add (clip);
+            if (clipStart >= maxPos || clipEnd <= minPos)
+                continue;
+
+            // Trim the yanked copy to only the portion within [minPos, maxPos)
+            auto trimmedCopy = clip.createCopy();
+            auto origTrimStart = static_cast<int64_t> (static_cast<juce::int64> (
+                trimmedCopy.getProperty (IDs::trimStart, 0)));
+
+            int64_t newStart  = std::max (clipStart, minPos);
+            int64_t newEnd    = std::min (clipEnd, maxPos);
+            int64_t trimDelta = newStart - clipStart;
+
+            trimmedCopy.setProperty (IDs::startPosition,
+                                     static_cast<juce::int64> (newStart), nullptr);
+            trimmedCopy.setProperty (IDs::length,
+                                     static_cast<juce::int64> (newEnd - newStart), nullptr);
+            trimmedCopy.setProperty (IDs::trimStart,
+                                     static_cast<juce::int64> (origTrimStart + trimDelta), nullptr);
+
+            clips.add (trimmedCopy);
         }
     }
 
@@ -2309,10 +2536,18 @@ bool VimEngine::handleSequencerNormalKey (const juce::KeyPress& key)
     }
 
     // Undo/redo
-    if (keyChar == 'u') { project.getUndoSystem().undo(); return true; }
+    if (keyChar == 'u' || (modifiers.isCtrlDown() && keyChar == 'z'))
+    {
+        project.getUndoSystem().undo();
+        updateClipIndexFromGridCursor();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
     if (keyChar == 'r' && modifiers.isCtrlDown())
     {
         project.getUndoSystem().redo();
+        updateClipIndexFromGridCursor();
+        listeners.call (&Listener::vimContextChanged);
         return true;
     }
 

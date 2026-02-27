@@ -46,6 +46,7 @@ private:
     void syncTrackProcessorsFromModel();
     void syncSequencerFromModel();
     void syncMidiClipFromModel (int trackIndex);
+    void syncAudioClipFromModel (int trackIndex);
     void saveSession();
     void loadSession();
 
