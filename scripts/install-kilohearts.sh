@@ -22,6 +22,14 @@ YABRIDGE_URL="https://github.com/robbert-vdh/yabridge/releases/download/${YABRID
 KILOHEARTS_INSTALLER_URL="https://kilohearts.com/data/install/_/win"
 KILOHEARTS_INSTALLER="$HOME/Downloads/KiloheartsInstaller.exe"
 
+# Wine >= 9.22 breaks mouse coordinates in yabridge-bridged plugin UIs.
+# Wine MR !6569 refactored ConfigureNotify handling; the plugin window's screen
+# position is ignored, so Win32 ScreenToClient() produces offset coordinates.
+# yabridge issue: https://github.com/robbert-vdh/yabridge/issues/382
+# yabridge fix: PR #405 (merged into new-wine10-embedding branch, not yet released)
+# Pin to 9.21 until a yabridge release includes the fix.
+WINE_VERSION="9.21"
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 info()  { printf '\033[1;34m[INFO]\033[0m  %s\n' "$*"; }
@@ -74,11 +82,26 @@ install_wine() {
     if command_exists wine; then
         local wine_ver
         wine_ver="$(wine --version 2>/dev/null || echo 'unknown')"
-        ok "Wine already installed: $wine_ver"
-        return 0
-    fi
 
-    info "Installing Wine Staging..."
+        # Check if installed version is >= 9.22 (broken mouse coordinates)
+        local wine_major wine_minor
+        wine_major="$(echo "$wine_ver" | sed -n 's/^wine-\([0-9]*\)\..*/\1/p')"
+        wine_minor="$(echo "$wine_ver" | sed -n 's/^wine-[0-9]*\.\([0-9]*\).*/\1/p')"
+        if [ -n "$wine_major" ] && [ -n "$wine_minor" ]; then
+            if [ "$wine_major" -gt 9 ] || { [ "$wine_major" -eq 9 ] && [ "$wine_minor" -ge 22 ]; }; then
+                warn "Wine $wine_ver is installed but >= 9.22 (broken mouse coordinates in plugin UIs)"
+                warn "Downgrading to Wine ${WINE_VERSION}..."
+            else
+                ok "Wine already installed: $wine_ver"
+                return 0
+            fi
+        else
+            ok "Wine already installed: $wine_ver"
+            return 0
+        fi
+    else
+        info "Installing Wine Staging ${WINE_VERSION}..."
+    fi
 
     if is_debian_family; then
         sudo dpkg --add-architecture i386
@@ -114,17 +137,29 @@ WINEEOF
         fi
 
         sudo apt update
-        sudo apt install -y --install-recommends winehq-staging
+
+        # Pin to exact version to avoid the Wine >= 9.22 mouse coordinate regression
+        local ver_suffix="~${codename}-1"
+        sudo apt install -y --install-recommends --allow-downgrades \
+            "winehq-staging=${WINE_VERSION}${ver_suffix}" \
+            "wine-staging=${WINE_VERSION}${ver_suffix}" \
+            "wine-staging-amd64=${WINE_VERSION}${ver_suffix}" \
+            "wine-staging-i386:i386=${WINE_VERSION}${ver_suffix}"
+
+        # Hold packages so apt upgrade doesn't pull in a broken version
+        sudo apt-mark hold winehq-staging wine-staging wine-staging-amd64 wine-staging-i386
 
     elif is_fedora_family; then
-        sudo dnf install -y winehq-staging
+        sudo dnf install -y "winehq-staging-${WINE_VERSION}"
 
     elif is_arch_family; then
-        # On Arch, wine-staging is in the repos
+        # On Arch, wine-staging is in the repos — version pinning is harder;
+        # user should use downgrade utility or hold the package manually
+        warn "Arch: install wine-staging <= 9.21 manually (wine >= 9.22 has mouse coordinate bugs)"
         sudo pacman -S --noconfirm --needed wine-staging winetricks
 
     else
-        fail "Unsupported distro: $(detect_distro). Install Wine Staging manually, then re-run this script."
+        fail "Unsupported distro: $(detect_distro). Install Wine Staging ${WINE_VERSION} manually, then re-run this script."
     fi
 
     ok "Wine Staging installed: $(wine --version)"

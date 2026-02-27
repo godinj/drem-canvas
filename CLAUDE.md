@@ -62,6 +62,36 @@ sudo dnf install cmake ninja-build python3 libpng-devel \
     vulkan-devel glfw-devel fontconfig-devel alsa-lib-devel
 ```
 
+### Wine Version Requirement (VST Plugins)
+
+**Wine must be pinned to version 9.21.** Wine >= 9.22 introduces a regression that
+breaks mouse coordinate handling in yabridge-bridged VST plugin UIs. Clicks land at
+wrong positions (offset by the plugin window's screen coordinates).
+
+Root cause: Wine 9.22 refactored the X11 window state/ConfigureNotify tracker
+(Wine MR !6569). The new code ignores ConfigureNotify events that report the plugin
+window's screen position, so Wine assumes position (0,0). Win32 `ScreenToClient()`
+inside the plugin then produces coordinates offset by the window's actual position.
+
+Tracking:
+- yabridge issue: https://github.com/robbert-vdh/yabridge/issues/382
+- yabridge fix: PR #405 merged into `new-wine10-embedding` branch (not yet released)
+- Wine change: MR !6569 (first shipped in Wine 9.22)
+
+To pin Wine 9.21 on Debian/Ubuntu:
+```bash
+sudo apt install winehq-staging=9.21~trixie-1 \
+    wine-staging=9.21~trixie-1 \
+    wine-staging-amd64=9.21~trixie-1 \
+    wine-staging-i386:i386=9.21~trixie-1
+sudo apt-mark hold winehq-staging wine-staging wine-staging-amd64 wine-staging-i386
+```
+
+Remove the hold once yabridge releases a version with the fix:
+```bash
+sudo apt-mark unhold winehq-staging wine-staging wine-staging-amd64 wine-staging-i386
+```
+
 ## Architecture
 
 - **C++17** with **JUCE 8** framework, **yaml-cpp** for serialization
