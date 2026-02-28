@@ -1,0 +1,401 @@
+From b4474ca1ce2fdf48ed9d1155cc2420f9d3a1a861 Mon Sep 17 00:00:00 2001
+From: Jon Godin <jon.m.godin@gmail.com>
+Date: Sat, 28 Feb 2026 15:14:22 -0800
+Subject: [PATCH] Add IParameterFinder and performEdit snoop patches
+
+Cherry-picked from feature/plug-v2_1 worktree JUCE:
+- VST3PluginWindow inherits VST3ParameterFinderSupport, caches
+  IParameterFinder*, implements spatial scan + wiggle + snoop
+- getEditController() accessor, editSnoopActive/editSnoopParamID
+  atomics, performEdit hook in VST3PluginFormatImpl.h
+---
+ .../format_types/juce_VST3PluginFormat.cpp    | 282 ++++++++++++++++++
+ .../format_types/juce_VST3PluginFormatImpl.h  |  23 ++
+ 2 files changed, 305 insertions(+)
+
+diff --git a/modules/juce_audio_processors/format_types/juce_VST3PluginFormat.cpp b/modules/juce_audio_processors/format_types/juce_VST3PluginFormat.cpp
+index cede28f25c..90311bc11c 100644
+--- a/modules/juce_audio_processors/format_types/juce_VST3PluginFormat.cpp
++++ b/modules/juce_audio_processors/format_types/juce_VST3PluginFormat.cpp
+@@ -36,6 +36,9 @@
+ 
+ #include <juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h>
+ #include <juce_audio_processors/utilities/juce_NSViewComponentWithParent.h>
++#include "plugins/VST3ParameterFinderSupport.h"
++#include <iostream>
++#include <map>
+ 
+ namespace juce
+ {
+@@ -235,6 +238,7 @@ private:
+ struct VST3PluginWindow final : public AudioProcessorEditor,
+                                 public RunLoop,
+                                 public IPlugFrame,
++                                public dc::VST3ParameterFinderSupport,
+                                 private ComponentMovementWatcher,
+                                 private ComponentBoundsConstrainer
+ {
+@@ -253,6 +257,7 @@ struct VST3PluginWindow final : public AudioProcessorEditor,
+ 
+         warnOnFailure (view->setFrame (this));
+         view->queryInterface (IPlugViewContentScaleSupport::iid, (void**) &scaleInterface);
++        view->queryInterface (Vst::IParameterFinder::iid, (void**) &paramFinderInterface);
+ 
+         setContentScaleFactor();
+         resizeToFit();
+@@ -262,6 +267,9 @@ struct VST3PluginWindow final : public AudioProcessorEditor,
+ 
+     ~VST3PluginWindow() override
+     {
++        if (paramFinderInterface != nullptr)
++            paramFinderInterface->release();
++
+         if (scaleInterface != nullptr)
+             scaleInterface->release();
+ 
+@@ -528,6 +536,279 @@ private:
+         return nativeScaleFactor * userScaleFactor;
+     }
+ 
++    // dc::VST3ParameterFinderSupport
++    bool hasParameterFinder() const override
++    {
++        return paramFinderInterface != nullptr;
++    }
++
++    bool findParameterAt (int xPos, int yPos, unsigned int& resultParamId) override
++    {
++        if (paramFinderInterface == nullptr)
++            return false;
++
++        Vst::ParamID tag = 0;
++        if (paramFinderInterface->findParameter (static_cast<Steinberg::int32> (xPos),
++                                                 static_cast<Steinberg::int32> (yPos),
++                                                 tag) == kResultOk)
++        {
++            resultParamId = static_cast<unsigned int> (tag);
++            return true;
++        }
++        return false;
++    }
++
++    int resolveFinderParamIndex (unsigned int finderParamId) override
++    {
++        auto tag = static_cast<Vst::ParamID> (finderParamId);
++
++        // Direct lookup: the finder ParamID matches JUCE's parameter map
++        auto* instance = dynamic_cast<VST3PluginInstanceHeadless*> (&processor);
++        if (instance != nullptr)
++        {
++            if (auto* p = instance->getParameterForID (tag))
++                return p->getParameterIndex();
++        }
++
++        // Fallback: query the IEditController for this ParamID and match by name.
++        if (instance != nullptr)
++        {
++            auto* ctrl = instance->getEditController();
++            if (ctrl != nullptr)
++            {
++                Steinberg::int32 count = ctrl->getParameterCount();
++                juce::String finderName;
++
++                // One-time diagnostic: log controller and JUCE param counts
++                if (! controllerDiagDumped)
++                {
++                    controllerDiagDumped = true;
++                    auto& juceParams = processor.getParameters();
++                    std::cerr << "[ResolveParam] controller has " << count
++                              << " params, JUCE has " << juceParams.size() << " params\n";
++                }
++
++                for (Steinberg::int32 i = 0; i < count; ++i)
++                {
++                    Vst::ParameterInfo info {};
++                    if (ctrl->getParameterInfo (i, info) == kResultOk
++                        && info.id == tag)
++                    {
++                        finderName = toString (info.title);
++                        std::cerr << "[ResolveParam] found finderParamId=" << finderParamId
++                                  << " in controller at index " << i
++                                  << " name=\"" << finderName << "\"\n";
++                        break;
++                    }
++                }
++
++                if (finderName.isNotEmpty())
++                {
++                    auto& params = processor.getParameters();
++                    for (int i = 0; i < params.size(); ++i)
++                    {
++                        if (params[i]->getName (128) == finderName)
++                            return i;
++                    }
++                    std::cerr << "[ResolveParam] name \"" << finderName
++                              << "\" not found in JUCE params\n";
++                }
++            }
++        }
++
++        return -1;
++    }
++
++    int resolveFinderParamByWiggle (unsigned int finderParamId) override
++    {
++        auto* instance = dynamic_cast<VST3PluginInstanceHeadless*> (&processor);
++        if (instance == nullptr)
++            return -1;
++
++        auto* ctrl = instance->getEditController();
++        if (ctrl == nullptr)
++            return -1;
++
++        auto& params = processor.getParameters();
++        if (params.isEmpty())
++            return -1;
++
++        auto tag = static_cast<Vst::ParamID> (finderParamId);
++        const int numParams = params.size();
++
++        // Read baseline from the JUCE parameter cache.
++        std::vector<float> juceBaseline (static_cast<size_t> (numParams));
++        for (int i = 0; i < numParams; ++i)
++            juceBaseline[static_cast<size_t> (i)] = params[i]->getValue();
++
++        // Read original value of the finder param
++        auto original = ctrl->getParamNormalized (tag);
++
++        // Nudge by +0.002, or -0.002 if near 1.0
++        double nudged = (original < 0.998) ? original + 0.002
++                                           : original - 0.002;
++        auto setResult = ctrl->setParamNormalized (tag, nudged);
++
++        // One-time diagnostic: log whether the controller accepts finder IDs
++        // and whether the value actually sticks
++        if (! wiggleDiagDumped)
++        {
++            wiggleDiagDumped = true;
++            auto readback = ctrl->getParamNormalized (tag);
++            std::cerr << "[WiggleResolve] setParamNormalized(" << finderParamId
++                      << ") returned " << (setResult == kResultOk ? "OK" : "FAIL")
++                      << ", original=" << original
++                      << ", nudged=" << nudged
++                      << ", readback=" << readback
++                      << ", numJuceParams=" << numParams << "\n";
++        }
++
++        // No sleep — for Phase Plant, setParamNormalized on finder IDs
++        // is silently ignored (readback=0), so no amount of waiting helps.
++
++        // Detect which JUCE param changed via the cache (updated by performEdit)
++        int matchIndex = -1;
++        for (int i = 0; i < numParams; ++i)
++        {
++            float current = params[i]->getValue();
++            if (std::abs (current - juceBaseline[static_cast<size_t> (i)]) > 0.0005f)
++            {
++                matchIndex = i;
++                break;
++            }
++        }
++
++        // Restore original value
++        ctrl->setParamNormalized (tag, original);
++
++        if (matchIndex >= 0)
++        {
++            std::cerr << "[WiggleResolve] finderParamId=" << finderParamId
++                      << " -> juceIndex=" << matchIndex
++                      << " name=\"" << params[matchIndex]->getName (64) << "\"\n";
++        }
++
++        return matchIndex;
++    }
++
++    bool wiggleDiagDumped = false;
++
++    int resolveByReverseWiggle (
++        const std::vector<unsigned int>& finderParamIds,
++        std::map<unsigned int, int>& outMapping) override
++    {
++        auto* instance = dynamic_cast<VST3PluginInstanceHeadless*> (&processor);
++        if (instance == nullptr)
++            return 0;
++
++        auto* ctrl = instance->getEditController();
++        if (ctrl == nullptr)
++            return 0;
++
++        auto& params = processor.getParameters();
++        if (params.isEmpty() || finderParamIds.empty())
++            return 0;
++
++        // Convert finder IDs to Vst::ParamID and read baselines
++        struct FinderBaseline { Vst::ParamID tag; double baseline; };
++        std::vector<FinderBaseline> finders;
++        finders.reserve (finderParamIds.size());
++        for (auto fid : finderParamIds)
++        {
++            FinderBaseline fb;
++            fb.tag = static_cast<Vst::ParamID> (fid);
++            fb.baseline = ctrl->getParamNormalized (fb.tag);
++            finders.push_back (fb);
++        }
++
++        int mapped = 0;
++
++        // Only wiggle the "interesting" JUCE params (skip automation slots, MIDI CCs, etc.)
++        // — limit to the first 30 or so, which are the real plugin controls
++        int maxToWiggle = std::min (params.size(), 30);
++
++        for (int ji = 0; ji < maxToWiggle; ++ji)
++        {
++            auto* vst3Param = dynamic_cast<VST3PluginInstanceHeadless::VST3Parameter*> (params[ji]);
++            if (vst3Param == nullptr)
++                continue;
++
++            Vst::ParamID juceTag = vst3Param->getParamID();
++            double juceOriginal = ctrl->getParamNormalized (juceTag);
++
++            // Nudge the JUCE param via the controller
++            double juceNudged = (juceOriginal < 0.998) ? juceOriginal + 0.002
++                                                       : juceOriginal - 0.002;
++            ctrl->setParamNormalized (juceTag, juceNudged);
++
++            // Check which finder params reacted
++            for (auto& fb : finders)
++            {
++                if (outMapping.count (static_cast<unsigned int> (fb.tag)))
++                    continue;  // already mapped
++
++                double current = ctrl->getParamNormalized (fb.tag);
++                if (std::abs (current - fb.baseline) > 0.0005)
++                {
++                    outMapping[static_cast<unsigned int> (fb.tag)] = ji;
++                    fb.baseline = current;  // update baseline for next round
++                    mapped++;
++
++                    std::cerr << "[ReverseWiggle] JUCE[" << ji << "] id=" << juceTag
++                              << " name=\"" << params[ji]->getName (64)
++                              << "\" -> finderParamId=" << fb.tag << "\n";
++                }
++            }
++
++            // Restore JUCE param
++            ctrl->setParamNormalized (juceTag, juceOriginal);
++
++            // Re-read finder baselines after restore (values may have changed back)
++            for (auto& fb : finders)
++            {
++                if (! outMapping.count (static_cast<unsigned int> (fb.tag)))
++                    fb.baseline = ctrl->getParamNormalized (fb.tag);
++            }
++        }
++
++        return mapped;
++    }
++
++    void beginEditSnoop() override
++    {
++        auto* instance = dynamic_cast<VST3PluginInstanceHeadless*> (&processor);
++        if (instance)
++        {
++            instance->snoopWindowCallCount.store (0, std::memory_order_relaxed);
++            instance->editSnoopParamID.store (0xFFFFFFFF, std::memory_order_relaxed);
++            instance->editSnoopActive.store (true, std::memory_order_relaxed);
++        }
++    }
++
++    unsigned int endEditSnoop() override
++    {
++        auto* instance = dynamic_cast<VST3PluginInstanceHeadless*> (&processor);
++        if (instance)
++        {
++            instance->editSnoopActive.store (false, std::memory_order_relaxed);
++            return instance->editSnoopParamID.load (std::memory_order_relaxed);
++        }
++        return 0xFFFFFFFF;
++    }
++
++    int resolveParamIDToIndex (unsigned int paramId) override
++    {
++        auto* instance = dynamic_cast<VST3PluginInstanceHeadless*> (&processor);
++        if (instance)
++        {
++            if (auto* p = instance->getParameterForID (static_cast<Vst::ParamID> (paramId)))
++                return p->getParameterIndex();
++        }
++        return -1;
++    }
++
++    bool controllerDiagDumped = false;
++
+     //==============================================================================
+     Atomic<int> refCount { 1 };
+     VSTComSmartPtr<IPlugView> view;
+@@ -574,6 +855,7 @@ private:
+     bool recursiveResize = false, isInOnSize = false, attachedCalled = false;
+ 
+     IPlugViewContentScaleSupport* scaleInterface = nullptr;
++    Vst::IParameterFinder* paramFinderInterface = nullptr;
+     float nativeScaleFactor = 1.0f;
+     float userScaleFactor = 1.0f;
+ 
+diff --git a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
+index 7e2231007d..0443f60809 100644
+--- a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
++++ b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
+@@ -45,6 +45,7 @@
+ #include <juce_audio_processors_headless/format_types/juce_VST3Common.h>
+ #include <juce_audio_processors_headless/format_types/juce_ARACommon.h>
+ #include <juce_audio_processors_headless/format_types/juce_ARACommonInternal.h>
++#include <iostream>
+ 
+ namespace juce
+ {
+@@ -2404,6 +2405,9 @@ public:
+         return it != idToParamMap.end() ? it->second : nullptr;
+     }
+ 
++    /** Raw access to the IEditController for parameter lookup by ParamID. */
++    Vst::IEditController* getEditController() const noexcept { return editController.get(); }
++
+     //==============================================================================
+     void processBlock (AudioBuffer<float>& buffer, MidiBuffer& midiMessages) override
+     {
+@@ -3055,6 +3059,16 @@ private:
+         return {};
+     }
+ 
++public:
++    // Edit snoop: when enabled, performEdit records the last ParamID here.
++    // Used by the mouse-probe resolution to discover finder→controller mappings.
++    std::atomic<bool> editSnoopActive { false };
++    std::atomic<uint32_t> editSnoopParamID { 0xFFFFFFFF };
++    std::atomic<uint64_t> totalPerformEditCount { 0 };
++    std::atomic<uint32_t> snoopWindowCallCount { 0 };
++
++private:
++
+     CachedParamValues cachedParamValues;
+     VSTComSmartPtr<ParameterChanges<HostToClientParamQueue>> inputParameterChanges
+     {
+@@ -3475,6 +3489,15 @@ tresult VST3HostContextHeadless::performEdit (Vst::ParamID paramID, Vst::ParamVa
+     if (plugin == nullptr)
+         return kResultTrue;
+ 
++    plugin->totalPerformEditCount.fetch_add (1, std::memory_order_relaxed);
++
++    // Edit snoop: record the paramID when the mouse-probe is active
++    if (plugin->editSnoopActive.load (std::memory_order_relaxed))
++    {
++        plugin->snoopWindowCallCount.fetch_add (1, std::memory_order_relaxed);
++        plugin->editSnoopParamID.store (static_cast<uint32_t> (paramID), std::memory_order_relaxed);
++    }
++
+     if (auto* param = plugin->getParameterForID (paramID))
+     {
+         param->setValueNotifyingHost ((float) valueNormalised);
+-- 
+2.47.3
+

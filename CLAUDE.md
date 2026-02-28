@@ -108,6 +108,23 @@ sudo apt-mark unhold winehq-staging wine-staging wine-staging-amd64 wine-staging
 - `src/platform/linux/` — Linux platform layer (GLFW, Vulkan, zenity dialogs)
 - `src/graphics/rendering/GpuBackend.h` — Abstract GPU interface (MetalBackend / VulkanBackend)
 
+### JUCE Submodule Patches
+
+The JUCE submodule (`libs/JUCE`) has local patches on top of upstream commit `501c076`
+that add IParameterFinder spatial hints and performEdit snoop support for VST3 plugin
+parameter discovery. These patches are:
+
+- **Canonical source**: `scripts/juce-patches/*.patch`
+- **Applied by**: `scripts/bootstrap.sh` (automatic on new worktrees)
+- **Affected files**: `juce_VST3PluginFormat.cpp`, `juce_VST3PluginFormatImpl.h`
+
+Each worktree has its own JUCE submodule git directory (objects are NOT shared).
+`bootstrap.sh` handles this automatically — it fetches patch commits from sibling
+worktrees when possible, or applies the `.patch` files as a fallback.
+
+**If spatial hints stop working** (overlay shows 0 results for all plugins), the JUCE
+patches are likely missing. Run `scripts/bootstrap.sh` to re-apply them.
+
 ## Key Patterns
 
 - `ValueTree` is the single source of truth for all model state

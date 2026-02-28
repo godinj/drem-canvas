@@ -113,15 +113,108 @@ esac
 echo "  All system prerequisites satisfied."
 
 # ── 2. Init JUCE submodule ─────────────────────────────────────────────────
+#
+# JUCE has local patches (IParameterFinder spatial hints, performEdit snoop)
+# committed inside the submodule's git history. Each worktree has its OWN
+# submodule git directory, so patch commits don't share across worktrees.
+#
+# Three-strategy fallback:
+#   1. Normal submodule init (works if tracked commit exists upstream)
+#   2. Fetch from a sibling worktree that has the patched commit
+#   3. Apply .patch files from scripts/juce-patches/ (last resort)
 
 echo ""
 echo "[2/5] Initializing JUCE submodule..."
 
+JUCE_PATCHED_COMMIT="b4474ca1ce2fdf48ed9d1155cc2420f9d3a1a861"
+JUCE_UPSTREAM_BASE="501c07674e1ad693085a7e7c398f205c2677f5da"
+
 if [ -f "libs/JUCE/CMakeLists.txt" ]; then
     echo "  Already initialized."
 else
-    git submodule update --init --depth 1 libs/JUCE
-    echo "  Done."
+    juce_ok=false
+
+    # Strategy 1: normal submodule init (works for upstream commits)
+    echo "  Strategy 1: normal submodule init..."
+    if git submodule update --init --depth 1 libs/JUCE 2>/dev/null; then
+        if [ -f "libs/JUCE/CMakeLists.txt" ]; then
+            juce_ok=true
+            echo "  Done (upstream init)."
+        fi
+    fi
+
+    # Strategy 2: fetch the patched commit from a sibling worktree
+    if [ "$juce_ok" = false ]; then
+        echo "  Strategy 2: fetching from sibling worktree..."
+        git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+        bare_root=""
+
+        if [ -n "$git_common_dir" ] && [ "$git_common_dir" != ".git" ]; then
+            bare_root="$(cd "$git_common_dir" && pwd)"
+            bare_root="$(dirname "$bare_root")"
+        fi
+
+        if [ -n "$bare_root" ]; then
+            # Ensure submodule is at least initialized (even if wrong commit)
+            git submodule init libs/JUCE 2>/dev/null || true
+
+            # Search sibling worktrees for one that has the patched commit
+            for sibling in "$bare_root"/*/libs/JUCE; do
+                [ -d "$sibling/.git" ] || [ -f "$sibling/.git" ] || continue
+                [ "$sibling" = "$PROJECT_ROOT/libs/JUCE" ] && continue
+
+                if git -C "$sibling" cat-file -e "$JUCE_PATCHED_COMMIT" 2>/dev/null; then
+                    echo "  Found patched commit in: $sibling"
+                    git -C libs/JUCE fetch "$sibling" "$JUCE_PATCHED_COMMIT" 2>/dev/null || continue
+                    git -C libs/JUCE checkout "$JUCE_PATCHED_COMMIT" 2>/dev/null || continue
+                    if [ -f "libs/JUCE/CMakeLists.txt" ]; then
+                        juce_ok=true
+                        echo "  Done (fetched from sibling)."
+                        break
+                    fi
+                fi
+            done
+        fi
+    fi
+
+    # Strategy 3: init upstream base and apply patches
+    if [ "$juce_ok" = false ]; then
+        echo "  Strategy 3: applying patches from scripts/juce-patches/..."
+        patch_dir="$SCRIPT_DIR/juce-patches"
+
+        if [ -d "$patch_dir" ] && ls "$patch_dir"/*.patch &>/dev/null; then
+            # Init submodule at whatever upstream has
+            git submodule update --init --depth 50 libs/JUCE 2>/dev/null || true
+
+            # Try to checkout the upstream base commit the patches were built against
+            git -C libs/JUCE checkout "$JUCE_UPSTREAM_BASE" 2>/dev/null || true
+
+            # Apply each patch
+            for p in "$patch_dir"/*.patch; do
+                echo "  Applying: $(basename "$p")"
+                git -C libs/JUCE am --3way "$p" || {
+                    echo "  Warning: git am failed, trying git apply..."
+                    git -C libs/JUCE am --abort 2>/dev/null || true
+                    git -C libs/JUCE apply --3way "$p" || git -C libs/JUCE apply "$p"
+                }
+            done
+
+            if [ -f "libs/JUCE/CMakeLists.txt" ]; then
+                juce_ok=true
+                echo "  Done (patches applied). Note: commit hash differs from tracked."
+            fi
+        else
+            echo "  Error: No patch files found in $patch_dir"
+        fi
+    fi
+
+    # Final verification
+    if [ ! -f "libs/JUCE/CMakeLists.txt" ]; then
+        echo "  ERROR: JUCE submodule initialization failed."
+        echo "  libs/JUCE/CMakeLists.txt is missing."
+        echo "  Try manually: git submodule update --init libs/JUCE"
+        exit 1
+    fi
 fi
 
 # ── 3. Skia — shared cache strategy ───────────────────────────────────────
