@@ -153,6 +153,9 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     if (context.getPanel() == VimContext::Mixer)
         return handleMixerNormalKey (key);
 
+    if (context.getPanel() == VimContext::PluginView)
+        return handlePluginViewNormalKey (key);
+
     auto keyChar = key.getTextCharacter();
     auto modifiers = key.getModifiers();
 
@@ -3255,10 +3258,12 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
     {
         if (focus == VimContext::FocusPlugins)
         {
-            // Navigate plugin slots downward
+            // Navigate plugin slots downward — allow moving through empty
+            // slots (min 4 visible) plus one "add" slot past the last plugin
             int numPlugins = getMixerPluginCount();
+            int maxSlot = std::max (numPlugins, 3); // 0..3 = 4 visible slots, plus add slot
             int slot = context.getSelectedPluginSlot();
-            if (slot < numPlugins) // allow one past for "add" slot
+            if (slot < maxSlot)
             {
                 context.setSelectedPluginSlot (slot + 1);
                 listeners.call (&Listener::vimContextChanged);
@@ -3307,7 +3312,7 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
         return true;
     }
 
-    // ── Return: open plugin editor or add plugin
+    // ── Return: open plugin view or add plugin
     if (key == juce::KeyPress::returnKey && focus == VimContext::FocusPlugins)
     {
         int trackIdx = context.isMasterStripSelected() ? -1 : arrangement.getSelectedTrackIndex();
@@ -3316,8 +3321,7 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
 
         if (slot < numPlugins)
         {
-            if (onMixerPluginOpen)
-                onMixerPluginOpen (trackIdx, slot);
+            openPluginView (trackIdx, slot);
         }
         else
         {
@@ -3409,6 +3413,314 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
         commandBuffer.clear();
         listeners.call (&Listener::vimModeChanged, Command);
         listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    return false;
+}
+
+// ─── Plugin View ─────────────────────────────────────────────────────────────
+
+juce::String VimEngine::generateHintLabel (int index)
+{
+    // Home-row keys for hint labels: a,s,d,f,g,h,j,k,l
+    static const char keys[] = "asdfghjkl";
+    static const int numKeys = 9;
+
+    if (index < numKeys)
+        return juce::String::charToString (keys[index]);
+
+    // Two-char labels: aa, as, ad, ...
+    int first = (index - numKeys) / numKeys;
+    int second = (index - numKeys) % numKeys;
+
+    if (first < numKeys)
+        return juce::String::charToString (keys[first])
+             + juce::String::charToString (keys[second]);
+
+    // Three-char for > 90 params (unlikely but safe)
+    int third = second;
+    second = first % numKeys;
+    first = (first / numKeys) % numKeys;
+    return juce::String::charToString (keys[first])
+         + juce::String::charToString (keys[second])
+         + juce::String::charToString (keys[third]);
+}
+
+int VimEngine::resolveHintLabel (const juce::String& label)
+{
+    static const char keys[] = "asdfghjkl";
+    static const int numKeys = 9;
+
+    auto indexOf = [] (juce_wchar c) -> int
+    {
+        for (int i = 0; i < numKeys; ++i)
+            if (keys[i] == c) return i;
+        return -1;
+    };
+
+    if (label.length() == 1)
+    {
+        int i = indexOf (label[0]);
+        return (i >= 0) ? i : -1;
+    }
+
+    if (label.length() == 2)
+    {
+        int first = indexOf (label[0]);
+        int second = indexOf (label[1]);
+        if (first < 0 || second < 0) return -1;
+        return numKeys + first * numKeys + second;
+    }
+
+    return -1;
+}
+
+void VimEngine::openPluginView (int trackIndex, int pluginIndex)
+{
+    context.setPluginViewTarget (trackIndex, pluginIndex);
+    context.setPanel (VimContext::PluginView);
+
+    if (onOpenPluginView)
+        onOpenPluginView (trackIndex, pluginIndex);
+
+    listeners.call (&Listener::vimContextChanged);
+}
+
+void VimEngine::closePluginView()
+{
+    context.clearPluginViewTarget();
+
+    if (onClosePluginView)
+        onClosePluginView();
+
+    context.setPanel (VimContext::Mixer);
+    listeners.call (&Listener::vimContextChanged);
+}
+
+bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
+{
+    auto keyChar = key.getTextCharacter();
+
+    // ── Number entry mode
+    if (context.isNumberEntryActive())
+    {
+        if (keyChar >= '0' && keyChar <= '9')
+        {
+            auto buf = context.getNumberBuffer();
+            buf += juce::String::charToString (keyChar);
+            context.setNumberBuffer (buf);
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+
+        if (keyChar == '.' && ! context.getNumberBuffer().contains ("."))
+        {
+            auto buf = context.getNumberBuffer();
+            buf += ".";
+            context.setNumberBuffer (buf);
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+
+        if (key == juce::KeyPress::returnKey)
+        {
+            float pct = context.getNumberBuffer().getFloatValue();
+            pct = juce::jlimit (0.0f, 100.0f, pct);
+            if (onPluginParamChanged)
+                onPluginParamChanged (context.getSelectedParamIndex(), pct / 100.0f);
+            context.clearNumberEntry();
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+
+        if (isEscapeOrCtrlC (key))
+        {
+            context.clearNumberEntry();
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+
+        if (key == juce::KeyPress::backspaceKey)
+        {
+            auto buf = context.getNumberBuffer();
+            if (buf.isNotEmpty())
+            {
+                buf = buf.dropLastCharacters (1);
+                context.setNumberBuffer (buf);
+            }
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+
+        return true; // absorb other keys during number entry
+    }
+
+    // ── Hint mode (both HintActive and HintSpatial)
+    if (context.getHintMode() == VimContext::HintActive
+        || context.getHintMode() == VimContext::HintSpatial)
+    {
+        bool isSpatial = (context.getHintMode() == VimContext::HintSpatial);
+
+        if (isEscapeOrCtrlC (key))
+        {
+            context.setHintMode (VimContext::HintNone);
+            context.clearHintBuffer();
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+
+        // Accept home-row hint chars
+        static const juce::String hintChars ("asdfghjkl");
+        if (hintChars.containsChar (keyChar))
+        {
+            auto buf = context.getHintBuffer() + juce::String::charToString (keyChar);
+            context.setHintBuffer (buf);
+
+            int resolved = resolveHintLabel (buf);
+            if (resolved >= 0)
+            {
+                if (isSpatial)
+                {
+                    // Resolve spatial index to JUCE param index
+                    int paramIdx = onResolveSpatialHint ? onResolveSpatialHint (resolved) : -1;
+                    if (paramIdx >= 0)
+                        context.setSelectedParamIndex (paramIdx);
+                }
+                else
+                {
+                    context.setSelectedParamIndex (resolved);
+                }
+
+                context.setHintMode (VimContext::HintNone);
+                context.clearHintBuffer();
+                listeners.call (&Listener::vimContextChanged);
+                return true;
+            }
+
+            // Could be a partial match (first char of two-char label) — wait for more
+            listeners.call (&Listener::vimContextChanged);
+            return true;
+        }
+
+        // Non-hint char cancels hint mode
+        context.setHintMode (VimContext::HintNone);
+        context.clearHintBuffer();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // ── Normal plugin view keys
+
+    // Escape: close plugin view
+    if (isEscapeOrCtrlC (key))
+    {
+        closePluginView();
+        return true;
+    }
+
+    // f: enter hint mode (spatial if available, otherwise parameter list)
+    if (keyChar == 'f')
+    {
+        if (onQuerySpatialHints && onQuerySpatialHints())
+            context.setHintMode (VimContext::HintSpatial);
+        else
+            context.setHintMode (VimContext::HintActive);
+        context.clearHintBuffer();
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // j/k: navigate parameters
+    if (keyChar == 'j')
+    {
+        context.setSelectedParamIndex (context.getSelectedParamIndex() + 1);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    if (keyChar == 'k')
+    {
+        int idx = context.getSelectedParamIndex();
+        if (idx > 0)
+            context.setSelectedParamIndex (idx - 1);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // h/l: coarse adjust ±5%
+    if (keyChar == 'h')
+    {
+        if (onPluginParamAdjust)
+            onPluginParamAdjust (context.getSelectedParamIndex(), -0.05f);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    if (keyChar == 'l')
+    {
+        if (onPluginParamAdjust)
+            onPluginParamAdjust (context.getSelectedParamIndex(), 0.05f);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // H/L: fine adjust ±1%
+    if (keyChar == 'H')
+    {
+        if (onPluginParamAdjust)
+            onPluginParamAdjust (context.getSelectedParamIndex(), -0.01f);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    if (keyChar == 'L')
+    {
+        if (onPluginParamAdjust)
+            onPluginParamAdjust (context.getSelectedParamIndex(), 0.01f);
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // 0-9: start number entry
+    if (keyChar >= '0' && keyChar <= '9')
+    {
+        context.setNumberEntryActive (true);
+        context.setNumberBuffer (juce::String::charToString (keyChar));
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // e: open native editor popup (existing behavior)
+    if (keyChar == 'e')
+    {
+        int trackIdx = context.getPluginViewTrackIndex();
+        int pluginIdx = context.getPluginViewPluginIndex();
+        if (onMixerPluginOpen)
+            onMixerPluginOpen (trackIdx, pluginIdx);
+        return true;
+    }
+
+    // z: toggle enlarged plugin view
+    if (keyChar == 'z')
+    {
+        context.setPluginViewEnlarged (! context.isPluginViewEnlarged());
+        listeners.call (&Listener::vimContextChanged);
+        return true;
+    }
+
+    // Tab: cycle panel
+    if (key == juce::KeyPress::tabKey)
+    {
+        closePluginView();
+        cycleFocusPanel();
+        return true;
+    }
+
+    // Space: toggle play/stop
+    if (key == juce::KeyPress::spaceKey)
+    {
+        togglePlayStop();
         return true;
     }
 

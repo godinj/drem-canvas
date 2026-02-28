@@ -13,15 +13,39 @@ void VimContext::setPanel (Panel p)
         mixerFocus = FocusNone;
 }
 
+void VimContext::setPluginViewTarget (int trackIdx, int pluginIdx)
+{
+    pluginViewTrackIndex = trackIdx;
+    pluginViewPluginIndex = pluginIdx;
+    selectedParamIndex = 0;
+    hintMode = HintNone;
+    hintBuffer.clear();
+    numberEntryActive = false;
+    numberBuffer.clear();
+}
+
+void VimContext::clearPluginViewTarget()
+{
+    pluginViewTrackIndex = -1;
+    pluginViewPluginIndex = -1;
+    selectedParamIndex = 0;
+    hintMode = HintNone;
+    hintBuffer.clear();
+    numberEntryActive = false;
+    numberBuffer.clear();
+    pluginViewEnlarged = false;
+}
+
 void VimContext::cyclePanel()
 {
-    // PianoRoll is entered explicitly via Enter, not cycled to
+    // PianoRoll and PluginView are entered explicitly, not cycled to
     switch (activePanel)
     {
-        case Editor:    activePanel = Mixer;     break;
-        case Mixer:     activePanel = Sequencer; break;
-        case Sequencer: activePanel = Editor;    break;
-        case PianoRoll: activePanel = Editor;    break;
+        case Editor:     activePanel = Mixer;     break;
+        case Mixer:      activePanel = Sequencer; break;
+        case Sequencer:  activePanel = Editor;    break;
+        case PianoRoll:  activePanel = Editor;    break;
+        case PluginView: activePanel = Mixer;     break;
     }
 
     // Default to FocusVolume when entering Mixer, clear otherwise
@@ -38,7 +62,8 @@ juce::String VimContext::getPanelName() const
         case Editor:    return "Editor";
         case Mixer:     return "Mixer";
         case Sequencer: return "Sequencer";
-        case PianoRoll: return "PianoRoll";
+        case PianoRoll:  return "PianoRoll";
+        case PluginView: return "PluginView";
     }
     return "Editor";
 }

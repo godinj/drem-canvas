@@ -28,50 +28,58 @@ void PluginSlotListWidget::paint (gfx::Canvas& canvas)
     auto& font = FontManager::getInstance().getSmallFont();
     float w = getWidth();
 
-    // Draw populated slots
-    for (size_t i = 0; i < slots.size(); ++i)
+    // Draw slots (populated + empty)
+    int totalSlots = std::max (static_cast<int> (slots.size()), 4);
+    // Show one extra if selected past the end (the "add" slot)
+    if (selectedSlotIndex >= totalSlots)
+        totalSlots = selectedSlotIndex + 1;
+
+    for (int i = 0; i < totalSlots; ++i)
     {
         float y = static_cast<float> (i) * slotHeight;
         Rect slotRect (0, y, w, slotHeight);
 
-        Color bg = slots[i].bypassed
+        Color bg = (i < static_cast<int> (slots.size()) && slots[i].bypassed)
             ? Color::fromARGB (0xff3a2a2a)
             : theme.widgetBackground;
 
         canvas.fillRect (slotRect, bg);
 
-        // Selected slot highlight
-        if (static_cast<int> (i) == selectedSlotIndex)
+        // Selected slot highlight — bright cursor bar + distinct background
+        if (i == selectedSlotIndex)
         {
-            canvas.fillRect (slotRect, theme.selection.withAlpha ((uint8_t) 38));
-            canvas.strokeRect (slotRect, theme.selection, 1.0f);
+            canvas.fillRect (slotRect, theme.selection.withAlpha ((uint8_t) 90));
+
+            // Solid green cursor bar on left edge
+            Rect cursorBar (0, slotRect.y, 3.0f, slotRect.height);
+            canvas.fillRect (cursorBar, theme.selection);
         }
         else
         {
             canvas.strokeRect (slotRect, theme.outlineColor, 0.5f);
         }
 
-        if (!slots[i].name.empty())
+        // Slot number prefix
+        std::string prefix = std::to_string (i + 1) + ": ";
+
+        if (i < static_cast<int> (slots.size()) && !slots[i].name.empty())
         {
             Color textColor = slots[i].bypassed ? theme.dimText : theme.defaultText;
-            canvas.drawText (slots[i].name, 4.0f, y + slotHeight * 0.5f + 4.0f,
+            canvas.drawText (prefix + slots[i].name, 4.0f, y + slotHeight * 0.5f + 4.0f,
                              font, textColor);
+        }
+        else if (i == selectedSlotIndex && i >= static_cast<int> (slots.size()))
+        {
+            // "Add" slot
+            canvas.drawText (prefix + "[+]", 4.0f, y + slotHeight * 0.5f + 4.0f,
+                             font, theme.selection);
         }
         else
         {
-            canvas.drawText ("(empty)", 4.0f, y + slotHeight * 0.5f + 4.0f,
-                             font, theme.dimText);
+            // Empty slot — show number
+            canvas.drawText (prefix, 4.0f, y + slotHeight * 0.5f + 4.0f,
+                             font, theme.dimText.withAlpha ((uint8_t) 100));
         }
-    }
-
-    // Draw "add" slot if selected past the last plugin
-    if (selectedSlotIndex >= 0 && selectedSlotIndex >= static_cast<int> (slots.size()))
-    {
-        float y = static_cast<float> (slots.size()) * slotHeight;
-        Rect slotRect (0, y, w, slotHeight);
-        canvas.fillRect (slotRect, theme.selection.withAlpha ((uint8_t) 38));
-        canvas.strokeRect (slotRect, theme.selection, 1.0f);
-        canvas.drawText ("[+]", 4.0f, y + slotHeight * 0.5f + 4.0f, font, theme.selection);
     }
 }
 

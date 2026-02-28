@@ -33,7 +33,12 @@
 #include "ui/palette/CommandPaletteWidget.h"
 #include "vim/ActionRegistry.h"
 #include "ui/keyboard/VirtualKeyboardWidget.h"
+#include "ui/pluginview/PluginViewWidget.h"
 #include "model/RecentProjects.h"
+
+#if defined(__linux__)
+struct GLFWwindow;
+#endif
 
 namespace dc
 {
@@ -60,6 +65,10 @@ public:
     // Access for wiring
     gfx::Renderer* getRenderer() { return renderer; }
     void setRenderer (gfx::Renderer* r);
+
+#if defined(__linux__)
+    void setGlfwWindow (GLFWwindow* w);
+#endif
 
 private:
     // ValueTree::Listener
@@ -154,11 +163,16 @@ private:
     std::unique_ptr<BrowserWidget> browserWidget;
     std::unique_ptr<CommandPaletteWidget> commandPalette;
     std::unique_ptr<VirtualKeyboardWidget> keyboardWidget;
+    std::unique_ptr<PluginViewWidget> pluginViewWidget;
 
     bool browserVisible = false;
 
     // Resizer bar position: fraction of center area occupied by top (arrangement)
     float splitRatio = 0.65f;
+
+#if defined(__linux__)
+    GLFWwindow* glfwWindow = nullptr;
+#endif
 
     gfx::Renderer* renderer = nullptr;
 };

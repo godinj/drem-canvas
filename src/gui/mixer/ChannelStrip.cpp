@@ -167,13 +167,22 @@ void ChannelStrip::paintOverChildren (juce::Graphics& g)
     {
         auto focusBounds = focusedComponent->getBounds().toFloat().expanded (2.0f);
 
-        // Subtle green fill
-        g.setColour (juce::Colour (0xff50c878).withAlpha (0.08f));
-        g.fillRoundedRectangle (focusBounds, 2.0f);
+        if (currentFocus == VimContext::FocusPlugins)
+        {
+            // Plugins: only draw a subtle border — individual slot highlights
+            // inside PluginSlotList handle the per-slot selection feedback
+            g.setColour (juce::Colour (0xff50c878).withAlpha (0.4f));
+            g.drawRoundedRectangle (focusBounds, 2.0f, 1.0f);
+        }
+        else
+        {
+            // Volume / Pan: full highlight
+            g.setColour (juce::Colour (0xff50c878).withAlpha (0.18f));
+            g.fillRoundedRectangle (focusBounds, 2.0f);
 
-        // Green stroke
-        g.setColour (juce::Colour (0xff50c878).withAlpha (0.6f));
-        g.drawRoundedRectangle (focusBounds, 2.0f, 1.5f);
+            g.setColour (juce::Colour (0xff50c878));
+            g.drawRoundedRectangle (focusBounds, 2.0f, 1.5f);
+        }
     }
 }
 

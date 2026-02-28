@@ -49,6 +49,19 @@ elseif(UNIX AND NOT APPLE)
     pkg_check_modules(GLFW REQUIRED glfw3)
     pkg_check_modules(FONTCONFIG REQUIRED fontconfig)
     find_package(Threads REQUIRED)
+    find_package(X11 REQUIRED)
+    if(NOT X11_Xcomposite_FOUND)
+        message(FATAL_ERROR "X11 Xcomposite extension not found (libxcomposite-dev)")
+    endif()
+    if(NOT X11_Xdamage_FOUND)
+        message(FATAL_ERROR "X11 Xdamage extension not found (libxdamage-dev)")
+    endif()
+    if(NOT X11_Xfixes_FOUND)
+        message(FATAL_ERROR "X11 Xfixes extension not found (libxfixes-dev)")
+    endif()
+    if(NOT X11_Xtst_FOUND)
+        message(FATAL_ERROR "X11 Xtst extension not found (libxtst-dev)")
+    endif()
 endif()
 
 juce_add_gui_app(DremCanvas
@@ -94,6 +107,7 @@ target_sources(DremCanvas PRIVATE
     src/plugins/PluginManager.cpp
     src/plugins/PluginHost.cpp
     src/plugins/PluginWindowManager.cpp
+    src/plugins/ParameterFinderScanner.cpp
 
     # Vim
     src/vim/VimContext.cpp
@@ -186,6 +200,10 @@ target_sources(DremCanvas PRIVATE
 
     # UI - Virtual Keyboard
     src/ui/keyboard/VirtualKeyboardWidget.cpp
+
+    # UI - Plugin View
+    src/ui/pluginview/PluginViewWidget.cpp
+    src/ui/pluginview/ParameterGridWidget.cpp
 )
 
 # ─── Platform-specific sources ────────────────────────────────
@@ -202,6 +220,9 @@ elseif(UNIX AND NOT APPLE)
         src/platform/linux/GlfwWindow.cpp
         src/platform/linux/VulkanBackend.cpp
         src/platform/linux/NativeDialogs.cpp
+        src/platform/linux/EmbeddedPluginEditor.cpp
+        src/platform/linux/X11Reparent.cpp
+        src/platform/linux/X11Compositor.cpp
     )
 endif()
 
@@ -313,5 +334,10 @@ elseif(UNIX AND NOT APPLE)
         ${GLFW_LIBRARIES}
         ${FONTCONFIG_LIBRARIES}
         Threads::Threads
+        X11::X11
+        ${X11_Xcomposite_LIB}
+        ${X11_Xdamage_LIB}
+        ${X11_Xfixes_LIB}
+        ${X11_Xtst_LIB}
     )
 endif()

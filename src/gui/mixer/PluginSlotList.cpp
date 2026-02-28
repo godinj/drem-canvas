@@ -36,14 +36,20 @@ void PluginSlotList::paint (juce::Graphics& g)
         g.setColour (i % 2 == 0 ? juce::Colour (0xff2a2a3a) : juce::Colour (0xff262636));
         g.fillRect (slotBounds);
 
-        // Selected slot highlight
+        // Selected slot highlight — bright cursor bar + distinct background
         if (i == selectedSlotIndex)
         {
-            g.setColour (juce::Colour (0xff50c878).withAlpha (0.15f));
+            g.setColour (juce::Colour (0xff50c878).withAlpha (0.35f));
             g.fillRect (slotBounds);
+
+            // Solid green cursor bar on left edge
             g.setColour (juce::Colour (0xff50c878));
-            g.drawRect (slotBounds, 1);
+            g.fillRect (slotBounds.getX(), slotBounds.getY(), 3, slotBounds.getHeight());
         }
+
+        // Slot number prefix
+        juce::String prefix = juce::String (i + 1) + ": ";
+        g.setFont (juce::Font (juce::FontOptions (11.0f)));
 
         if (i < numPlugins)
         {
@@ -53,15 +59,19 @@ void PluginSlotList::paint (juce::Graphics& g)
 
             // Dim colour when bypassed
             g.setColour (enabled ? juce::Colour (0xffc0c0d0) : juce::Colour (0xff606070));
-            g.setFont (juce::Font (juce::FontOptions (11.0f)));
-            g.drawText (name, slotBounds.reduced (4, 0), juce::Justification::centredLeft, true);
+            g.drawText (prefix + name, slotBounds.reduced (4, 0), juce::Justification::centredLeft, true);
         }
         else if (i == selectedSlotIndex)
         {
             // "Add" slot indicator when selected
             g.setColour (juce::Colour (0xff50c878));
-            g.setFont (juce::Font (juce::FontOptions (11.0f)));
-            g.drawText ("[+]", slotBounds.reduced (4, 0), juce::Justification::centredLeft, true);
+            g.drawText (prefix + "[+]", slotBounds.reduced (4, 0), juce::Justification::centredLeft, true);
+        }
+        else
+        {
+            // Empty slot — show number
+            g.setColour (juce::Colour (0xff484858));
+            g.drawText (prefix, slotBounds.reduced (4, 0), juce::Justification::centredLeft, true);
         }
     }
 }

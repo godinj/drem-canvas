@@ -166,6 +166,40 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
                 }
             }
         }
+        else if (panel == VimContext::PluginView)
+        {
+            int pvTrack = context.getPluginViewTrackIndex();
+            int pvPlugin = context.getPluginViewPluginIndex();
+            std::string plugName = "Plugin";
+
+            if (pvTrack >= 0 && pvTrack < arrangement.getNumTracks())
+            {
+                Track pvt = arrangement.getTrack (pvTrack);
+                if (pvPlugin < pvt.getNumPlugins())
+                {
+                    auto plugState = pvt.getPlugin (pvPlugin);
+                    plugName = plugState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
+                }
+            }
+
+            breadcrumb = "> " + trackInfo + " > " + plugName;
+
+            if (context.isPluginViewEnlarged())
+                breadcrumb += " [ZOOM]";
+
+            if (context.getHintMode() == VimContext::HintActive)
+            {
+                breadcrumb += " [HINT: " + context.getHintBuffer().toStdString() + "]";
+            }
+            else if (context.isNumberEntryActive())
+            {
+                breadcrumb += " [" + context.getNumberBuffer().toStdString() + "%]";
+            }
+            else
+            {
+                breadcrumb += " > P" + std::to_string (context.getSelectedParamIndex() + 1);
+            }
+        }
         else if (panel == VimContext::Sequencer)
         {
             breadcrumb = "> R" + std::to_string (context.getSeqRow() + 1)

@@ -108,6 +108,177 @@ void AppController::initialise()
     // Wire browser toggle (gp keybinding)
     vimEngine->onToggleBrowser = [this]() { toggleBrowser(); };
 
+    // Wire mixer plugin navigation callbacks
+    vimEngine->onMixerPluginOpen = [this] (int trackIdx, int pluginIndex)
+    {
+        if (trackIdx >= 0)
+            openPluginEditor (trackIdx, pluginIndex);
+    };
+
+    vimEngine->onMixerPluginAdd = [this] (int trackIdx)
+    {
+        if (trackIdx >= 0)
+            arrangement.selectTrack (trackIdx);
+        toggleBrowser();
+    };
+
+    vimEngine->onMixerPluginRemove = [this] (int trackIdx, int pluginIndex)
+    {
+        if (trackIdx < 0)
+            return; // master strip not supported in graphics path yet
+
+        auto trackState = project.getTrack (trackIdx);
+        Track t (trackState);
+
+        if (trackIdx < trackPluginChains.size()
+            && pluginIndex < trackPluginChains[trackIdx].size())
+        {
+            auto& info = trackPluginChains[trackIdx].getReference (pluginIndex);
+            pluginWindowManager.closeEditorForPlugin (info.plugin);
+
+            audioEngine.getGraph().suspendProcessing (true);
+            disconnectTrackPluginChain (trackIdx);
+            audioEngine.removeProcessor (info.node->nodeID);
+            trackPluginChains.getReference (trackIdx).remove (pluginIndex);
+            connectTrackPluginChain (trackIdx);
+            audioEngine.getGraph().suspendProcessing (false);
+        }
+
+        t.removePlugin (pluginIndex, &project.getUndoManager());
+
+        if (mixerWidget != nullptr)
+            mixerWidget->rebuildStrips();
+    };
+
+    vimEngine->onMixerPluginBypass = [this] (int trackIdx, int pluginIndex)
+    {
+        if (trackIdx < 0)
+            return; // master strip not supported in graphics path yet
+
+        auto trackState = project.getTrack (trackIdx);
+        Track t (trackState);
+        bool enabled = t.isPluginEnabled (pluginIndex);
+        t.setPluginEnabled (pluginIndex, ! enabled, &project.getUndoManager());
+
+        audioEngine.getGraph().suspendProcessing (true);
+        disconnectTrackPluginChain (trackIdx);
+        connectTrackPluginChain (trackIdx);
+        audioEngine.getGraph().suspendProcessing (false);
+    };
+
+    vimEngine->onMixerPluginReorder = [this] (int trackIdx, int fromIndex, int toIndex)
+    {
+        if (trackIdx < 0)
+            return; // master strip not supported in graphics path yet
+
+        auto trackState = project.getTrack (trackIdx);
+        Track t (trackState);
+
+        if (trackIdx < trackPluginChains.size())
+        {
+            audioEngine.getGraph().suspendProcessing (true);
+            disconnectTrackPluginChain (trackIdx);
+
+            t.movePlugin (fromIndex, toIndex, &project.getUndoManager());
+            trackPluginChains.getReference (trackIdx).swap (fromIndex, toIndex);
+
+            connectTrackPluginChain (trackIdx);
+            audioEngine.getGraph().suspendProcessing (false);
+        }
+    };
+
+    // Wire plugin view callbacks
+    vimEngine->onOpenPluginView = [this] (int trackIdx, int pluginIdx)
+    {
+        if (trackIdx < 0 || trackIdx >= trackPluginChains.size())
+            return;
+        if (pluginIdx < 0 || pluginIdx >= trackPluginChains[trackIdx].size())
+            return;
+
+        auto* plugin = trackPluginChains[trackIdx][pluginIdx].plugin;
+        if (plugin == nullptr)
+            return;
+
+        auto trackState = project.getTrack (trackIdx);
+        Track t (trackState);
+        juce::String name;
+        if (pluginIdx < t.getNumPlugins())
+        {
+            auto pluginState = t.getPlugin (pluginIdx);
+            name = pluginState.getProperty (IDs::pluginName, "Plugin");
+        }
+
+        if (pluginViewWidget)
+            pluginViewWidget->setPlugin (dynamic_cast<juce::AudioPluginInstance*> (plugin), name);
+    };
+
+    vimEngine->onClosePluginView = [this]
+    {
+        if (pluginViewWidget)
+            pluginViewWidget->clearPlugin();
+    };
+
+    vimEngine->onPluginParamAdjust = [this] (int paramIndex, float delta)
+    {
+        int trackIdx = vimContext.getPluginViewTrackIndex();
+        int pluginIdx = vimContext.getPluginViewPluginIndex();
+
+        if (trackIdx < 0 || trackIdx >= trackPluginChains.size())
+            return;
+        if (pluginIdx < 0 || pluginIdx >= trackPluginChains[trackIdx].size())
+            return;
+
+        auto* plugin = trackPluginChains[trackIdx][pluginIdx].plugin;
+        if (plugin == nullptr) return;
+
+        auto& params = plugin->getParameters();
+        if (paramIndex < 0 || paramIndex >= params.size())
+            return;
+
+        auto* param = params[paramIndex];
+        float current = param->getValue();
+        float newVal = juce::jlimit (0.0f, 1.0f, current + delta);
+        param->setValueNotifyingHost (newVal);
+    };
+
+    vimEngine->onQuerySpatialHints = [this]() -> bool {
+        return pluginViewWidget && pluginViewWidget->hasSpatialHints();
+    };
+
+    vimEngine->onResolveSpatialHint = [this] (int spatialIndex) -> int {
+        if (! pluginViewWidget)
+            return -1;
+        auto& results = pluginViewWidget->getSpatialResults();
+        if (spatialIndex < 0 || spatialIndex >= static_cast<int> (results.size()))
+            return -1;
+        auto& info = results[spatialIndex];
+        std::cerr << "[SpatialHint] resolved index=" << spatialIndex
+                  << " paramId=" << info.paramId
+                  << " juceParamIndex=" << info.juceParamIndex
+                  << " name=" << info.name << "\n";
+        return info.juceParamIndex;
+    };
+
+    vimEngine->onPluginParamChanged = [this] (int paramIndex, float newValue)
+    {
+        int trackIdx = vimContext.getPluginViewTrackIndex();
+        int pluginIdx = vimContext.getPluginViewPluginIndex();
+
+        if (trackIdx < 0 || trackIdx >= trackPluginChains.size())
+            return;
+        if (pluginIdx < 0 || pluginIdx >= trackPluginChains[trackIdx].size())
+            return;
+
+        auto* plugin = trackPluginChains[trackIdx][pluginIdx].plugin;
+        if (plugin == nullptr) return;
+
+        auto& params = plugin->getParameters();
+        if (paramIndex < 0 || paramIndex >= params.size())
+            return;
+
+        params[paramIndex]->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, newValue));
+    };
+
     // Wire plugin menu callbacks
     vimEngine->onPluginMenuMove = [this] (int delta)
     {
@@ -386,6 +557,16 @@ void AppController::initialise()
         insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
     };
 
+    // Plugin view (hidden initially, shown when entering PluginView panel)
+    pluginViewWidget = std::make_unique<PluginViewWidget>();
+    pluginViewWidget->setVisible (false);
+    addChild (pluginViewWidget.get());
+
+#if defined(__linux__)
+    if (glfwWindow != nullptr)
+        pluginViewWidget->setGlfwWindow (glfwWindow);
+#endif
+
     // Virtual keyboard (hidden initially, shown when entering Keyboard mode)
     keyboardWidget = std::make_unique<VirtualKeyboardWidget> (vimEngine->getKeyboardState());
     keyboardWidget->setVisible (false);
@@ -441,6 +622,15 @@ void AppController::setRenderer (gfx::Renderer* r)
     renderer = r;
 }
 
+#if defined(__linux__)
+void AppController::setGlfwWindow (GLFWwindow* w)
+{
+    glfwWindow = w;
+    if (pluginViewWidget)
+        pluginViewWidget->setGlfwWindow (w);
+}
+#endif
+
 void AppController::paint (gfx::Canvas& canvas)
 {
     auto& theme = gfx::Theme::getDefault();
@@ -492,32 +682,90 @@ void AppController::resized()
     float bottomH = centerH - arrangementH;
 
     if (arrangementWidget)
-        arrangementWidget->setBounds (centerX, centerY, centerW, arrangementH);
-
-    // Bottom panel: mixer, sequencer, or piano roll
-    auto currentPanel = vimContext.getPanel();
-    bool showSequencer = (currentPanel == VimContext::Sequencer);
-    bool showPianoRoll = (currentPanel == VimContext::PianoRoll);
-
-    if (mixerWidget)
     {
-        mixerWidget->setVisible (! showSequencer && ! showPianoRoll);
-        if (! showSequencer && ! showPianoRoll)
-            mixerWidget->setBounds (centerX, centerY + arrangementH, centerW, bottomH);
+        arrangementWidget->setVisible (true);
+        arrangementWidget->setBounds (centerX, centerY, centerW, arrangementH);
+    }
+
+    // Bottom panel: mixer, sequencer, piano roll, or plugin view + mixer split
+    auto currentPanel = vimContext.getPanel();
+    bool showSequencer  = (currentPanel == VimContext::Sequencer);
+    bool showPianoRoll  = (currentPanel == VimContext::PianoRoll);
+    bool showPluginView = (currentPanel == VimContext::PluginView);
+
+    float bottomY = centerY + arrangementH;
+
+    bool pluginEnlarged = showPluginView && vimContext.isPluginViewEnlarged();
+
+    if (showPluginView && pluginEnlarged)
+    {
+        // Enlarged: plugin view fills arrangement area, mixer full-width bottom
+        if (arrangementWidget)
+            arrangementWidget->setVisible (false);
+
+        if (pluginViewWidget)
+        {
+            pluginViewWidget->setEnlarged (true);
+            pluginViewWidget->setVisible (true);
+            pluginViewWidget->setBounds (centerX, centerY, centerW, arrangementH);
+#if defined(__linux__)
+            pluginViewWidget->updateEditorBounds();
+#endif
+        }
+
+        if (mixerWidget)
+        {
+            mixerWidget->setVisible (true);
+            mixerWidget->setBounds (centerX, bottomY, centerW, bottomH);
+        }
+    }
+    else if (showPluginView)
+    {
+        // Split bottom: 55% plugin view (left), 45% mixer (right)
+        float pluginViewW = centerW * 0.55f;
+        float mixerW = centerW - pluginViewW;
+
+        if (pluginViewWidget)
+        {
+            pluginViewWidget->setEnlarged (false);
+            pluginViewWidget->setVisible (true);
+            pluginViewWidget->setBounds (centerX, bottomY, pluginViewW, bottomH);
+#if defined(__linux__)
+            pluginViewWidget->updateEditorBounds();
+#endif
+        }
+
+        if (mixerWidget)
+        {
+            mixerWidget->setVisible (true);
+            mixerWidget->setBounds (centerX + pluginViewW, bottomY, mixerW, bottomH);
+        }
+    }
+    else
+    {
+        if (pluginViewWidget)
+            pluginViewWidget->setVisible (false);
+
+        if (mixerWidget)
+        {
+            mixerWidget->setVisible (! showSequencer && ! showPianoRoll);
+            if (! showSequencer && ! showPianoRoll)
+                mixerWidget->setBounds (centerX, bottomY, centerW, bottomH);
+        }
     }
 
     if (sequencerWidget)
     {
         sequencerWidget->setVisible (showSequencer);
         if (showSequencer)
-            sequencerWidget->setBounds (centerX, centerY + arrangementH, centerW, bottomH);
+            sequencerWidget->setBounds (centerX, bottomY, centerW, bottomH);
     }
 
     if (pianoRollWidget)
     {
         pianoRollWidget->setVisible (showPianoRoll);
         if (showPianoRoll)
-            pianoRollWidget->setBounds (centerX, centerY + arrangementH, centerW, bottomH);
+            pianoRollWidget->setBounds (centerX, bottomY, centerW, bottomH);
     }
 
     // Command palette overlay (centered, top portion)
@@ -1833,8 +2081,38 @@ void AppController::vimContextChanged()
     if (mixerWidget)
     {
         mixerWidget->setActiveContext (panel == VimContext::Mixer);
-        mixerWidget->setSelectedStripIndex (arrangement.getSelectedTrackIndex());
+
+        if (vimContext.isMasterStripSelected())
+            mixerWidget->setSelectedStripIndex (project.getNumTracks());
+        else
+            mixerWidget->setSelectedStripIndex (arrangement.getSelectedTrackIndex());
+
         mixerWidget->setMixerFocus (vimContext.getMixerFocus());
+
+        if (vimContext.getMixerFocus() == VimContext::FocusPlugins)
+            mixerWidget->setSelectedPluginSlot (vimContext.getSelectedPluginSlot());
+        else
+            mixerWidget->setSelectedPluginSlot (-1);
+    }
+
+    // Propagate plugin view state
+    if (pluginViewWidget)
+    {
+        pluginViewWidget->setActiveContext (panel == VimContext::PluginView);
+
+        if (panel == VimContext::PluginView)
+        {
+            // Clamp selected param to valid range
+            int numParams = pluginViewWidget->getNumParameters();
+            if (numParams > 0 && vimContext.getSelectedParamIndex() >= numParams)
+                vimContext.setSelectedParamIndex (numParams - 1);
+
+            pluginViewWidget->setSelectedParamIndex (vimContext.getSelectedParamIndex());
+            pluginViewWidget->setHintMode (vimContext.getHintMode());
+            pluginViewWidget->setHintBuffer (vimContext.getHintBuffer());
+            pluginViewWidget->setNumberEntryActive (vimContext.isNumberEntryActive());
+            pluginViewWidget->setNumberBuffer (vimContext.getNumberBuffer());
+        }
     }
 
     // Sync grid cursor to VimContext
@@ -1847,6 +2125,12 @@ void AppController::vimContextChanged()
     if (panel != VimContext::PianoRoll && pianoRollWidget && pianoRollWidget->isVisible())
     {
         pianoRollWidget->loadClip (juce::ValueTree());
+    }
+
+    // When plugin view is closed, clear its plugin data
+    if (panel != VimContext::PluginView && pluginViewWidget && pluginViewWidget->isVisible())
+    {
+        pluginViewWidget->clearPlugin();
     }
 }
 

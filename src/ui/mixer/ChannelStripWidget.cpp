@@ -120,11 +120,18 @@ void ChannelStripWidget::paintOverChildren (gfx::Canvas& canvas)
     {
         Rect focusBounds = focusedWidget->getBounds().reduced (-2.0f);
 
-        // Subtle green fill
-        canvas.fillRoundedRect (focusBounds, 2.0f, theme.selection.withAlpha ((uint8_t) 20));
-
-        // Green stroke
-        canvas.strokeRect (focusBounds, theme.selection.withAlpha ((uint8_t) 153), 1.5f);
+        if (currentFocus == VimContext::FocusPlugins)
+        {
+            // Plugins: only draw a subtle border — individual slot highlights
+            // inside PluginSlotListWidget handle per-slot selection feedback
+            canvas.strokeRect (focusBounds, theme.selection.withAlpha ((uint8_t) 102), 1.0f);
+        }
+        else
+        {
+            // Volume / Pan: full highlight
+            canvas.fillRoundedRect (focusBounds, 2.0f, theme.selection.withAlpha ((uint8_t) 46));
+            canvas.strokeRect (focusBounds, theme.selection, 1.5f);
+        }
     }
 }
 

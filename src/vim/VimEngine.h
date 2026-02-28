@@ -75,6 +75,18 @@ public:
     // Browser toggle callback (gp keybinding)
     std::function<void()> onToggleBrowser;
 
+    // Plugin view callbacks
+    std::function<void (int trackIndex, int pluginIndex)> onOpenPluginView;
+    std::function<void()> onClosePluginView;
+    std::function<void (int paramIndex, float delta)> onPluginParamAdjust;
+    std::function<void (int paramIndex, float newValue)> onPluginParamChanged;
+    std::function<bool()> onQuerySpatialHints;
+    std::function<int (int spatialIndex)> onResolveSpatialHint;
+
+    // Hint label generation
+    static juce::String generateHintLabel (int index);
+    static int resolveHintLabel (const juce::String& label);
+
     // Mixer plugin callbacks (wired by MainComponent)
     std::function<void (int trackIndex, int pluginIndex)> onMixerPluginOpen;
     std::function<void (int trackIndex)> onMixerPluginAdd;
@@ -209,6 +221,10 @@ private:
     bool handleSequencerNormalKey (const juce::KeyPress& key);
     bool handlePianoRollNormalKey (const juce::KeyPress& key);
     bool handleMixerNormalKey (const juce::KeyPress& key);
+    bool handlePluginViewNormalKey (const juce::KeyPress& key);
+
+    void openPluginView (int trackIndex, int pluginIndex);
+    void closePluginView();
 
     int getMixerPluginCount() const;
 

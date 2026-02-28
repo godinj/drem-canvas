@@ -159,6 +159,9 @@ public:
             systemRequestedQuit();
         };
 
+        // Pass GLFW window handle for X11 reparenting of plugin editors
+        appController->setGlfwWindow (glfwWindow->getHandle());
+
         // Initialize the audio engine and all UI
         appController->initialise();
 

@@ -7,8 +7,9 @@ namespace dc
 class VimContext
 {
 public:
-    enum Panel { Editor, Mixer, Sequencer, PianoRoll };
+    enum Panel { Editor, Mixer, Sequencer, PianoRoll, PluginView };
     enum MixerFocus { FocusNone, FocusVolume, FocusPan, FocusPlugins };
+    enum HintMode { HintNone, HintActive, HintSpatial };
 
     VimContext() = default;
 
@@ -29,6 +30,31 @@ public:
     // Plugin slot selection (within Plugins focus)
     int getSelectedPluginSlot() const { return selectedPluginSlot; }
     void setSelectedPluginSlot (int slot) { selectedPluginSlot = slot; }
+
+    // Plugin view state
+    int getPluginViewTrackIndex() const { return pluginViewTrackIndex; }
+    int getPluginViewPluginIndex() const { return pluginViewPluginIndex; }
+    void setPluginViewTarget (int trackIdx, int pluginIdx);
+    void clearPluginViewTarget();
+
+    int getSelectedParamIndex() const { return selectedParamIndex; }
+    void setSelectedParamIndex (int idx) { selectedParamIndex = idx; }
+
+    HintMode getHintMode() const { return hintMode; }
+    void setHintMode (HintMode m) { hintMode = m; }
+
+    const juce::String& getHintBuffer() const { return hintBuffer; }
+    void setHintBuffer (const juce::String& buf) { hintBuffer = buf; }
+    void clearHintBuffer() { hintBuffer.clear(); }
+
+    bool isNumberEntryActive() const { return numberEntryActive; }
+    const juce::String& getNumberBuffer() const { return numberBuffer; }
+    void setNumberEntryActive (bool active) { numberEntryActive = active; }
+    void setNumberBuffer (const juce::String& buf) { numberBuffer = buf; }
+    void clearNumberEntry() { numberEntryActive = false; numberBuffer.clear(); }
+
+    bool isPluginViewEnlarged() const { return pluginViewEnlarged; }
+    void setPluginViewEnlarged (bool enlarged) { pluginViewEnlarged = enlarged; }
 
     // Master strip selection (separate from track index)
     bool isMasterStripSelected() const { return masterStripSelected; }
@@ -86,6 +112,16 @@ private:
     int selectedClipIndex = 0;
     int selectedPluginSlot = 0;
     bool masterStripSelected = false;
+
+    // Plugin view state
+    int pluginViewTrackIndex = -1;
+    int pluginViewPluginIndex = -1;
+    int selectedParamIndex = 0;
+    HintMode hintMode = HintNone;
+    juce::String hintBuffer;
+    bool numberEntryActive = false;
+    juce::String numberBuffer;
+    bool pluginViewEnlarged = false;
     int64_t gridCursorPosition = 0;
     int seqRow  = 0;
     int seqStep = 0;
