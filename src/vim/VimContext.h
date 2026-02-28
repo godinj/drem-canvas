@@ -43,6 +43,9 @@ public:
     HintMode getHintMode() const { return hintMode; }
     void setHintMode (HintMode m) { hintMode = m; }
 
+    int getHintTotalCount() const { return hintTotalCount; }
+    void setHintTotalCount (int count) { hintTotalCount = count; }
+
     const juce::String& getHintBuffer() const { return hintBuffer; }
     void setHintBuffer (const juce::String& buf) { hintBuffer = buf; }
     void clearHintBuffer() { hintBuffer.clear(); }
@@ -118,6 +121,7 @@ private:
     int pluginViewPluginIndex = -1;
     int selectedParamIndex = 0;
     HintMode hintMode = HintNone;
+    int hintTotalCount = 0;
     juce::String hintBuffer;
     bool numberEntryActive = false;
     juce::String numberBuffer;

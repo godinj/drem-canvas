@@ -223,6 +223,7 @@ elseif(UNIX AND NOT APPLE)
         src/platform/linux/EmbeddedPluginEditor.cpp
         src/platform/linux/X11Reparent.cpp
         src/platform/linux/X11Compositor.cpp
+        src/platform/linux/X11MouseProbe.cpp
     )
 endif()
 

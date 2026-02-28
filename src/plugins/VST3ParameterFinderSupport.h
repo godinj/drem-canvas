@@ -1,5 +1,9 @@
 #pragma once
 
+#include <vector>
+#include <map>
+
+
 namespace dc
 {
 
@@ -32,6 +36,27 @@ public:
         nudging the value and detecting which JUCE parameter changes.
         Returns -1 if no mapping could be established. */
     virtual int resolveFinderParamByWiggle (unsigned int /*finderParamId*/) { return -1; }
+
+    /** Reverse wiggle: nudge each JUCE parameter and check if the finder
+        param's controller value changes. Useful when finder ParamIDs are
+        outside the controller's parameter space (e.g. kiloHearts plugins).
+        Populates outMapping with finderParamId → juceIndex pairs.
+        Returns the number of successful mappings. */
+    virtual int resolveByReverseWiggle (
+        const std::vector<unsigned int>& /*finderParamIds*/,
+        std::map<unsigned int, int>& /*outMapping*/) { return 0; }
+
+    /** Enable performEdit snooping. While active, the host context records
+        the ParamID from each performEdit callback. */
+    virtual void beginEditSnoop() {}
+
+    /** Disable snooping and return the last captured ParamID, or 0xFFFFFFFF
+        if no performEdit was received. */
+    virtual unsigned int endEditSnoop() { return 0xFFFFFFFF; }
+
+    /** Resolve a captured performEdit ParamID to a JUCE parameter index.
+        Returns -1 if the ParamID is not in the JUCE parameter map. */
+    virtual int resolveParamIDToIndex (unsigned int /*paramId*/) { return -1; }
 };
 
 } // namespace dc

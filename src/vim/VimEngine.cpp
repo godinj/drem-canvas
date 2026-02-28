@@ -3421,33 +3421,40 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
 
 // ─── Plugin View ─────────────────────────────────────────────────────────────
 
-juce::String VimEngine::generateHintLabel (int index)
+juce::String VimEngine::generateHintLabel (int index, int totalCount)
 {
     // Home-row keys for hint labels: a,s,d,f,g,h,j,k,l
+    // All hints are uniform length to avoid prefix conflicts
+    // (e.g. 'a' would block 'aa','as' if mixed lengths were used)
     static const char keys[] = "asdfghjkl";
     static const int numKeys = 9;
 
-    if (index < numKeys)
-        return juce::String::charToString (keys[index]);
+    if (totalCount <= numKeys)
+    {
+        // Single-char hints: a, s, d, ...
+        if (index < numKeys)
+            return juce::String::charToString (keys[index]);
+    }
+    else if (totalCount <= numKeys * numKeys)
+    {
+        // Two-char hints for ALL entries: aa, as, ad, ...
+        int first = index / numKeys;
+        int second = index % numKeys;
+        if (first < numKeys)
+            return juce::String::charToString (keys[first])
+                 + juce::String::charToString (keys[second]);
+    }
 
-    // Two-char labels: aa, as, ad, ...
-    int first = (index - numKeys) / numKeys;
-    int second = (index - numKeys) % numKeys;
-
-    if (first < numKeys)
-        return juce::String::charToString (keys[first])
-             + juce::String::charToString (keys[second]);
-
-    // Three-char for > 90 params (unlikely but safe)
-    int third = second;
-    second = first % numKeys;
-    first = (first / numKeys) % numKeys;
+    // Three-char for > 81 params (unlikely but safe)
+    int first = (index / (numKeys * numKeys)) % numKeys;
+    int second = (index / numKeys) % numKeys;
+    int third = index % numKeys;
     return juce::String::charToString (keys[first])
          + juce::String::charToString (keys[second])
          + juce::String::charToString (keys[third]);
 }
 
-int VimEngine::resolveHintLabel (const juce::String& label)
+int VimEngine::resolveHintLabel (const juce::String& label, int totalCount)
 {
     static const char keys[] = "asdfghjkl";
     static const int numKeys = 9;
@@ -3459,18 +3466,39 @@ int VimEngine::resolveHintLabel (const juce::String& label)
         return -1;
     };
 
-    if (label.length() == 1)
+    // Determine expected label length based on totalCount
+    int expectedLen = (totalCount <= numKeys) ? 1
+                    : (totalCount <= numKeys * numKeys) ? 2
+                    : 3;
+
+    // Only resolve when label reaches the expected length
+    if (label.length() < expectedLen)
+        return -1;
+
+    if (expectedLen == 1)
     {
         int i = indexOf (label[0]);
-        return (i >= 0) ? i : -1;
+        return (i >= 0 && i < totalCount) ? i : -1;
     }
 
-    if (label.length() == 2)
+    if (expectedLen == 2)
     {
         int first = indexOf (label[0]);
         int second = indexOf (label[1]);
         if (first < 0 || second < 0) return -1;
-        return numKeys + first * numKeys + second;
+        int idx = first * numKeys + second;
+        return (idx < totalCount) ? idx : -1;
+    }
+
+    // Three-char
+    if (label.length() >= 3)
+    {
+        int first = indexOf (label[0]);
+        int second = indexOf (label[1]);
+        int third = indexOf (label[2]);
+        if (first < 0 || second < 0 || third < 0) return -1;
+        int idx = first * numKeys * numKeys + second * numKeys + third;
+        return (idx < totalCount) ? idx : -1;
     }
 
     return -1;
@@ -3577,7 +3605,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
             auto buf = context.getHintBuffer() + juce::String::charToString (keyChar);
             context.setHintBuffer (buf);
 
-            int resolved = resolveHintLabel (buf);
+            int resolved = resolveHintLabel (buf, context.getHintTotalCount());
             if (resolved >= 0)
             {
                 if (isSpatial)
@@ -3622,10 +3650,18 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     // f: enter hint mode (spatial if available, otherwise parameter list)
     if (keyChar == 'f')
     {
-        if (onQuerySpatialHints && onQuerySpatialHints())
+        int spatialCount = onQuerySpatialHintCount ? onQuerySpatialHintCount() : 0;
+        if (spatialCount > 0)
+        {
             context.setHintMode (VimContext::HintSpatial);
+            context.setHintTotalCount (spatialCount);
+        }
         else
+        {
+            int paramCount = onQueryPluginParamCount ? onQueryPluginParamCount() : 0;
             context.setHintMode (VimContext::HintActive);
+            context.setHintTotalCount (paramCount);
+        }
         context.clearHintBuffer();
         listeners.call (&Listener::vimContextChanged);
         return true;

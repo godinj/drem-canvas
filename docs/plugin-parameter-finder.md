@@ -174,3 +174,112 @@ name matching, and wiggle-based value-change detection.
 Runs the scanner at plugin open time, renders hint labels on the composited
 editor image when spatial hint mode is active, and resolves hint selections
 back to JUCE parameter indices.
+
+## Phase 4: Mouse Probe Resolution
+
+### Problem
+
+For Phase Plant (kiloHearts), phases 1-3 all fail. The finder returns 64
+ParamIDs that are "ghost parameters" — the IEditController accepts
+`setParamNormalized()` (returns OK) but doesn't store the value (readback
+is always 0). The 2174 controller params include only ~30 real ones (Bypass,
+Lanes, Macros, Master). The finder ParamID space is completely disjoint from
+the controller's enumerable ParamID space.
+
+### Approach
+
+Inject synthetic X11 mouse events at each unmapped param's centroid position
+and intercept the plugin's `performEdit()` callback to discover the real
+controller ParamID. This is how DAWs like Cubase implement "Learn" mode.
+
+### Off-Screen Window Fix
+
+The editor window lives at (-10000, -10000) for Wayland compositor capture.
+XTest events use root-relative coordinates, so events at negative positions
+never reach the plugin window on XWayland. Fix: call `moveWindow()` to
+reposition the editor at (0, 0) before probing, then back to (-10000, -10000)
+after. The window is briefly visible during probing.
+
+### Multi-Pass Probing
+
+Different controls respond to different mouse gestures. Phase 4 tries four
+strategies in sequence, skipping already-mapped params between passes:
+
+| Pass | ProbeMode  | Gesture                        | Phase Plant hits |
+|------|------------|--------------------------------|------------------|
+| 0    | dragUp     | Press + drag 10px up + release  | 14/64            |
+| 1    | dragDown   | Press + drag 10px down + release | 3/50            |
+| 2    | dragRight  | Press + drag 10px right + release | 0/47           |
+| 3    | click      | Press + release (no drag)        | 0/47            |
+
+**Result: 17 of 64 resolved.** All visible automatable knobs/sliders in
+Phase Plant's default view: Macros 1-8, Mod Wheel, Lane volumes ×3, Lane
+pans ×3, Master output.
+
+### The Remaining 47 Params
+
+IParameterFinder tags 47 additional GUI regions with ParamIDs, but no mouse
+gesture triggers `performEdit`. These are likely module selectors, effect
+slot buttons, dropdown menus, lane tabs, waveform displays, and routing
+controls — interactive GUI elements that the plugin handles internally
+without going through the VST3 performEdit path.
+
+#### Tier 1: Cursor Teleport (no mapping needed)
+
+When user selects a spatial hint for an unmapped param, warp the mouse cursor
+to the param's centroid position so the user can manually interact with it.
+The hint system becomes "navigate to control" rather than "automate this param."
+
+- Already have centroid coords from IParameterFinder scan
+- Use `XTestFakeMotionEvent` to move cursor (same mechanism as nudgePlugin)
+- Mark unmapped hints differently in the overlay (dimmer color or "?" suffix)
+- **Low effort, high value** — implement first
+
+#### Tier 2: Name Discovery via IEditController
+
+Query `editController->getParameterInfo()` using the finder's ParamID to get
+a display name, even for ghost params. The controller might return names like
+"Lane 1 Select" or "Filter Type" even if the param isn't in JUCE's map.
+
+- Add `getParamName(finderParamId)` method to `VST3ParameterFinderSupport`
+- Use the name for spatial hint labels instead of blank text
+- **Low effort** — just a controller query, no mouse injection
+
+#### Tier 3: Additional Probe Strategies
+
+a. **Scroll wheel** — `XTestFakeButtonEvent(dpy, 4/5, ...)` (button 4 = scroll
+   up, 5 = scroll down). Many knobs and dropdowns respond to scroll even if
+   they ignore click+drag.
+
+b. **beginEdit snoop** — some plugins call `beginEdit(paramId)` before
+   `performEdit`. Snoop `beginEdit` to confirm a control is interactive and
+   capture its real paramID, even if `performEdit` doesn't fire within the
+   timing window.
+
+c. **Double-click** — press-release-press-release. Toggle buttons and some
+   value fields fire performEdit on double-click.
+
+d. **Larger drag + longer timing** — 30px drag with 100-200ms wait. Some
+   controls have large dead zones or yabridge IPC latency spikes.
+
+e. **Right-click** — button 3 press. Some controls expose value editing or
+   reset via right-click.
+
+#### Tier 4: Classify Unmapped Params
+
+After all probe strategies, remaining unmapped params should be classified:
+- **Display-only**: waveform viewers, spectrum analyzers, modulation displays
+- **Navigation**: module tabs, lane selectors (state changes, not automation)
+- **Unknown**: keep the spatial hint for cursor teleport
+
+### Files
+
+| File | Change |
+|------|--------|
+| `src/platform/linux/X11MouseProbe.h/.cpp` | `sendMouseProbe()` with `ProbeMode` enum, `moveWindow()`, `findDeepestChild()` |
+| `src/plugins/VST3ParameterFinderSupport.h` | Added `beginEditSnoop()`, `endEditSnoop()`, `resolveParamIDToIndex()` |
+| `libs/JUCE/.../juce_VST3PluginFormat.cpp` | VST3PluginWindow implements snoop methods |
+| `libs/JUCE/.../juce_VST3PluginFormatImpl.h` | `editSnoopActive`, `editSnoopParamID`, `totalPerformEditCount`, `snoopWindowCallCount` atomics; performEdit hook |
+| `src/ui/pluginview/PluginViewWidget.cpp` | Phase 4 multi-pass integration, on-screen window move |
+| `src/plugins/ParameterFinderScanner.h` | `getMutableResults()` for Phase 4 |
+| `CMakeLists.txt` | Added `src/platform/linux/X11MouseProbe.cpp` |

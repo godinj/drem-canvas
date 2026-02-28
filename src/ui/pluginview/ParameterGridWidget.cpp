@@ -70,6 +70,12 @@ void ParameterGridWidget::setNumberBuffer (const juce::String& buffer)
     repaint();
 }
 
+void ParameterGridWidget::setSpatialHintMap (std::unordered_map<int, juce::String> map)
+{
+    spatialHintMap = std::move (map);
+    repaint();
+}
+
 int ParameterGridWidget::getNumParameters() const
 {
     return parameters.size();
@@ -120,24 +126,37 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
         float x = 4.0f;
 
         // Hint label column
-        auto hintLabel = VimEngine::generateHintLabel (i);
-        if (hintMode == VimContext::HintActive)
+        // When spatial data is available, show spatial hint labels (matching the overlay).
+        // Otherwise fall back to generated hints for HintActive mode.
         {
-            // Check if this hint matches the current buffer prefix
-            bool matches = hintBuffer.isEmpty()
-                         || hintLabel.startsWith (hintBuffer);
+            juce::String hintLabel;
+            bool hasSpatial = ! spatialHintMap.empty();
 
-            Color hintColor = matches
-                ? Color::fromARGB (0xffffcc00) // yellow for matching
-                : Color::fromARGB (0xff45475a); // dim for non-matching
+            if (hasSpatial)
+            {
+                auto it = spatialHintMap.find (i);
+                if (it != spatialHintMap.end())
+                    hintLabel = it->second;
+            }
+            else if (hintMode == VimContext::HintActive)
+            {
+                hintLabel = VimEngine::generateHintLabel (i, parameters.size());
+            }
 
-            canvas.drawText (hintLabel.toStdString(), x, rowY + rowHeight * 0.5f + 5.0f,
-                             fm.getMonoFont(), hintColor);
-        }
-        else
-        {
-            canvas.drawText (hintLabel.toStdString(), x, rowY + rowHeight * 0.5f + 5.0f,
-                             fm.getMonoFont(), Color::fromARGB (0xff585b70));
+            if (hintLabel.isNotEmpty())
+            {
+                bool isHinting = (hintMode == VimContext::HintActive
+                               || hintMode == VimContext::HintSpatial);
+                bool matches = ! isHinting || hintBuffer.isEmpty()
+                             || hintLabel.startsWith (hintBuffer);
+
+                Color hintColor = isHinting
+                    ? (matches ? Color::fromARGB (0xffffcc00) : Color::fromARGB (0xff45475a))
+                    : Color::fromARGB (0xff585b70);
+
+                canvas.drawText (hintLabel.toStdString(), x, rowY + rowHeight * 0.5f + 5.0f,
+                                 fm.getMonoFont(), hintColor);
+            }
         }
         x += hintColWidth;
 

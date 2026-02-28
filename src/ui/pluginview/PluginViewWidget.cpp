@@ -8,7 +8,10 @@
 #include "platform/linux/EmbeddedPluginEditor.h"
 #include "platform/linux/X11Compositor.h"
 #include "platform/linux/X11Reparent.h"
+#include "platform/linux/X11MouseProbe.h"
 #include <iostream>
+#include <thread>
+#include <chrono>
 #endif
 
 namespace dc
@@ -89,6 +92,7 @@ void PluginViewWidget::clearPlugin()
 
     spatialScanner.clear();
     spatialScanComplete = false;
+    paramGrid.setSpatialHintMap ({});
 
 #if defined(__linux__)
     if (compositor)
@@ -176,7 +180,95 @@ void PluginViewWidget::runSpatialScan()
     int nativeH = embeddedEditor->getNativeHeight();
 
     spatialScanner.scan (*finder, currentPlugin, nativeW, nativeH);
+
+    // Phase 4: mouse probe — for params still unmapped after phases 1-3,
+    // inject synthetic mouse clicks at their centroid positions and intercept
+    // the plugin's performEdit callback to discover the real controller ParamID.
+    {
+        auto& results = spatialScanner.getMutableResults();
+        auto& params = currentPlugin->getParameters();
+        void* xDisplay = embeddedEditor->getXDisplay();
+        unsigned long xWindow = embeddedEditor->getXWindow();
+        int probed = 0;
+        int unmappedCount = 0;
+
+        for (auto& info : results)
+            if (info.juceParamIndex < 0)
+                unmappedCount++;
+
+        if (xDisplay != nullptr && xWindow != 0 && unmappedCount > 0)
+        {
+            // Move the editor on-screen so XTest root coords are positive.
+            // In Wayland mode the editor lives at (-10000,-10000) for compositor
+            // capture — XTest events at negative root coords never reach the
+            // plugin window on XWayland.
+            platform::x11::moveWindow (xDisplay, xWindow, 0, 0);
+            std::this_thread::sleep_for (std::chrono::milliseconds (50));
+
+            // Multi-pass probing: try different mouse strategies to handle
+            // vertical knobs, horizontal sliders, buttons, etc.
+            using PM = platform::x11::ProbeMode;
+            const PM strategies[] = { PM::dragUp, PM::dragDown, PM::dragRight, PM::click };
+
+            for (int pass = 0; pass < 4; ++pass)
+            {
+                int passAttempts = 0;
+
+                for (auto& info : results)
+                {
+                    if (info.juceParamIndex >= 0)
+                        continue;
+
+                    finder->beginEditSnoop();
+
+                    platform::x11::sendMouseProbe (xDisplay, xWindow,
+                                                   info.centerX, info.centerY,
+                                                   strategies[pass]);
+
+                    // Wait for yabridge IPC round-trip
+                    std::this_thread::sleep_for (std::chrono::milliseconds (50));
+
+                    unsigned int capturedId = finder->endEditSnoop();
+
+                    if (capturedId != 0xFFFFFFFF)
+                    {
+                        int juceIdx = finder->resolveParamIDToIndex (capturedId);
+                        if (juceIdx >= 0 && juceIdx < params.size())
+                        {
+                            info.juceParamIndex = juceIdx;
+                            info.name = params[juceIdx]->getName (64);
+                            probed++;
+                        }
+                    }
+
+                    passAttempts++;
+                }
+
+                // If no unmapped params remain, stop early
+                if (passAttempts == 0)
+                    break;
+            }
+
+            // Move editor back off-screen for compositor capture
+            platform::x11::moveWindow (xDisplay, xWindow, -10000, -10000);
+        }
+
+        if (probed > 0)
+            std::cerr << "[SpatialScan] Phase 4: " << probed
+                      << " of " << unmappedCount << " resolved via mouse probe\n";
+    }
+
     spatialScanComplete = spatialScanner.hasResults();
+
+    // Build juceParamIndex -> hintLabel map for the parameter grid
+    if (spatialScanComplete)
+    {
+        std::unordered_map<int, juce::String> hintMap;
+        for (auto& info : spatialScanner.getResults())
+            if (info.juceParamIndex >= 0)
+                hintMap[info.juceParamIndex] = info.hintLabel;
+        paramGrid.setSpatialHintMap (std::move (hintMap));
+    }
 #endif
 }
 

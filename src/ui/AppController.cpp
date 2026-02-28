@@ -241,8 +241,10 @@ void AppController::initialise()
         param->setValueNotifyingHost (newVal);
     };
 
-    vimEngine->onQuerySpatialHints = [this]() -> bool {
-        return pluginViewWidget && pluginViewWidget->hasSpatialHints();
+    vimEngine->onQuerySpatialHintCount = [this]() -> int {
+        if (! pluginViewWidget || ! pluginViewWidget->hasSpatialHints())
+            return 0;
+        return static_cast<int> (pluginViewWidget->getSpatialResults().size());
     };
 
     vimEngine->onResolveSpatialHint = [this] (int spatialIndex) -> int {
@@ -257,6 +259,12 @@ void AppController::initialise()
                   << " juceParamIndex=" << info.juceParamIndex
                   << " name=" << info.name << "\n";
         return info.juceParamIndex;
+    };
+
+    vimEngine->onQueryPluginParamCount = [this]() -> int {
+        if (! pluginViewWidget)
+            return 0;
+        return pluginViewWidget->getNumParameters();
     };
 
     vimEngine->onPluginParamChanged = [this] (int paramIndex, float newValue)

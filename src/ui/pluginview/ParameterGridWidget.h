@@ -4,6 +4,7 @@
 #include "vim/VimContext.h"
 #include "vim/VimEngine.h"
 #include <JuceHeader.h>
+#include <unordered_map>
 
 namespace dc
 {
@@ -27,6 +28,10 @@ public:
     void setNumberEntryActive (bool active);
     void setNumberBuffer (const juce::String& buffer);
 
+    /** Set spatial hint labels keyed by JUCE parameter index.
+        When non-empty, these labels are shown instead of generated hints. */
+    void setSpatialHintMap (std::unordered_map<int, juce::String> map);
+
     int getNumParameters() const;
 
 private:
@@ -38,6 +43,7 @@ private:
     juce::String hintBuffer;
     bool numberEntry = false;
     juce::String numberBuffer;
+    std::unordered_map<int, juce::String> spatialHintMap;
 
     static constexpr float rowHeight = 24.0f;
     static constexpr float hintColWidth = 36.0f;

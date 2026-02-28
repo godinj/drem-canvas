@@ -43,6 +43,7 @@ public:
 
     bool hasResults() const { return ! results.empty(); }
     const std::vector<SpatialParamInfo>& getResults() const { return results; }
+    std::vector<SpatialParamInfo>& getMutableResults() { return results; }
     void clear() { results.clear(); }
 
 private:

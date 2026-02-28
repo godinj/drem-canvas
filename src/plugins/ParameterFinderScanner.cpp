@@ -90,9 +90,53 @@ void ParameterFinderScanner::scan (VST3ParameterFinderSupport& finder,
         }
     }
 
+    // Phase 3: reverse wiggle — nudge JUCE params and detect finder param changes.
+    // Useful when finder ParamIDs are outside the controller's param space.
+    int reverseWiggled = 0;
+    {
+        std::vector<unsigned int> unmappedFinderIds;
+        for (auto& info : results)
+        {
+            if (info.juceParamIndex < 0)
+                unmappedFinderIds.push_back (info.paramId);
+        }
+
+        if (! unmappedFinderIds.empty())
+        {
+            std::map<unsigned int, int> reverseMap;
+            int found = finder.resolveByReverseWiggle (unmappedFinderIds, reverseMap);
+
+            if (found > 0)
+            {
+                for (auto& info : results)
+                {
+                    if (info.juceParamIndex >= 0)
+                        continue;
+
+                    auto it = reverseMap.find (info.paramId);
+                    if (it != reverseMap.end() && it->second >= 0 && it->second < params.size())
+                    {
+                        info.juceParamIndex = it->second;
+                        info.name = params[it->second]->getName (64);
+                        reverseWiggled++;
+                    }
+                }
+            }
+        }
+    }
+
+    int unmapped = 0;
+    for (auto& info : results)
+    {
+        if (info.juceParamIndex < 0)
+            unmapped++;
+    }
+
     std::cerr << "[SpatialScan] " << accumulators.size() << " finder params, "
-              << mapped << " mapped to JUCE indices, "
-              << wiggled << " via wiggle\n";
+              << mapped << " direct, "
+              << wiggled << " wiggle, "
+              << reverseWiggled << " reverse, "
+              << unmapped << " unmapped\n";
 
     // Sort by position: top-to-bottom rows (20px tolerance), then left-to-right
     static constexpr int rowTolerance = 20;
@@ -106,9 +150,10 @@ void ParameterFinderScanner::scan (VST3ParameterFinderSupport& finder,
         return a.centerX < b.centerX;
     });
 
-    // Assign hint labels
-    for (int i = 0; i < static_cast<int> (results.size()); ++i)
-        results[i].hintLabel = VimEngine::generateHintLabel (i);
+    // Assign hint labels (uniform length based on total count)
+    int totalCount = static_cast<int> (results.size());
+    for (int i = 0; i < totalCount; ++i)
+        results[i].hintLabel = VimEngine::generateHintLabel (i, totalCount);
 }
 
 } // namespace dc

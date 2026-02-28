@@ -80,12 +80,13 @@ public:
     std::function<void()> onClosePluginView;
     std::function<void (int paramIndex, float delta)> onPluginParamAdjust;
     std::function<void (int paramIndex, float newValue)> onPluginParamChanged;
-    std::function<bool()> onQuerySpatialHints;
+    std::function<int()> onQuerySpatialHintCount;
     std::function<int (int spatialIndex)> onResolveSpatialHint;
+    std::function<int()> onQueryPluginParamCount;
 
-    // Hint label generation
-    static juce::String generateHintLabel (int index);
-    static int resolveHintLabel (const juce::String& label);
+    // Hint label generation (totalCount determines uniform label length)
+    static juce::String generateHintLabel (int index, int totalCount);
+    static int resolveHintLabel (const juce::String& label, int totalCount);
 
     // Mixer plugin callbacks (wired by MainComponent)
     std::function<void (int trackIndex, int pluginIndex)> onMixerPluginOpen;
