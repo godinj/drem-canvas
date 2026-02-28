@@ -36,10 +36,6 @@
 #include "ui/pluginview/PluginViewWidget.h"
 #include "model/RecentProjects.h"
 
-#if defined(__linux__)
-struct GLFWwindow;
-#endif
-
 namespace dc
 {
 namespace ui
@@ -66,9 +62,7 @@ public:
     gfx::Renderer* getRenderer() { return renderer; }
     void setRenderer (gfx::Renderer* r);
 
-#if defined(__linux__)
-    void setGlfwWindow (GLFWwindow* w);
-#endif
+    void setNativeWindowHandle (void* handle);
 
 private:
     // ValueTree::Listener
@@ -170,9 +164,7 @@ private:
     // Resizer bar position: fraction of center area occupied by top (arrangement)
     float splitRatio = 0.65f;
 
-#if defined(__linux__)
-    GLFWwindow* glfwWindow = nullptr;
-#endif
+    void* nativeWindowHandle = nullptr;
 
     gfx::Renderer* renderer = nullptr;
 };

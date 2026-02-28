@@ -84,6 +84,9 @@ public:
             systemRequestedQuit();
         };
 
+        // Pass native window handle for plugin editor compositing
+        appController->setNativeWindowHandle (nativeWindow->getNativeHandle());
+
         // Initialize the audio engine and all UI
         appController->initialise();
 
@@ -159,8 +162,8 @@ public:
             systemRequestedQuit();
         };
 
-        // Pass GLFW window handle for X11 reparenting of plugin editors
-        appController->setGlfwWindow (glfwWindow->getHandle());
+        // Pass native window handle for plugin editor compositing
+        appController->setNativeWindowHandle (glfwWindow->getHandle());
 
         // Initialize the audio engine and all UI
         appController->initialise();

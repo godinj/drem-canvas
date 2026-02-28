@@ -6,14 +6,12 @@
 #include "plugins/ParameterFinderScanner.h"
 #include <JuceHeader.h>
 
-#if defined(__linux__)
-struct GLFWwindow;
-namespace dc { namespace platform { class EmbeddedPluginEditor; } }
-namespace dc { namespace platform { namespace x11 { class Compositor; } } }
-#endif
-
 namespace dc
 {
+
+class PluginEditorBridge;
+class SyntheticInputProbe;
+
 namespace ui
 {
 
@@ -48,10 +46,8 @@ public:
     bool hasSpatialHints();
     const std::vector<SpatialParamInfo>& getSpatialResults() const { return spatialScanner.getResults(); }
 
-#if defined(__linux__)
-    void setGlfwWindow (GLFWwindow* w);
+    void setEditorBridge (std::unique_ptr<PluginEditorBridge> bridge);
     void updateEditorBounds();
-#endif
 
 private:
     ParameterGridWidget paramGrid;
@@ -77,12 +73,8 @@ private:
     };
     CompositeGeometry computeCompositeGeometry() const;
 
-#if defined(__linux__)
-    GLFWwindow* glfwWindow = nullptr;
-    std::unique_ptr<platform::EmbeddedPluginEditor> embeddedEditor;
-    std::unique_ptr<platform::x11::Compositor> compositor;
-    bool compositorActive = false;
-#endif
+    std::unique_ptr<PluginEditorBridge> editorBridge;
+    std::unique_ptr<SyntheticInputProbe> inputProbe;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginViewWidget)
 };

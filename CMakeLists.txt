@@ -108,6 +108,8 @@ target_sources(DremCanvas PRIVATE
     src/plugins/PluginHost.cpp
     src/plugins/PluginWindowManager.cpp
     src/plugins/ParameterFinderScanner.cpp
+    src/plugins/PluginEditorBridge.cpp
+    src/plugins/SyntheticInputProbe.cpp
 
     # Vim
     src/vim/VimContext.cpp
@@ -213,6 +215,8 @@ if(APPLE)
         src/platform/MetalView.mm
         src/platform/EventBridge.mm
         src/platform/NativeDialogs.mm
+        src/platform/MacPluginEditorBridge.mm
+        src/platform/MacSyntheticInputProbe.mm
         src/graphics/rendering/MetalBackend.mm
     )
 elseif(UNIX AND NOT APPLE)
@@ -224,6 +228,8 @@ elseif(UNIX AND NOT APPLE)
         src/platform/linux/X11Reparent.cpp
         src/platform/linux/X11Compositor.cpp
         src/platform/linux/X11MouseProbe.cpp
+        src/platform/linux/X11PluginEditorBridge.cpp
+        src/platform/linux/X11SyntheticInputProbe.cpp
     )
 endif()
 
@@ -270,6 +276,8 @@ if(APPLE)
         src/platform/MetalView.mm
         src/platform/EventBridge.mm
         src/platform/NativeDialogs.mm
+        src/platform/MacPluginEditorBridge.mm
+        src/platform/MacSyntheticInputProbe.mm
         src/graphics/rendering/MetalBackend.mm
         PROPERTIES
         COMPILE_FLAGS "-fobjc-arc"

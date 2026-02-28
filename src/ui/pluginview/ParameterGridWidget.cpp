@@ -138,7 +138,7 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
                 if (it != spatialHintMap.end())
                     hintLabel = it->second;
             }
-            else if (hintMode == VimContext::HintActive)
+            else
             {
                 hintLabel = VimEngine::generateHintLabel (i, parameters.size());
             }

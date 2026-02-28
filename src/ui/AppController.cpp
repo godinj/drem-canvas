@@ -5,6 +5,7 @@
 #include "model/MidiClip.h"
 #include "model/StepSequencer.h"
 #include "platform/NativeDialogs.h"
+#include "plugins/PluginEditorBridge.h"
 #include "utils/UndoSystem.h"
 #include <cmath>
 
@@ -570,10 +571,8 @@ void AppController::initialise()
     pluginViewWidget->setVisible (false);
     addChild (pluginViewWidget.get());
 
-#if defined(__linux__)
-    if (glfwWindow != nullptr)
-        pluginViewWidget->setGlfwWindow (glfwWindow);
-#endif
+    if (nativeWindowHandle != nullptr)
+        pluginViewWidget->setEditorBridge (PluginEditorBridge::create (nativeWindowHandle));
 
     // Virtual keyboard (hidden initially, shown when entering Keyboard mode)
     keyboardWidget = std::make_unique<VirtualKeyboardWidget> (vimEngine->getKeyboardState());
@@ -630,14 +629,12 @@ void AppController::setRenderer (gfx::Renderer* r)
     renderer = r;
 }
 
-#if defined(__linux__)
-void AppController::setGlfwWindow (GLFWwindow* w)
+void AppController::setNativeWindowHandle (void* handle)
 {
-    glfwWindow = w;
+    nativeWindowHandle = handle;
     if (pluginViewWidget)
-        pluginViewWidget->setGlfwWindow (w);
+        pluginViewWidget->setEditorBridge (PluginEditorBridge::create (handle));
 }
-#endif
 
 void AppController::paint (gfx::Canvas& canvas)
 {
@@ -716,9 +713,7 @@ void AppController::resized()
             pluginViewWidget->setEnlarged (true);
             pluginViewWidget->setVisible (true);
             pluginViewWidget->setBounds (centerX, centerY, centerW, arrangementH);
-#if defined(__linux__)
             pluginViewWidget->updateEditorBounds();
-#endif
         }
 
         if (mixerWidget)
@@ -738,9 +733,7 @@ void AppController::resized()
             pluginViewWidget->setEnlarged (false);
             pluginViewWidget->setVisible (true);
             pluginViewWidget->setBounds (centerX, bottomY, pluginViewW, bottomH);
-#if defined(__linux__)
             pluginViewWidget->updateEditorBounds();
-#endif
         }
 
         if (mixerWidget)
