@@ -227,13 +227,22 @@ void BrowserWidget::startAsyncScan()
     scanTotal_ = 0;
     scanResultReady_ = false;
     scanButton.setText ("Scanning...");
+
+    progressBar.setProgress (0.0);
+    progressBar.setStatusText ("");
+    progressBar.setVisible (true);
+    scanStatusLabel.setVisible (true);
+    scanStatusLabel.setText ("Preparing scan...");
+    resized();
     repaint();
 
     pluginManager.scanForPluginsAsync (
-        [this] (const std::string& /*name*/, int current, int total)
+        [this] (const std::string& name, int current, int total)
         {
             scanCurrent_ = current;
             scanTotal_ = total;
+            scanPluginName_ = name;
+            scanNameDirty_ = true;
         },
         [this] ()
         {
@@ -248,17 +257,27 @@ void BrowserWidget::tick()
         scanInProgress_ = false;
         scanResultReady_ = false;
         scanButton.setText ("Scan Plugins");
+        progressBar.setVisible (false);
+        scanStatusLabel.setVisible (false);
         refreshPluginList();
+        resized();
         repaint();
     }
     else if (scanInProgress_)
     {
-        // Update button text with progress
         int cur = scanCurrent_;
         int tot = scanTotal_;
         if (tot > 0)
         {
             scanButton.setText ("Scanning " + std::to_string (cur) + "/" + std::to_string (tot));
+            progressBar.setProgress (static_cast<double> (cur) / static_cast<double> (tot));
+
+            if (scanNameDirty_.exchange (false))
+            {
+                progressBar.setStatusText (scanPluginName_);
+                scanStatusLabel.setText (scanPluginName_);
+            }
+
             repaint();
         }
     }

@@ -66,6 +66,8 @@ private:
     std::atomic<int> scanCurrent_ { 0 };
     std::atomic<int> scanTotal_ { 0 };
     std::atomic<bool> scanResultReady_ { false };
+    std::atomic<bool> scanNameDirty_ { false };
+    std::string scanPluginName_;
 
     static constexpr float searchFieldHeight = 28.0f;
 };

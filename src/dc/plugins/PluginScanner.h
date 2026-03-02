@@ -2,6 +2,7 @@
 #include "PluginDescription.h"
 #include <filesystem>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -59,6 +60,13 @@ private:
     std::filesystem::path deadMansPedal_;  // tracks current scan target
     ProbeCache* probeCache_ = nullptr;
     std::vector<PluginDescription> previousPlugins_;
+
+    /// Mutex serialising yabridge plugin loads.  Yabridge chainloaders
+    /// spawn Wine host processes whose IPC setup races if two loads
+    /// overlap, producing a SIGSEGV on a bridge thread.  We hold this
+    /// mutex for the entire load+settle cycle so that at most one Wine
+    /// bridge is being established at a time.
+    std::mutex yabridgeLoadMutex_;
 
     /// Scan a single bundle in a forked child process.
     /// Returns nullopt if child crashes or times out.

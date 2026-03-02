@@ -43,6 +43,7 @@ int main (int argc, char* argv[])
     std::string loadPath;
     int expectTracks = -1;
     int expectPlugins = -1;
+    std::string expectPluginName;
     int scanTrack = -1;
     int scanSlot = -1;
     bool noSpatialCache = false;
@@ -63,6 +64,8 @@ int main (int argc, char* argv[])
             expectTracks = std::atoi (argv[++i]);
         else if (arg == "--expect-plugins" && i + 1 < argc)
             expectPlugins = std::atoi (argv[++i]);
+        else if (arg == "--expect-plugin-name" && i + 1 < argc)
+            expectPluginName = argv[++i];
         else if (arg == "--scan-plugin" && i + 2 < argc)
         {
             scanTrack = std::atoi (argv[++i]);
@@ -196,6 +199,32 @@ int main (int argc, char* argv[])
                     {
                         std::cerr << "FAIL: expected " << expectPlugins
                                   << " plugins, got " << totalPlugins << "\n";
+                        exitCode = 1;
+                    }
+                }
+
+                // Validate specific plugin loaded by name
+                if (! expectPluginName.empty())
+                {
+                    bool found = false;
+                    auto& project = appController->getProject();
+                    for (int t = 0; t < project.getNumTracks() && ! found; ++t)
+                    {
+                        dc::Track track (project.getTrack (t));
+                        for (int p = 0; p < track.getNumPlugins(); ++p)
+                        {
+                            auto pluginNode = track.getPlugin (p);
+                            auto name = pluginNode.getProperty (dc::IDs::pluginName).getStringOr ("");
+                            if (name == expectPluginName)
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (! found)
+                    {
+                        std::cerr << "FAIL: plugin '" << expectPluginName << "' not found in model\n";
                         exitCode = 1;
                     }
                 }
@@ -395,6 +424,7 @@ int main (int argc, char* argv[])
     std::string loadPath;
     int expectTracks = -1;
     int expectPlugins = -1;
+    std::string expectPluginName;
     int scanTrack = -1;
     int scanSlot = -1;
     bool noSpatialCache = false;
@@ -415,6 +445,8 @@ int main (int argc, char* argv[])
             expectTracks = std::atoi (argv[++i]);
         else if (arg == "--expect-plugins" && i + 1 < argc)
             expectPlugins = std::atoi (argv[++i]);
+        else if (arg == "--expect-plugin-name" && i + 1 < argc)
+            expectPluginName = argv[++i];
         else if (arg == "--scan-plugin" && i + 2 < argc)
         {
             scanTrack = std::atoi (argv[++i]);
@@ -546,6 +578,32 @@ int main (int argc, char* argv[])
             {
                 std::cerr << "FAIL: expected " << expectPlugins
                           << " plugins, got " << totalPlugins << "\n";
+                exitCode = 1;
+            }
+        }
+
+        // Validate specific plugin loaded by name
+        if (! expectPluginName.empty())
+        {
+            bool found = false;
+            auto& project = appController->getProject();
+            for (int t = 0; t < project.getNumTracks() && ! found; ++t)
+            {
+                dc::Track track (project.getTrack (t));
+                for (int p = 0; p < track.getNumPlugins(); ++p)
+                {
+                    auto pluginNode = track.getPlugin (p);
+                    auto name = pluginNode.getProperty (dc::IDs::pluginName).getStringOr ("");
+                    if (name == expectPluginName)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (! found)
+            {
+                std::cerr << "FAIL: plugin '" << expectPluginName << "' not found in model\n";
                 exitCode = 1;
             }
         }

@@ -47,6 +47,7 @@ add_executable(dc_unit_tests
     regression/issue_003_set_state_deactivation.cpp
     regression/issue_004_teardown_sigsegv.cpp
     regression/issue_005_set_state_setup_processing.cpp
+    regression/issue_006_phase_plant_blocked.cpp
 
     # Phase 8: higher-level model tests
     unit/model_layer/test_tempo_map.cpp
@@ -218,5 +219,18 @@ if(BUILD_TESTING)
         COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_auto_scan.sh
                 $<TARGET_FILE:DremCanvas>)
     set_tests_properties(e2e.auto_scan PROPERTIES
+        LABELS "e2e" TIMEOUT 150)
+
+    add_test(NAME e2e.phase_plant
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_phase_plant.sh
+                $<TARGET_FILE:DremCanvas>
+                ${CMAKE_SOURCE_DIR}/tests/fixtures/e2e-phase-plant)
+    set_tests_properties(e2e.phase_plant PROPERTIES
+        LABELS "e2e" TIMEOUT 90)
+
+    add_test(NAME e2e.phase_plant_scan
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_phase_plant_scan.sh
+                $<TARGET_FILE:DremCanvas>)
+    set_tests_properties(e2e.phase_plant_scan PROPERTIES
         LABELS "e2e" TIMEOUT 150)
 endif()

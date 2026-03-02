@@ -9,10 +9,12 @@
 #include <pluginterfaces/vst/ivsteditcontroller.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <thread>
 
 #include <errno.h>
 #include <signal.h>
@@ -383,6 +385,14 @@ void PluginScanner::setPreviousPlugins (const std::vector<PluginDescription>& pl
 std::optional<PluginDescription> PluginScanner::scanOneInProcess (
     const std::filesystem::path& bundlePath)
 {
+    bool isYabridge = VST3Module::isYabridgeBundle (bundlePath);
+
+    // Serialize yabridge loads — Wine bridge IPC setup races if two
+    // loads overlap, producing SIGSEGV on bridge threads.
+    std::unique_lock<std::mutex> lock (yabridgeLoadMutex_, std::defer_lock);
+    if (isYabridge)
+        lock.lock();
+
     if (probeCache_)
         probeCache_->setPedal (bundlePath);
 
@@ -408,7 +418,13 @@ std::optional<PluginDescription> PluginScanner::scanOneInProcess (
         probeCache_->save();
     }
 
-    return extractDescription (*module, bundlePath);
+    auto desc = extractDescription (*module, bundlePath);
+
+    // Let the Wine bridge settle before loading the next yabridge plugin.
+    if (isYabridge)
+        std::this_thread::sleep_for (std::chrono::milliseconds (500));
+
+    return desc;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -571,11 +587,17 @@ std::vector<PluginDescription> PluginScanner::scanAll()
         if (progressCallback_)
             progressCallback_ (pluginName, i + 1, total);
 
-        // Skip blocked bundles
+        // Skip blocked bundles — but retry yabridge ones, since blocking
+        // may have been caused by a now-fixed load-serialisation race.
         if (probeCache_ && probeCache_->getStatus (bundle) == ProbeCache::Status::blocked)
         {
-            dc_log ("PluginScanner: skipping blocked: %s", pluginName.c_str());
-            continue;
+            if (! VST3Module::isYabridgeBundle (bundle))
+            {
+                dc_log ("PluginScanner: skipping blocked: %s", pluginName.c_str());
+                continue;
+            }
+            dc_log ("PluginScanner: retrying blocked yabridge bundle: %s",
+                    pluginName.c_str());
         }
 
         // Reuse cached description if bundle is safe and unchanged
