@@ -16,8 +16,10 @@ PluginManager::~PluginManager()
 
 void PluginManager::scanForPlugins()
 {
+    scanState_ = ScanState::scanning;
     vst3Host_.scanPlugins();
     savePluginList (getDefaultPluginListFile());
+    scanState_ = ScanState::complete;
 }
 
 const std::vector<dc::PluginDescription>& PluginManager::getKnownPlugins() const
@@ -37,6 +39,7 @@ void PluginManager::scanForPluginsAsync (ScanProgressCallback onProgress,
         return;
 
     scanning_.store (true);
+    scanState_ = ScanState::scanning;
 
     scanThread_.submit ([this, onProgress = std::move (onProgress),
                          onComplete = std::move (onComplete)]()
@@ -58,6 +61,7 @@ void PluginManager::scanForPluginsAsync (ScanProgressCallback onProgress,
         messageQueue_.post ([this, onComplete]()
         {
             scanning_.store (false);
+            scanState_ = ScanState::complete;
             if (onComplete)
                 onComplete();
         });

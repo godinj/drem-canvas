@@ -19,6 +19,8 @@ void VST3Host::scanPlugins (PluginScanner::ProgressCallback cb)
     if (cb)
         scanner_.setProgressCallback (std::move (cb));
 
+    scanner_.setProbeCache (&probeCache_);
+    scanner_.setPreviousPlugins (knownPlugins_);
     knownPlugins_ = scanner_.scanAll();
 }
 

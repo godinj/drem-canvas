@@ -3,10 +3,11 @@
 #include "dc/plugins/PluginDescription.h"
 #include "dc/foundation/worker_thread.h"
 #include "dc/foundation/message_queue.h"
+#include <atomic>
 #include <filesystem>
 #include <functional>
+#include <string>
 #include <vector>
-#include <atomic>
 
 namespace dc
 {
@@ -18,7 +19,13 @@ public:
     ~PluginManager();
 
     // ─── Existing (sync) API ──────────────────────────────
+
+    /// Scan state for UI feedback
+    enum class ScanState { idle, scanning, complete };
     void scanForPlugins();
+
+    /// Get current scan state
+    ScanState getScanState() const { return scanState_; }
 
     /// Returns the scanned plugin list as dc::PluginDescription
     const std::vector<dc::PluginDescription>& getKnownPlugins() const;
@@ -55,6 +62,7 @@ private:
     dc::MessageQueue& messageQueue_;
     dc::WorkerThread scanThread_ { "plugin-scan" };
     std::atomic<bool> scanning_ { false };
+    std::atomic<ScanState> scanState_ { ScanState::idle };
 
     PluginManager (const PluginManager&) = delete;
     PluginManager& operator= (const PluginManager&) = delete;

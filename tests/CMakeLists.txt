@@ -29,12 +29,16 @@ add_executable(dc_unit_tests
 
     # Plugin scanner tests
     unit/test_plugin_scanner.cpp
+    unit/test_auto_scan_trigger.cpp
+    unit/test_probecache_scan_filter.cpp
+    unit/test_async_scan.cpp
 
     # Plugin tests
     unit/plugins/test_probe_cache.cpp
     unit/plugins/test_plugin_description.cpp
     unit/plugins/test_plugin_instance_bypass.cpp
     unit/plugins/test_vst3_module.cpp
+    unit/plugins/test_yabridge_scan.cpp
 
     # Regression tests
     regression/issue_001_uid_from_file_path.cpp
@@ -57,8 +61,11 @@ add_executable(dc_unit_tests
     # Plugin sources needed by plugin unit tests
     ${CMAKE_SOURCE_DIR}/src/dc/plugins/ProbeCache.cpp
     ${CMAKE_SOURCE_DIR}/src/dc/plugins/VST3Module.cpp
+    ${CMAKE_SOURCE_DIR}/src/dc/plugins/PluginScanner.cpp
     "${VST3_SDK_DIR}/pluginterfaces/base/coreiids.cpp"
     "${VST3_SDK_DIR}/pluginterfaces/base/funknown.cpp"
+    "${VST3_SDK_DIR}/public.sdk/source/vst/vstinitiids.cpp"
+    "${VST3_SDK_DIR}/public.sdk/source/common/commoniids.cpp"
 
     # Note: test_ProgressBarWidget.cpp and test_PluginManager_async.cpp
     # require the graphics/plugin stacks (Skia, VST3Host) and are validated
@@ -206,4 +213,10 @@ if(BUILD_TESTING)
                 ${CMAKE_SOURCE_DIR}/tests/fixtures/e2e-state-restore)
     set_tests_properties(e2e.state_restore PROPERTIES
         LABELS "e2e" TIMEOUT 30)
+
+    add_test(NAME e2e.auto_scan
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_auto_scan.sh
+                $<TARGET_FILE:DremCanvas>)
+    set_tests_properties(e2e.auto_scan PROPERTIES
+        LABELS "e2e" TIMEOUT 150)
 endif()

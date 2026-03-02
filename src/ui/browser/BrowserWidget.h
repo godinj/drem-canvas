@@ -7,6 +7,7 @@
 #include "graphics/widgets/LabelWidget.h"
 #include "plugins/PluginManager.h"
 #include "dc/plugins/PluginDescription.h"
+#include <atomic>
 #include <functional>
 #include <string>
 #include <vector>
@@ -39,6 +40,12 @@ public:
     void scrollByHalfPage (int direction);
     void confirmSelection();
 
+    /// Start async plugin scan with progress display
+    void startAsyncScan();
+
+    /// Called each frame to check for scan completion
+    void tick();
+
     std::function<void (const dc::PluginDescription&)> onPluginSelected;
 
 private:
@@ -52,8 +59,13 @@ private:
     std::vector<dc::PluginDescription> displayedPlugins;
     std::string searchBuffer;
     bool searchActive = false;
-    bool scanning_ = false;
     float searchFieldY_ = 36.0f;
+
+    // Async scan progress state
+    std::atomic<bool> scanInProgress_ { false };
+    std::atomic<int> scanCurrent_ { 0 };
+    std::atomic<int> scanTotal_ { 0 };
+    std::atomic<bool> scanResultReady_ { false };
 
     static constexpr float searchFieldHeight = 28.0f;
 };

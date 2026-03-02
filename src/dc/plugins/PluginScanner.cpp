@@ -1,4 +1,5 @@
 #include "dc/plugins/PluginScanner.h"
+#include "dc/plugins/ProbeCache.h"
 #include "dc/plugins/VST3Module.h"
 #include "dc/foundation/assert.h"
 
@@ -196,47 +197,53 @@ std::vector<std::filesystem::path> PluginScanner::findBundles(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-std::optional<PluginDescription> PluginScanner::scanOne(
+std::optional<PluginDescription> PluginScanner::scanOne (
     const std::filesystem::path& bundlePath)
 {
-    // 1. Load the module
-    auto module = VST3Module::load(bundlePath);
+    auto module = VST3Module::load (bundlePath);
 
     if (! module)
         return std::nullopt;
 
-    // 2. Get the factory
-    auto* factory = module->getFactory();
+    return extractDescription (*module, bundlePath);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+std::optional<PluginDescription> PluginScanner::extractDescription (
+    VST3Module& module, const std::filesystem::path& bundlePath)
+{
+    auto* factory = module.getFactory();
 
     if (factory == nullptr)
         return std::nullopt;
 
-    // 3. Get factory info for vendor/manufacturer fallback
+    // Get factory info for vendor/manufacturer fallback
     Steinberg::PFactoryInfo factoryInfo;
-    factory->getFactoryInfo(&factoryInfo);
+    factory->getFactoryInfo (&factoryInfo);
 
-    // 4. Try to get IPluginFactory2 for richer class info
+    // Try to get IPluginFactory2 for richer class info
     Steinberg::IPluginFactory2* factory2 = nullptr;
-    factory->queryInterface(Steinberg::IPluginFactory2::iid,
-                            reinterpret_cast<void**>(&factory2));
+    factory->queryInterface (Steinberg::IPluginFactory2::iid,
+                             reinterpret_cast<void**> (&factory2));
 
-    // 5. Iterate classes and find audio effects
+    // Iterate classes and find audio effects
     auto numClasses = factory->countClasses();
 
     for (Steinberg::int32 i = 0; i < numClasses; ++i)
     {
         Steinberg::PClassInfo classInfo;
 
-        if (factory->getClassInfo(i, &classInfo) != Steinberg::kResultOk)
+        if (factory->getClassInfo (i, &classInfo) != Steinberg::kResultOk)
             continue;
 
         // Only interested in audio effect classes
-        if (std::strcmp(classInfo.category, kVstAudioEffectClass) != 0)
+        if (std::strcmp (classInfo.category, kVstAudioEffectClass) != 0)
             continue;
 
         PluginDescription desc;
         desc.name = classInfo.name;
-        desc.uid = PluginDescription::uidToHexString(classInfo.cid);
+        desc.uid = PluginDescription::uidToHexString (classInfo.cid);
         desc.path = bundlePath;
         desc.category = classInfo.category;
         desc.manufacturer = factoryInfo.vendor;
@@ -246,11 +253,11 @@ std::optional<PluginDescription> PluginScanner::scanOne(
         {
             Steinberg::PClassInfo2 classInfo2;
 
-            if (factory2->getClassInfo2(i, &classInfo2) == Steinberg::kResultOk)
+            if (factory2->getClassInfo2 (i, &classInfo2) == Steinberg::kResultOk)
             {
                 desc.name = classInfo2.name;
 
-                if (std::strlen(classInfo2.vendor) > 0)
+                if (std::strlen (classInfo2.vendor) > 0)
                     desc.manufacturer = classInfo2.vendor;
 
                 desc.version = classInfo2.version;
@@ -258,65 +265,65 @@ std::optional<PluginDescription> PluginScanner::scanOne(
             }
         }
 
-        // 6. Try to create the component to query bus info
+        // Try to create the component to query bus info
         void* obj = nullptr;
 
-        if (factory->createInstance(classInfo.cid,
-                                    Steinberg::Vst::IComponent::iid,
-                                    &obj) == Steinberg::kResultOk
+        if (factory->createInstance (classInfo.cid,
+                                     Steinberg::Vst::IComponent::iid,
+                                     &obj) == Steinberg::kResultOk
             && obj != nullptr)
         {
-            auto* component = static_cast<Steinberg::Vst::IComponent*>(obj);
+            auto* component = static_cast<Steinberg::Vst::IComponent*> (obj);
 
             // Initialize the component (required before querying bus info)
-            component->initialize(nullptr);
+            component->initialize (nullptr);
 
             // Query audio input channels
-            auto audioInputBusCount = component->getBusCount(
+            auto audioInputBusCount = component->getBusCount (
                 Steinberg::Vst::kAudio, Steinberg::Vst::kInput);
 
             if (audioInputBusCount > 0)
             {
                 Steinberg::Vst::BusInfo busInfo;
 
-                if (component->getBusInfo(Steinberg::Vst::kAudio,
-                                          Steinberg::Vst::kInput,
-                                          0, busInfo) == Steinberg::kResultOk)
+                if (component->getBusInfo (Steinberg::Vst::kAudio,
+                                           Steinberg::Vst::kInput,
+                                           0, busInfo) == Steinberg::kResultOk)
                 {
                     desc.numInputChannels = busInfo.channelCount;
                 }
             }
 
             // Query audio output channels
-            auto audioOutputBusCount = component->getBusCount(
+            auto audioOutputBusCount = component->getBusCount (
                 Steinberg::Vst::kAudio, Steinberg::Vst::kOutput);
 
             if (audioOutputBusCount > 0)
             {
                 Steinberg::Vst::BusInfo busInfo;
 
-                if (component->getBusInfo(Steinberg::Vst::kAudio,
-                                          Steinberg::Vst::kOutput,
-                                          0, busInfo) == Steinberg::kResultOk)
+                if (component->getBusInfo (Steinberg::Vst::kAudio,
+                                           Steinberg::Vst::kOutput,
+                                           0, busInfo) == Steinberg::kResultOk)
                 {
                     desc.numOutputChannels = busInfo.channelCount;
                 }
             }
 
             // Check for MIDI support (event input bus)
-            auto eventInputBusCount = component->getBusCount(
+            auto eventInputBusCount = component->getBusCount (
                 Steinberg::Vst::kEvent, Steinberg::Vst::kInput);
             desc.acceptsMidi = (eventInputBusCount > 0);
 
             // Check for MIDI output (event output bus)
-            auto eventOutputBusCount = component->getBusCount(
+            auto eventOutputBusCount = component->getBusCount (
                 Steinberg::Vst::kEvent, Steinberg::Vst::kOutput);
             desc.producesMidi = (eventOutputBusCount > 0);
 
             // Check for editor: try to get controller class ID
             Steinberg::TUID controllerCid;
 
-            if (component->getControllerClassId(controllerCid) == Steinberg::kResultOk)
+            if (component->getControllerClassId (controllerCid) == Steinberg::kResultOk)
             {
                 // Controller exists — assume it has an editor.
                 // A more thorough check would create the controller and query
@@ -328,9 +335,9 @@ std::optional<PluginDescription> PluginScanner::scanOne(
                 // Some plugins implement IEditController on the same component
                 Steinberg::Vst::IEditController* controller = nullptr;
 
-                if (component->queryInterface(
+                if (component->queryInterface (
                         Steinberg::Vst::IEditController::iid,
-                        reinterpret_cast<void**>(&controller))
+                        reinterpret_cast<void**> (&controller))
                     == Steinberg::kResultOk
                     && controller != nullptr)
                 {
@@ -357,6 +364,51 @@ std::optional<PluginDescription> PluginScanner::scanOne(
         factory2->release();
 
     return std::nullopt;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+void PluginScanner::setProbeCache (ProbeCache* cache)
+{
+    probeCache_ = cache;
+}
+
+void PluginScanner::setPreviousPlugins (const std::vector<PluginDescription>& plugins)
+{
+    previousPlugins_ = plugins;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+std::optional<PluginDescription> PluginScanner::scanOneInProcess (
+    const std::filesystem::path& bundlePath)
+{
+    if (probeCache_)
+        probeCache_->setPedal (bundlePath);
+
+    // Load directly, skip fork probe (yabridge can't be fork-probed)
+    auto module = VST3Module::load (bundlePath, /* skipProbe */ true);
+
+    if (probeCache_)
+        probeCache_->clearPedal();
+
+    if (! module)
+    {
+        if (probeCache_)
+        {
+            probeCache_->setStatus (bundlePath, ProbeCache::Status::blocked);
+            probeCache_->save();
+        }
+        return std::nullopt;
+    }
+
+    if (probeCache_)
+    {
+        probeCache_->setStatus (bundlePath, ProbeCache::Status::safe);
+        probeCache_->save();
+    }
+
+    return extractDescription (*module, bundlePath);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -512,23 +564,60 @@ std::vector<PluginDescription> PluginScanner::scanAll()
 
     for (int i = 0; i < total; ++i)
     {
-        const auto& bundle = allBundles[static_cast<size_t>(i)];
+        const auto& bundle = allBundles[static_cast<size_t> (i)];
         auto pluginName = bundle.stem().string();
 
         // 3. Report progress
         if (progressCallback_)
-            progressCallback_(pluginName, i + 1, total);
+            progressCallback_ (pluginName, i + 1, total);
 
-        auto desc = scanOneForked(bundle);
-
-        if (desc.has_value())
+        // Skip blocked bundles
+        if (probeCache_ && probeCache_->getStatus (bundle) == ProbeCache::Status::blocked)
         {
-            results.push_back(std::move(desc.value()));
-            dc_log("PluginScanner: scanned OK: %s", pluginName.c_str());
+            dc_log ("PluginScanner: skipping blocked: %s", pluginName.c_str());
+            continue;
+        }
+
+        // Reuse cached description if bundle is safe and unchanged
+        if (probeCache_ && probeCache_->getStatus (bundle) == ProbeCache::Status::safe)
+        {
+            bool reused = false;
+            for (const auto& prev : previousPlugins_)
+            {
+                if (prev.path == bundle)
+                {
+                    results.push_back (prev);
+                    dc_log ("PluginScanner: reused cached: %s", pluginName.c_str());
+                    reused = true;
+                    break;
+                }
+            }
+            if (reused)
+                continue;
+        }
+
+        // Full scan — yabridge in-process, native forked
+        std::optional<PluginDescription> desc;
+
+        if (VST3Module::isYabridgeBundle (bundle))
+        {
+            dc_log ("PluginScanner: yabridge bundle, scanning in-process: %s",
+                    pluginName.c_str());
+            desc = scanOneInProcess (bundle);
         }
         else
         {
-            dc_log("PluginScanner: failed to scan: %s", pluginName.c_str());
+            desc = scanOneForked (bundle);
+        }
+
+        if (desc.has_value())
+        {
+            results.push_back (std::move (desc.value()));
+            dc_log ("PluginScanner: scanned OK: %s", pluginName.c_str());
+        }
+        else
+        {
+            dc_log ("PluginScanner: failed to scan: %s", pluginName.c_str());
         }
     }
 

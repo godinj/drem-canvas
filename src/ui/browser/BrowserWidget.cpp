@@ -28,41 +28,7 @@ BrowserWidget::BrowserWidget (PluginManager& pm)
 
     scanButton.onClick = [this]()
     {
-        if (pluginManager.isScanning())
-            return;  // already in progress
-
-        scanning_ = true;
-        scanButton.setEnabled (false);
-        progressBar.setProgress (0.0);
-        progressBar.setStatusText ("Starting scan...");
-        progressBar.setVisible (true);
-        scanStatusLabel.setVisible (true);
-        scanStatusLabel.setText ("Starting scan...");
-        resized();  // re-layout to show progress bar
-
-        pluginManager.scanForPluginsAsync (
-            // onProgress (message thread)
-            [this] (const std::string& pluginName, int current, int total)
-            {
-                double pct = (total > 0) ? static_cast<double> (current) / total : 0.0;
-                progressBar.setProgress (pct);
-
-                std::string status = pluginName + "  " + std::to_string (current)
-                                     + "/" + std::to_string (total);
-                progressBar.setStatusText (status);
-                scanStatusLabel.setText (status);
-            },
-            // onComplete (message thread)
-            [this]()
-            {
-                scanning_ = false;
-                scanButton.setEnabled (true);
-                progressBar.setVisible (false);
-                scanStatusLabel.setVisible (false);
-                refreshPluginList();
-                resized();  // re-layout to hide progress bar
-            }
-        );
+        startAsyncScan();
     };
 
     pluginList.onDoubleClick = [this] (int index)
@@ -129,7 +95,7 @@ void BrowserWidget::resized()
     y += 32.0f;
 
     // Progress bar — only visible during scan
-    if (scanning_)
+    if (scanInProgress_)
     {
         progressBar.setBounds (4.0f, y, w - 8.0f, 20.0f);
         y += 24.0f;
@@ -249,6 +215,53 @@ void BrowserWidget::confirmSelection()
     int idx = pluginList.getSelectedIndex();
     if (idx >= 0 && idx < static_cast<int> (displayedPlugins.size()) && onPluginSelected)
         onPluginSelected (displayedPlugins[idx]);
+}
+
+void BrowserWidget::startAsyncScan()
+{
+    if (scanInProgress_)
+        return;
+
+    scanInProgress_ = true;
+    scanCurrent_ = 0;
+    scanTotal_ = 0;
+    scanResultReady_ = false;
+    scanButton.setText ("Scanning...");
+    repaint();
+
+    pluginManager.scanForPluginsAsync (
+        [this] (const std::string& /*name*/, int current, int total)
+        {
+            scanCurrent_ = current;
+            scanTotal_ = total;
+        },
+        [this] ()
+        {
+            scanResultReady_ = true;
+        });
+}
+
+void BrowserWidget::tick()
+{
+    if (scanInProgress_ && scanResultReady_)
+    {
+        scanInProgress_ = false;
+        scanResultReady_ = false;
+        scanButton.setText ("Scan Plugins");
+        refreshPluginList();
+        repaint();
+    }
+    else if (scanInProgress_)
+    {
+        // Update button text with progress
+        int cur = scanCurrent_;
+        int tot = scanTotal_;
+        if (tot > 0)
+        {
+            scanButton.setText ("Scanning " + std::to_string (cur) + "/" + std::to_string (tot));
+            repaint();
+        }
+    }
 }
 
 } // namespace ui

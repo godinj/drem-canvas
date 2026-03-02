@@ -341,6 +341,22 @@ int main (int argc, char* argv[])
                     appController->tick();
                 }
 
+                // Assert known plugins count (auto-scan verification)
+                // This checks what initialise() populated — independent of --browser-scan.
+                if (! browserScan && expectKnownPluginsGt >= 0)
+                {
+                    int knownCount = static_cast<int> (
+                        appController->getPluginManager().getKnownPlugins().size());
+                    std::cerr << "INFO: known plugins after init: " << knownCount << "\n";
+
+                    if (knownCount <= expectKnownPluginsGt)
+                    {
+                        std::cerr << "FAIL: expected > " << expectKnownPluginsGt
+                                  << " known plugins, got " << knownCount << "\n";
+                        exitCode = 1;
+                    }
+                }
+
                 // Teardown
                 appController.reset();
                 eventBridge.reset();
@@ -673,6 +689,22 @@ int main (int argc, char* argv[])
             // Close browser
             appController->toggleBrowser();
             appController->tick();
+        }
+
+        // Assert known plugins count (auto-scan verification)
+        // This checks what initialise() populated — independent of --browser-scan.
+        if (! browserScan && expectKnownPluginsGt >= 0)
+        {
+            int knownCount = static_cast<int> (
+                appController->getPluginManager().getKnownPlugins().size());
+            std::cerr << "INFO: known plugins after init: " << knownCount << "\n";
+
+            if (knownCount <= expectKnownPluginsGt)
+            {
+                std::cerr << "FAIL: expected > " << expectKnownPluginsGt
+                          << " known plugins, got " << knownCount << "\n";
+                exitCode = 1;
+            }
         }
 
         // Teardown

@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <iostream>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -90,6 +91,13 @@ void AppController::initialise()
 
     // Load plugin list
     pluginManager.loadPluginList (pluginManager.getDefaultPluginListFile());
+
+    // Auto-scan if the persisted list was empty (first launch or cleared cache)
+    if (pluginManager.getKnownPlugins().empty())
+    {
+        std::cerr << "[AppController] plugin list empty, triggering auto-scan" << std::endl;
+        pluginManager.scanForPlugins();
+    }
 
     // Create vim engine
     vimEngine = std::make_unique<VimEngine> (project, transportController, arrangement, vimContext, gridSystem);
@@ -2240,6 +2248,10 @@ void AppController::vimContextChanged()
 void AppController::tick()
 {
     messageQueue.processAll();
+
+    // Poll browser scan progress (async scan updates atomics from background thread)
+    if (browserWidget)
+        browserWidget->tick();
 
     if (! mixerWidget)
         return;
