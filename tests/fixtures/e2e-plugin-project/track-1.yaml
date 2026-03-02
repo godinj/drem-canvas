@@ -1,0 +1,18 @@
+track:
+  name: "FX"
+  colour: "#FF88CCFF"
+  mixer:
+    volume: 1.0
+    pan: 0.0
+    mute: false
+    solo: false
+    armed: false
+  clips: []
+  plugins:
+    - name: "kHs Gain"
+      format: "VST3"
+      manufacturer: "Kilohearts"
+      unique_id: 0
+      file_or_identifier: "~/.vst3/yabridge/Kilohearts/kHs Gain.vst3"
+      state: ""
+      enabled: true

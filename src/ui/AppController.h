@@ -69,6 +69,25 @@ public:
 
     void setNativeWindowHandle (void* handle);
 
+    // Project access (used by E2E validation in Main.cpp)
+    Project& getProject() { return project; }
+    const Project& getProject() const { return project; }
+
+    // Session loading (public for E2E --load flag)
+    void loadSessionFromDirectory (const std::filesystem::path& dir);
+
+    // Plugin view access (used by E2E --scan-plugin flag)
+    PluginViewWidget* getPluginViewWidget() { return pluginViewWidget.get(); }
+
+    // Open plugin editor (used by E2E --scan-plugin flag)
+    void openPluginEditor (int trackIndex, int pluginIndex);
+
+    // Plugin manager access (used by E2E --browser-scan flag)
+    PluginManager& getPluginManager() { return pluginManager; }
+
+    // Browser toggle (used by E2E --browser-scan flag)
+    void toggleBrowser();
+
 private:
     // PropertyTree::Listener
     void propertyChanged (PropertyTree&, PropertyId) override;
@@ -94,14 +113,12 @@ private:
 
     void connectTrackPluginChain (int trackIndex);
     void disconnectTrackPluginChain (int trackIndex);
-    void openPluginEditor (int trackIndex, int pluginIndex);
     void captureAllPluginStates();
     void insertPluginOnTrack (int trackIndex, const dc::PluginDescription& desc);
 
     // Session management
     void saveSession();
     void loadSession();
-    void loadSessionFromDirectory (const std::filesystem::path& dir);
     void openFile();
     void addTrackFromFile (const std::filesystem::path& file);
     void addMidiTrack (const std::string& name);
@@ -109,7 +126,6 @@ private:
 
     // Panel visibility
     void updatePanelVisibility();
-    void toggleBrowser();
 
     // Command palette
     void registerAllActions();

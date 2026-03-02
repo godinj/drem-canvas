@@ -134,3 +134,39 @@ catch_discover_tests(dc_integration_tests
     REPORTER XML
     OUTPUT_DIR ${CMAKE_BINARY_DIR}/test-results
 )
+
+# --- E2E tests (shell-based, exercise real binary) ---
+if(BUILD_TESTING)
+    add_test(NAME e2e.smoke
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_smoke.sh
+                $<TARGET_FILE:DremCanvas>)
+    set_tests_properties(e2e.smoke PROPERTIES
+        LABELS "e2e" TIMEOUT 30)
+
+    add_test(NAME e2e.load_project
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_load_project.sh
+                $<TARGET_FILE:DremCanvas>
+                ${CMAKE_SOURCE_DIR}/tests/fixtures/e2e-plugin-project)
+    set_tests_properties(e2e.load_project PROPERTIES
+        LABELS "e2e" TIMEOUT 60)
+
+    add_test(NAME e2e.scan_cold
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_scan_cold.sh
+                $<TARGET_FILE:DremCanvas>
+                ${CMAKE_SOURCE_DIR}/tests/fixtures/e2e-scan-project)
+    set_tests_properties(e2e.scan_cold PROPERTIES
+        LABELS "e2e" TIMEOUT 90)
+
+    add_test(NAME e2e.scan_warm
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_scan_warm.sh
+                $<TARGET_FILE:DremCanvas>
+                ${CMAKE_SOURCE_DIR}/tests/fixtures/e2e-scan-project)
+    set_tests_properties(e2e.scan_warm PROPERTIES
+        LABELS "e2e" TIMEOUT 90)
+
+    add_test(NAME e2e.browser_scan
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_browser_scan.sh
+                $<TARGET_FILE:DremCanvas>)
+    set_tests_properties(e2e.browser_scan PROPERTIES
+        LABELS "e2e" TIMEOUT 150)
+endif()
