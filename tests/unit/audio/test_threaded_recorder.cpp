@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <thread>
 #include <vector>
@@ -25,8 +26,10 @@ struct TempDir
 
     TempDir()
     {
-        path = fs::temp_directory_path() / "dc_recorder_test";
-        fs::create_directories(path);
+        auto base = fs::temp_directory_path() / "dc_recorder_test_XXXXXX";
+        auto tmpl = base.string();
+        REQUIRE(mkdtemp(tmpl.data()) != nullptr);
+        path = tmpl;
     }
 
     ~TempDir()

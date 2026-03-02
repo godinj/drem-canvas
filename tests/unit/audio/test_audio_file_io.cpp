@@ -6,6 +6,7 @@
 #include <dc/audio/AudioBlock.h>
 
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -52,8 +53,10 @@ struct TempDir
 
     TempDir()
     {
-        path = fs::temp_directory_path() / "dc_audio_test";
-        fs::create_directories(path);
+        auto base = fs::temp_directory_path() / "dc_audio_test_XXXXXX";
+        auto tmpl = base.string();
+        REQUIRE(mkdtemp(tmpl.data()) != nullptr);
+        path = tmpl;
     }
 
     ~TempDir()

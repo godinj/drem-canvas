@@ -13,14 +13,11 @@ namespace fs = std::filesystem;
 // Helper: create a unique temporary directory for each test
 static fs::path createTempSessionDir()
 {
-    auto tmpDir = fs::temp_directory_path() / "dc_test_session";
-    fs::create_directories (tmpDir);
-
-    // Use a unique name to avoid clashes between test runs
-    static int counter = 0;
-    auto sessionDir = tmpDir / ("session_" + std::to_string (counter++) + "_" + std::to_string (std::rand()));
-    fs::create_directories (sessionDir);
-    return sessionDir;
+    auto base = fs::temp_directory_path() / "dc_test_session_XXXXXX";
+    auto tmpl = base.string();
+    if (mkdtemp(tmpl.data()) == nullptr)
+        return {};
+    return fs::path(tmpl);
 }
 
 // Helper: clean up session directory
