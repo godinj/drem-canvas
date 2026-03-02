@@ -1,31 +1,8 @@
 #include "PluginWindowManager.h"
-#include "gui/common/ColourBridge.h"
+#include "dc/foundation/assert.h"
 
 namespace dc
 {
-
-//==============================================================================
-// PluginWindow
-//==============================================================================
-
-PluginWindow::PluginWindow (juce::AudioProcessorEditor* editor, const juce::String& name)
-    : juce::DocumentWindow (name, dc::bridge::toJuce (dc::Colours::darkgrey), juce::DocumentWindow::allButtons)
-{
-    setUsingNativeTitleBar (true);
-    setResizable (true, false);
-    setContentOwned (editor, true);
-    centreWithSize (getWidth(), getHeight());
-    setVisible (true);
-}
-
-void PluginWindow::closeButtonPressed()
-{
-    setVisible (false);
-}
-
-//==============================================================================
-// PluginWindowManager
-//==============================================================================
 
 PluginWindowManager::PluginWindowManager() = default;
 
@@ -34,44 +11,35 @@ PluginWindowManager::~PluginWindowManager()
     closeAll();
 }
 
-void PluginWindowManager::showEditorForPlugin (juce::AudioPluginInstance& plugin)
+void PluginWindowManager::showEditorForPlugin (dc::PluginInstance& plugin)
 {
-    auto it = pluginToWindow.find (&plugin);
+    auto it = editors_.find (&plugin);
 
-    if (it != pluginToWindow.end())
+    if (it != editors_.end())
     {
-        it->second->setVisible (true);
-        it->second->toFront (true);
+        // Editor already open — nothing to do
         return;
     }
 
-    if (auto* editor = plugin.createEditorIfNeeded())
+    auto editor = plugin.createEditor();
+    if (editor != nullptr)
     {
-        auto window = std::make_unique<PluginWindow> (editor, plugin.getName());
-        pluginToWindow[&plugin] = window.get();
-        windows.push_back (std::move (window));
+        dc_log ("[PluginWindowManager] Created editor for: %s", plugin.getName().c_str());
+        editors_[&plugin] = std::move (editor);
     }
 }
 
-void PluginWindowManager::closeEditorForPlugin (juce::AudioPluginInstance* plugin)
+void PluginWindowManager::closeEditorForPlugin (dc::PluginInstance* plugin)
 {
-    auto it = pluginToWindow.find (plugin);
+    auto it = editors_.find (plugin);
 
-    if (it != pluginToWindow.end())
-    {
-        auto* window = it->second;
-        pluginToWindow.erase (it);
-        windows.erase (
-            std::remove_if (windows.begin(), windows.end(),
-                            [window] (const std::unique_ptr<PluginWindow>& w) { return w.get() == window; }),
-            windows.end());
-    }
+    if (it != editors_.end())
+        editors_.erase (it);
 }
 
 void PluginWindowManager::closeAll()
 {
-    pluginToWindow.clear();
-    windows.clear();
+    editors_.clear();
 }
 
 } // namespace dc

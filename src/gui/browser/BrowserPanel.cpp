@@ -26,12 +26,12 @@ BrowserPanel::BrowserPanel (PluginManager& pm)
 
     scanButton.onClick = [this]()
     {
-        pluginManager.scanDefaultPaths();
+        pluginManager.scanForPlugins();
         refreshPluginList();
     };
     addAndMakeVisible (scanButton);
 
-    listModel.onItemSelected = [this] (const juce::PluginDescription& desc)
+    listModel.onItemSelected = [this] (const dc::PluginDescription& desc)
     {
         if (onPluginSelected)
             onPluginSelected (desc);
@@ -60,7 +60,7 @@ void BrowserPanel::refreshPluginList()
 void BrowserPanel::rebuildFilteredList()
 {
     filteredTypes.clear();
-    auto allTypes = pluginManager.getKnownPlugins().getTypes();
+    auto& allTypes = pluginManager.getKnownPlugins();
 
     if (searchFilter.empty())
     {
@@ -76,8 +76,16 @@ void BrowserPanel::rebuildFilteredList()
 
         for (const auto& t : allTypes)
         {
-            if (t.name.toLowerCase().contains (queryLower.c_str())
-                || t.manufacturerName.toLowerCase().contains (queryLower.c_str()))
+            // Case-insensitive search in name and manufacturer
+            std::string nameLower = t.name;
+            std::transform (nameLower.begin(), nameLower.end(), nameLower.begin(),
+                            [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
+            std::string mfgLower = t.manufacturer;
+            std::transform (mfgLower.begin(), mfgLower.end(), mfgLower.begin(),
+                            [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
+
+            if (nameLower.find (queryLower) != std::string::npos
+                || mfgLower.find (queryLower) != std::string::npos)
                 filteredTypes.push_back (t);
         }
     }
@@ -178,7 +186,7 @@ void BrowserPanel::PluginListModel::paintListBoxItem (int rowNumber, juce::Graph
 
     // Manufacturer on the right
     g.setColour (toJuce (dc::Colours::lightgrey));
-    g.drawText (desc.manufacturerName, textArea, juce::Justification::centredRight, true);
+    g.drawText (desc.manufacturer, textArea, juce::Justification::centredRight, true);
 }
 
 void BrowserPanel::PluginListModel::listBoxItemDoubleClicked (int row, const juce::MouseEvent&)

@@ -4,6 +4,7 @@
 #include "graphics/widgets/ListBoxWidget.h"
 #include "graphics/widgets/ButtonWidget.h"
 #include "plugins/PluginManager.h"
+#include "dc/plugins/PluginDescription.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -36,7 +37,7 @@ public:
     void scrollByHalfPage (int direction);
     void confirmSelection();
 
-    std::function<void (const juce::PluginDescription&)> onPluginSelected;
+    std::function<void (const dc::PluginDescription&)> onPluginSelected;
 
 private:
     void filterPlugins();
@@ -44,7 +45,7 @@ private:
     PluginManager& pluginManager;
     gfx::ButtonWidget scanButton;
     gfx::ListBoxWidget pluginList;
-    std::vector<juce::PluginDescription> displayedPlugins;
+    std::vector<dc::PluginDescription> displayedPlugins;
     std::string searchBuffer;
     bool searchActive = false;
 

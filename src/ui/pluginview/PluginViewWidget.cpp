@@ -1,9 +1,10 @@
 #include "PluginViewWidget.h"
+#include "dc/foundation/assert.h"
 #include "dc/foundation/string_utils.h"
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/Theme.h"
 #include "graphics/theme/FontManager.h"
-#include "plugins/VST3ParameterFinderSupport.h"
+#include "dc/plugins/PluginEditor.h"
 #include "plugins/PluginEditorBridge.h"
 #include "plugins/SyntheticInputProbe.h"
 #include "plugins/SyntheticMouseDrag.h"
@@ -38,7 +39,7 @@ void PluginViewWidget::setEditorBridge (std::unique_ptr<PluginEditorBridge> brid
     editorBridge = std::move (bridge);
 }
 
-void PluginViewWidget::setPlugin (juce::AudioPluginInstance* plugin, const std::string& name,
+void PluginViewWidget::setPlugin (dc::PluginInstance* plugin, const std::string& name,
                                   const std::string& fileOrIdentifier)
 {
     endMouseDrag();
@@ -168,12 +169,7 @@ void PluginViewWidget::runSpatialScan()
     if (! editorBridge || ! editorBridge->isOpen() || currentPlugin == nullptr)
         return;
 
-    auto* editor = editorBridge->getEditor();
-    if (editor == nullptr)
-        return;
-
-    auto* finder = dynamic_cast<VST3ParameterFinderSupport*> (editor);
-    if (finder == nullptr || ! finder->hasParameterFinder())
+    if (! currentPlugin->supportsParameterFinder())
         return;
 
     int nativeW = editorBridge->getNativeWidth();
@@ -197,20 +193,21 @@ void PluginViewWidget::runSpatialScan()
         }
     }
 
-    spatialScanner.scan (*finder, currentPlugin, nativeW, nativeH);
+    spatialScanner.scan (currentPlugin, nativeW, nativeH);
 
-    // Phase 4: mouse probe — for params still unmapped after phases 1-3,
+    // Phase 4: mouse probe — for params still unmapped after the grid scan,
     // inject synthetic mouse clicks at their centroid positions and intercept
-    // the plugin's performEdit callback to discover the real controller ParamID.
+    // the plugin's performEdit callback (via popLastEdit) to discover the
+    // real controller ParamID.
     if (inputProbe)
     {
         auto& results = spatialScanner.getMutableResults();
-        auto& params = currentPlugin->getParameters();
+        int numParams = currentPlugin->getNumParameters();
         int probed = 0;
         int unmappedCount = 0;
 
         for (auto& info : results)
-            if (info.juceParamIndex < 0)
+            if (info.paramIndex < 0)
                 unmappedCount++;
 
         if (unmappedCount > 0 && inputProbe->beginProbing (*editorBridge))
@@ -226,26 +223,31 @@ void PluginViewWidget::runSpatialScan()
 
                 for (auto& info : results)
                 {
-                    if (info.juceParamIndex >= 0)
+                    if (info.paramIndex >= 0)
                         continue;
 
-                    finder->beginEditSnoop();
+                    // Drain any stale edits
+                    while (currentPlugin->popLastEdit().has_value()) {}
 
                     inputProbe->sendProbe (info.centerX, info.centerY, strategies[pass]);
 
                     // Wait for yabridge IPC round-trip
                     std::this_thread::sleep_for (std::chrono::milliseconds (50));
 
-                    unsigned int capturedId = finder->endEditSnoop();
-
-                    if (capturedId != 0xFFFFFFFF)
+                    auto editEvent = currentPlugin->popLastEdit();
+                    if (editEvent.has_value())
                     {
-                        int juceIdx = finder->resolveParamIDToIndex (capturedId);
-                        if (juceIdx >= 0 && juceIdx < params.size())
+                        unsigned int capturedId = static_cast<unsigned int> (editEvent->paramId);
+                        // Resolve ParamID to parameter index
+                        for (int idx = 0; idx < numParams; ++idx)
                         {
-                            info.juceParamIndex = juceIdx;
-                            info.name = params[juceIdx]->getName (64).toStdString();
-                            probed++;
+                            if (static_cast<unsigned int> (currentPlugin->getParameterId (idx)) == capturedId)
+                            {
+                                info.paramIndex = idx;
+                                info.name = currentPlugin->getParameterName (idx);
+                                probed++;
+                                break;
+                            }
                         }
                     }
 
@@ -261,8 +263,7 @@ void PluginViewWidget::runSpatialScan()
         }
 
         if (probed > 0)
-            std::cerr << "[SpatialScan] Phase 4: " << probed
-                      << " of " << unmappedCount << " resolved via mouse probe\n";
+            dc_log ("[SpatialScan] Phase 4: %d of %d resolved via mouse probe", probed, unmappedCount);
     }
 
     spatialScanComplete = spatialScanner.hasResults();
@@ -490,7 +491,7 @@ bool PluginViewWidget::getSpatialCentroid (int paramIndex, int& cx, int& cy) con
 
     for (auto& info : spatialScanner.getResults())
     {
-        if (info.juceParamIndex == paramIndex)
+        if (info.paramIndex == paramIndex)
         {
             cx = info.centerX;
             cy = info.centerY;

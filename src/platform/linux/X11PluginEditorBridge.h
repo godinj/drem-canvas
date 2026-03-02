@@ -3,6 +3,8 @@
 #if defined(__linux__)
 
 #include "plugins/PluginEditorBridge.h"
+#include "dc/plugins/PluginInstance.h"
+#include "dc/plugins/PluginEditor.h"
 #include <memory>
 
 struct GLFWwindow;
@@ -15,7 +17,7 @@ namespace dc
 
 /**
  * Linux implementation of PluginEditorBridge.
- * Wraps EmbeddedPluginEditor (JUCE editor hosting + X11 reparenting)
+ * Wraps EmbeddedPluginEditor (dc::PluginEditor hosting + X11 reparenting)
  * and X11Compositor (XComposite pixel capture).
  */
 class X11PluginEditorBridge : public PluginEditorBridge
@@ -24,7 +26,7 @@ public:
     explicit X11PluginEditorBridge (void* nativeWindowHandle);
     ~X11PluginEditorBridge() override;
 
-    void openEditor (juce::AudioPluginInstance* plugin) override;
+    void openEditor (dc::PluginInstance* plugin) override;
     void closeEditor() override;
     bool isOpen() const override;
 
@@ -37,7 +39,7 @@ public:
     sk_sp<SkImage> capture() override;
     bool isCompositing() const override;
 
-    juce::AudioProcessorEditor* getEditor() const override;
+    dc::PluginEditor* getEditor() const override;
     float getContentScale() const override;
 
     // X11-specific accessors (used by X11SyntheticInputProbe)

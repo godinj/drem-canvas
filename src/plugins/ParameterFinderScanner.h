@@ -1,19 +1,17 @@
 #pragma once
 
-#include <JuceHeader.h>
+#include "dc/plugins/PluginInstance.h"
 #include <string>
 #include <vector>
 
 namespace dc
 {
 
-class VST3ParameterFinderSupport;
-
 /** Spatial info for a single parameter discovered via IParameterFinder grid scan. */
 struct SpatialParamInfo
 {
     unsigned int paramId = 0;   // VST3 ParamID
-    int juceParamIndex = -1;    // Index into plugin->getParameters(), -1 if unmapped
+    int paramIndex = -1;        // Index into plugin parameters, -1 if unmapped
     int centerX = 0;            // Centroid X in plugin native coords (unscaled)
     int centerY = 0;            // Centroid Y in plugin native coords (unscaled)
     int hitCount = 0;           // Grid cells that hit this param
@@ -31,14 +29,12 @@ public:
     ParameterFinderScanner() = default;
 
     /** Run a grid scan of the editor surface.
-        @param finder       The IParameterFinder interface wrapper
-        @param plugin       The plugin instance (for mapping ParamIDs to JUCE indices)
+        @param plugin       The dc::PluginInstance (provides findParameterAtPoint/popLastEdit)
         @param nativeWidth  Editor width in native (unscaled) pixels
         @param nativeHeight Editor height in native (unscaled) pixels
         @param gridStep     Scan interval in pixels (default 8)
     */
-    void scan (VST3ParameterFinderSupport& finder,
-               juce::AudioPluginInstance* plugin,
+    void scan (dc::PluginInstance* plugin,
                int nativeWidth, int nativeHeight,
                int gridStep = 8);
 

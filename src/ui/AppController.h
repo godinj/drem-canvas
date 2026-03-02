@@ -90,14 +90,14 @@ private:
     struct PluginNodeInfo
     {
         NodeId node = 0;
-        juce::AudioPluginInstance* plugin = nullptr;
+        dc::PluginInstance* plugin = nullptr;
     };
 
     void connectTrackPluginChain (int trackIndex);
     void disconnectTrackPluginChain (int trackIndex);
     void openPluginEditor (int trackIndex, int pluginIndex);
     void captureAllPluginStates();
-    void insertPluginOnTrack (int trackIndex, const juce::PluginDescription& desc);
+    void insertPluginOnTrack (int trackIndex, const dc::PluginDescription& desc);
 
     // Session management
     void saveSession();

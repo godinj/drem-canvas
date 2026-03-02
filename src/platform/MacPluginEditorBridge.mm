@@ -7,6 +7,7 @@
 #include "include/core/SkBitmap.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkImageInfo.h"
+#include "dc/foundation/assert.h"
 
 namespace dc
 {
@@ -21,52 +22,65 @@ MacPluginEditorBridge::~MacPluginEditorBridge()
     closeEditor();
 }
 
-void MacPluginEditorBridge::openEditor (juce::AudioPluginInstance* plugin)
+void MacPluginEditorBridge::openEditor (dc::PluginInstance* plugin)
 {
     closeEditor();
 
     if (plugin == nullptr)
         return;
 
-    editor = plugin->createEditorIfNeeded();
-    if (editor == nullptr)
+    editor_ = plugin->createEditor();
+    if (editor_ == nullptr)
         return;
 
-    nativeWidth = editor->getWidth();
-    nativeHeight = editor->getHeight();
+    auto [w, h] = editor_->getPreferredSize();
+    nativeWidth = w;
+    nativeHeight = h;
 
-    // Create a holder component and add the editor as a child
-    holder = std::make_unique<juce::Component>();
-    holder->setSize (nativeWidth, nativeHeight);
-    holder->addAndMakeVisible (editor);
+    // Create an off-screen NSWindow to host the plugin editor.
+    // The plugin editor needs to be in a real NSWindow for CGWindowListCreateImage.
+    NSRect frame = NSMakeRect (-10000, -10000, w, h);
+    NSWindow* window = [[NSWindow alloc]
+        initWithContentRect:frame
+                  styleMask:NSWindowStyleMaskBorderless
+                    backing:NSBackingStoreBuffered
+                      defer:NO];
+    [window setReleasedWhenClosed:NO];
+    [window setLevel:NSNormalWindowLevel];
+    [window orderFront:nil];
 
-    // Add to desktop as an off-screen window so it renders but isn't visible
-    holder->addToDesktop (juce::ComponentPeer::windowIsTemporary);
+    NSView* contentView = [window contentView];
+    editorNSWindow = (__bridge void*) window;
+    editorNSView = (__bridge void*) contentView;
 
-    // Position off-screen initially
-    holder->setTopLeftPosition (-10000, -10000);
+    // Attach the plugin editor to the NSView
+    editor_->attachToWindow (editorNSView);
 
     // Get the CGWindowID for capture
-    if (auto* peer = holder->getPeer())
-    {
-        auto* nsView = (NSView*) peer->getNativeHandle();
-        if (nsView != nil && [nsView window] != nil)
-        {
-            cgWindowId = (uint32_t) [[nsView window] windowNumber];
-        }
-    }
+    cgWindowId = (uint32_t) [window windowNumber];
+
+    dc_log ("[MacPluginEditorBridge] Opened editor: %dx%d cgWindowId=%u",
+            nativeWidth, nativeHeight, cgWindowId);
 
     damaged = true;
 }
 
 void MacPluginEditorBridge::closeEditor()
 {
-    if (holder)
+    if (editor_)
     {
-        holder->removeFromDesktop();
-        holder.reset();
+        editor_->detach();
+        editor_.reset();
     }
-    editor = nullptr;
+
+    if (editorNSWindow != nullptr)
+    {
+        NSWindow* window = (__bridge NSWindow*) editorNSWindow;
+        [window close];
+        editorNSWindow = nullptr;
+        editorNSView = nullptr;
+    }
+
     nativeWidth = 0;
     nativeHeight = 0;
     cgWindowId = 0;
@@ -76,7 +90,7 @@ void MacPluginEditorBridge::closeEditor()
 
 bool MacPluginEditorBridge::isOpen() const
 {
-    return editor != nullptr;
+    return editor_ != nullptr;
 }
 
 int MacPluginEditorBridge::getNativeWidth() const
@@ -163,9 +177,9 @@ bool MacPluginEditorBridge::isCompositing() const
     return cgWindowId != 0;
 }
 
-juce::AudioProcessorEditor* MacPluginEditorBridge::getEditor() const
+dc::PluginEditor* MacPluginEditorBridge::getEditor() const
 {
-    return editor;
+    return editor_.get();
 }
 
 } // namespace dc

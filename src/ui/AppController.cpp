@@ -1,5 +1,6 @@
 #include "AppController.h"
 #include "engine/PluginProcessorNode.h"
+#include "dc/plugins/PluginDescription.h"
 #include "graphics/rendering/Canvas.h"
 #include "model/Track.h"
 #include "model/AudioClip.h"
@@ -8,6 +9,8 @@
 #include "platform/NativeDialogs.h"
 #include "plugins/PluginEditorBridge.h"
 #include "utils/UndoSystem.h"
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -88,11 +91,18 @@ void AppController::initialise()
     vimEngine->onPluginCommand = [this] (const std::string& pluginName)
     {
         auto& knownPlugins = pluginManager.getKnownPlugins();
-        auto types = knownPlugins.getTypes();
 
-        for (const auto& desc : types)
+        std::string queryLower = pluginName;
+        std::transform (queryLower.begin(), queryLower.end(), queryLower.begin(),
+                        [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
+
+        for (const auto& desc : knownPlugins)
         {
-            if (desc.name.containsIgnoreCase (pluginName.c_str()))
+            std::string nameLower = desc.name;
+            std::transform (nameLower.begin(), nameLower.end(), nameLower.begin(),
+                            [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
+
+            if (nameLower.find (queryLower) != std::string::npos)
             {
                 insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
                 return;
@@ -216,7 +226,7 @@ void AppController::initialise()
         }
 
         if (pluginViewWidget)
-            pluginViewWidget->setPlugin (dynamic_cast<juce::AudioPluginInstance*> (plugin), name, fileOrId);
+            pluginViewWidget->setPlugin (plugin, name, fileOrId);
     };
 
     vimEngine->onClosePluginView = [this]
@@ -280,17 +290,12 @@ void AppController::initialise()
 
             auto& info = results[static_cast<size_t> (paramIndex)];
 
-            if (info.juceParamIndex >= 0)
+            if (info.paramIndex >= 0 && info.paramIndex < plugin->getNumParameters())
             {
                 // Mapped param: host API only
-                auto& params = plugin->getParameters();
-                if (info.juceParamIndex < params.size())
-                {
-                    auto* param = params[info.juceParamIndex];
-                    float current = param->getValue();
-                    float newVal = std::clamp (current + delta, 0.0f, 1.0f);
-                    param->setValueNotifyingHost (newVal);
-                }
+                float current = plugin->getParameterValue (info.paramIndex);
+                float newVal = std::clamp (current + delta, 0.0f, 1.0f);
+                plugin->setParameterValue (info.paramIndex, newVal);
             }
             else
             {
@@ -303,15 +308,13 @@ void AppController::initialise()
         }
         else
         {
-            // JUCE param mode (fallback) — all params are mapped
-            auto& params = plugin->getParameters();
-            if (paramIndex < 0 || paramIndex >= params.size())
+            // dc::PluginInstance param mode — all params are mapped
+            if (paramIndex < 0 || paramIndex >= plugin->getNumParameters())
                 return;
 
-            auto* param = params[paramIndex];
-            float current = param->getValue();
+            float current = plugin->getParameterValue (paramIndex);
             float newVal = std::clamp (current + delta, 0.0f, 1.0f);
-            param->setValueNotifyingHost (newVal);
+            plugin->setParameterValue (paramIndex, newVal);
         }
     };
 
@@ -328,11 +331,9 @@ void AppController::initialise()
         if (spatialIndex < 0 || spatialIndex >= static_cast<int> (results.size()))
             return -1;
         auto& info = results[spatialIndex];
-        std::cerr << "[SpatialHint] resolved index=" << spatialIndex
-                  << " paramId=" << info.paramId
-                  << " juceParamIndex=" << info.juceParamIndex
-                  << " name=" << info.name << "\n";
-        return info.juceParamIndex;
+        dc_log ("[SpatialHint] resolved index=%d paramId=%u paramIndex=%d name=%s",
+                spatialIndex, info.paramId, info.paramIndex, info.name.c_str());
+        return info.paramIndex;
     };
 
     vimEngine->onQueryPluginParamCount = [this]() -> int {
@@ -661,7 +662,7 @@ void AppController::initialise()
     browserWidget->setVisible (false);
     addChild (browserWidget.get());
 
-    browserWidget->onPluginSelected = [this] (const juce::PluginDescription& desc)
+    browserWidget->onPluginSelected = [this] (const dc::PluginDescription& desc)
     {
         insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
     };
@@ -1442,8 +1443,7 @@ void AppController::rebuildAudioGraph()
             auto pluginState = track.getPlugin (p);
             auto desc = PluginHost::descriptionFromPropertyTree (pluginState);
 
-            auto instance = PluginHost::createPluginSync (
-                pluginManager.getFormatManager(), desc, sampleRate, blockSize);
+            auto instance = pluginHost.createPluginSync (desc, sampleRate, blockSize);
 
             if (instance != nullptr)
             {
@@ -1825,7 +1825,7 @@ void AppController::captureAllPluginStates()
     }
 }
 
-void AppController::insertPluginOnTrack (int trackIndex, const juce::PluginDescription& desc)
+void AppController::insertPluginOnTrack (int trackIndex, const dc::PluginDescription& desc)
 {
     if (trackIndex < 0 || trackIndex >= project.getNumTracks())
         return;
@@ -1833,18 +1833,18 @@ void AppController::insertPluginOnTrack (int trackIndex, const juce::PluginDescr
     auto trackState = project.getTrack (trackIndex);
     Track track (trackState);
 
-    track.addPlugin (desc.name.toStdString(), desc.pluginFormatName.toStdString(),
-                     desc.manufacturerName.toStdString(),
-                     desc.uniqueId, desc.fileOrIdentifier.toStdString(),
+    track.addPlugin (desc.name, "VST3",
+                     desc.manufacturer,
+                     0, desc.path.string(),
                      &project.getUndoManager());
 
     auto sampleRate = audioEngine.getSampleRate();
     auto blockSize = audioEngine.getBufferSize();
 
     pluginHost.createPluginAsync (desc, sampleRate, blockSize,
-        [this, trackIndex] (std::unique_ptr<juce::AudioPluginInstance> instance, const std::string& errorMessage)
+        [this, trackIndex] (std::unique_ptr<dc::PluginInstance> instance, const std::string& errorMessage)
         {
-            juce::ignoreUnused (errorMessage);
+            (void) errorMessage;
             if (instance == nullptr)
                 return;
 

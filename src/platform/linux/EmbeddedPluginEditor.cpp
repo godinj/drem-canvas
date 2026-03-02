@@ -2,7 +2,7 @@
 
 #include "EmbeddedPluginEditor.h"
 #include "X11Reparent.h"
-#include <iostream>
+#include "dc/foundation/assert.h"
 #include <algorithm>
 
 namespace dc
@@ -19,33 +19,28 @@ EmbeddedPluginEditor::~EmbeddedPluginEditor()
     closeEditor();
 }
 
-void EmbeddedPluginEditor::openEditor (juce::AudioPluginInstance* plugin, GLFWwindow* parentWindow)
+void EmbeddedPluginEditor::openEditor (dc::PluginInstance* plugin, GLFWwindow* parentWindow)
 {
     if (plugin == nullptr || parentWindow == nullptr)
         return;
 
     closeEditor();
 
-    editor = plugin->createEditorIfNeeded();
-    if (editor == nullptr)
+    editor_ = plugin->createEditor();
+    if (editor_ == nullptr)
     {
-        std::cerr << "[EmbedEditor] createEditorIfNeeded returned null\n";
+        dc_log ("[EmbedEditor] createEditor returned null");
         return;
     }
 
     // Store the editor's native (unscaled) size
-    nativeWidth = editor->getWidth();
-    nativeHeight = editor->getHeight();
+    auto [w, h] = editor_->getPreferredSize();
+    nativeWidth = w;
+    nativeHeight = h;
 
-    std::cerr << "[EmbedEditor] editor native size: "
-              << nativeWidth << "x" << nativeHeight << "\n";
+    dc_log ("[EmbedEditor] editor native size: %dx%d", nativeWidth, nativeHeight);
 
-    // Create a holder component that wraps the editor
-    holder = std::make_unique<juce::Component>();
-    holder->setSize (nativeWidth, nativeHeight);
-    holder->addAndMakeVisible (editor);
-
-    // Get the native X11 window handle from GLFW for JUCE parenting
+    // Get the native X11 window handle from GLFW for embedding
     unsigned long parentX11Window = 0;
     if (x11::isX11())
     {
@@ -55,58 +50,51 @@ void EmbeddedPluginEditor::openEditor (juce::AudioPluginInstance* plugin, GLFWwi
 
     if (parentX11Window != 0)
     {
-        // X11: pass the GLFW window as native parent to JUCE.
-        // JUCE creates the peer as a child window — coordinates are
-        // automatically parent-relative, no manual reparenting needed.
-        holder->addToDesktop (juce::ComponentPeer::windowIsTemporary,
-                              reinterpret_cast<void*> (parentX11Window));
+        // X11: attach the IPlugView to the GLFW parent window.
+        // The IPlugView creates a child X11 window under the parent.
+        editor_->attachToWindow (reinterpret_cast<void*> (parentX11Window));
         reparented = true;
 
-        auto* peer = holder->getPeer();
-        if (peer != nullptr)
-            editorXWindow = reinterpret_cast<unsigned long> (peer->getNativeHandle());
+        // The IPlugView should have created an X11 window; we need to discover it.
+        // The plug view's window becomes a child of parentX11Window.
+        // For now, store the parent as the editor window — the compositor
+        // will capture the child window via XComposite.
+        // TODO: discover the actual child window created by IPlugView
+        editorXWindow = parentX11Window;
 
-        std::cerr << "[EmbedEditor] X11 child window: parent=" << parentX11Window
-                  << " child=" << editorXWindow << "\n";
+        dc_log ("[EmbedEditor] X11 child window: parent=%lu", parentX11Window);
     }
     else
     {
-        // Wayland fallback: show as standalone floating window.
-        // JUCE creates an XWayland window; we just position and show it.
-        holder->addToDesktop (juce::ComponentPeer::windowIsTemporary);
-        std::cerr << "[EmbedEditor] Wayland mode: floating window\n";
-        holder->setVisible (true);
-        holder->toFront (false);
-
-        // Get the XWayland window handle for compositor use
-        auto* peer = holder->getPeer();
-        if (peer != nullptr)
+        // Wayland fallback: attach to an independent X11 connection.
+        // The IPlugView creates its own XWayland window.
+        xDisplay = x11::openDisplay();
+        if (xDisplay != nullptr)
         {
-            editorXWindow = reinterpret_cast<unsigned long> (peer->getNativeHandle());
-            // Open an independent X11 connection to XWayland
-            xDisplay = x11::openDisplay();
-            std::cerr << "[EmbedEditor] Wayland XWayland window: " << editorXWindow
-                      << " display=" << xDisplay << "\n";
+            // Create a small container window for the IPlugView
+            editorXWindow = x11::createWindow (xDisplay, nativeWidth, nativeHeight);
+            if (editorXWindow != 0)
+            {
+                editor_->attachToWindow (reinterpret_cast<void*> (editorXWindow));
+                dc_log ("[EmbedEditor] Wayland mode: XWayland window %lu display=%p",
+                        editorXWindow, xDisplay);
+            }
+        }
+        else
+        {
+            dc_log ("[EmbedEditor] Wayland mode: could not open display");
         }
     }
 }
 
 void EmbeddedPluginEditor::closeEditor()
 {
-    if (holder != nullptr)
+    if (editor_ != nullptr)
     {
-        if (editor != nullptr)
-            holder->removeChildComponent (editor);
-
-        holder->removeFromDesktop();
-        holder.reset();
+        editor_->detach();
+        editor_.reset();
     }
 
-    // Delete the editor so the plugin clears its active-editor reference.
-    // Without this, createEditorIfNeeded() returns the stale editor on
-    // reopen — it was removed from desktop and won't render correctly.
-    delete editor;
-    editor = nullptr;
     // Close our own X11 display if we opened one (Wayland mode)
     if (! reparented && xDisplay != nullptr)
         x11::closeDisplay (xDisplay);
@@ -119,7 +107,7 @@ void EmbeddedPluginEditor::closeEditor()
 
 void EmbeddedPluginEditor::scaleToFit (int maxW, int maxH, int& outW, int& outH)
 {
-    if (editor == nullptr || nativeWidth <= 0 || nativeHeight <= 0
+    if (editor_ == nullptr || nativeWidth <= 0 || nativeHeight <= 0
         || maxW <= 0 || maxH <= 0)
     {
         outW = std::max (maxW, 0);
@@ -137,12 +125,11 @@ void EmbeddedPluginEditor::scaleToFit (int maxW, int maxH, int& outW, int& outH)
     outW = static_cast<int> (nativeWidth * scale);
     outH = static_cast<int> (nativeHeight * scale);
 
-    std::cerr << "[EmbedEditor] scaleToFit: native=" << nativeWidth << "x" << nativeHeight
-              << " max=" << maxW << "x" << maxH
-              << " scale=" << scale
-              << " result=" << outW << "x" << outH << "\n";
+    dc_log ("[EmbedEditor] scaleToFit: native=%dx%d max=%dx%d scale=%f result=%dx%d",
+            nativeWidth, nativeHeight, maxW, maxH, scale, outW, outH);
 
-    editor->setScaleFactor (scale);
+    // Resize the editor via IPlugView
+    editor_->setSize (outW, outH);
 }
 
 void EmbeddedPluginEditor::setBounds (int x, int y, int width, int height)
@@ -158,20 +145,12 @@ void EmbeddedPluginEditor::setBounds (int x, int y, int width, int height)
     int offsetX = x + (width - scaledW);
     int offsetY = y + (height - scaledH);
 
-    std::cerr << "[EmbedEditor] setBounds: panel=(" << x << "," << y << " " << width << "x" << height << ")"
-              << " scaled=" << scaledW << "x" << scaledH
-              << " offset=(" << offsetX << "," << offsetY << ")\n";
+    dc_log ("[EmbedEditor] setBounds: panel=(%d,%d %dx%d) scaled=%dx%d offset=(%d,%d)",
+            x, y, width, height, scaledW, scaledH, offsetX, offsetY);
 
-    // JUCE handles positioning natively — for reparented windows it uses
-    // parent-relative coordinates automatically (no manual X11 calls needed).
-    holder->setBounds (offsetX, offsetY, scaledW, scaledH);
-
-    std::cerr << "[EmbedEditor] after setBounds: holder=("
-              << holder->getX() << "," << holder->getY() << " "
-              << holder->getWidth() << "x" << holder->getHeight() << ")";
-    if (auto* peer = holder->getPeer())
-        std::cerr << " peerScale=" << peer->getPlatformScaleFactor();
-    std::cerr << "\n";
+    // Move the X11 window
+    if (editorXWindow != 0 && xDisplay != nullptr)
+        x11::moveResizeWindow (xDisplay, editorXWindow, offsetX, offsetY, scaledW, scaledH);
 }
 
 void EmbeddedPluginEditor::setScreenPosition (int screenX, int screenY)
@@ -180,17 +159,17 @@ void EmbeddedPluginEditor::setScreenPosition (int screenX, int screenY)
         return;
 
     // Wayland: position the floating window at absolute screen coords
-    int scaledW = holder != nullptr ? holder->getWidth() : 400;
-    int scaledH = holder != nullptr ? holder->getHeight() : 300;
-
-    auto* peer = holder->getPeer();
-    if (peer != nullptr)
-        peer->setBounds (juce::Rectangle<int> (screenX, screenY, scaledW, scaledH), false);
+    if (editorXWindow != 0 && xDisplay != nullptr)
+    {
+        int w = nativeWidth > 0 ? nativeWidth : 400;
+        int h = nativeHeight > 0 ? nativeHeight : 300;
+        x11::moveResizeWindow (xDisplay, editorXWindow, screenX, screenY, w, h);
+    }
 }
 
 bool EmbeddedPluginEditor::isOpen() const
 {
-    return editor != nullptr && holder != nullptr;
+    return editor_ != nullptr;
 }
 
 bool EmbeddedPluginEditor::isReparented() const
@@ -200,12 +179,22 @@ bool EmbeddedPluginEditor::isReparented() const
 
 int EmbeddedPluginEditor::getEditorWidth() const
 {
-    return editor != nullptr ? editor->getWidth() : 0;
+    if (editor_ != nullptr)
+    {
+        auto [w, h] = editor_->getPreferredSize();
+        return w;
+    }
+    return 0;
 }
 
 int EmbeddedPluginEditor::getEditorHeight() const
 {
-    return editor != nullptr ? editor->getHeight() : 0;
+    if (editor_ != nullptr)
+    {
+        auto [w, h] = editor_->getPreferredSize();
+        return h;
+    }
+    return 0;
 }
 
 } // namespace platform

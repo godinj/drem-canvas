@@ -57,13 +57,13 @@ private:
     void disconnectTrackPluginChain (int trackIndex);
     void openPluginEditor (int trackIndex, int pluginIndex);
     void captureAllPluginStates();
-    void insertPluginOnTrack (int trackIndex, const juce::PluginDescription& desc);
+    void insertPluginOnTrack (int trackIndex, const dc::PluginDescription& desc);
     void toggleBrowser();
 
     // Master bus plugin chain
     void connectMasterPluginChain();
     void disconnectMasterPluginChain();
-    void insertPluginOnMaster (const juce::PluginDescription& desc);
+    void insertPluginOnMaster (const dc::PluginDescription& desc);
     void openMasterPluginEditor (int pluginIndex);
 
     // PropertyTree listener
@@ -87,7 +87,7 @@ private:
     struct PluginNodeInfo
     {
         NodeId node = 0;
-        juce::AudioPluginInstance* plugin = nullptr;  // non-owning; graph owns
+        dc::PluginInstance* plugin = nullptr;  // non-owning; graph owns
     };
 
     // Engine

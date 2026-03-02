@@ -18,18 +18,9 @@ ParameterGridWidget::~ParameterGridWidget()
 {
 }
 
-void ParameterGridWidget::setPlugin (juce::AudioPluginInstance* plugin)
+void ParameterGridWidget::setPlugin (dc::PluginInstance* plugin)
 {
     currentPlugin = plugin;
-    parameters.clear();
-
-    if (plugin != nullptr)
-    {
-        auto& params = plugin->getParameters();
-        for (auto* p : params)
-            parameters.push_back (p);
-    }
-
     selectedParam = 0;
     repaint();
 }
@@ -37,7 +28,6 @@ void ParameterGridWidget::setPlugin (juce::AudioPluginInstance* plugin)
 void ParameterGridWidget::clearPlugin()
 {
     currentPlugin = nullptr;
-    parameters.clear();
     selectedParam = 0;
     repaint();
 }
@@ -74,7 +64,7 @@ void ParameterGridWidget::setNumberBuffer (const std::string& buffer)
 }
 
 void ParameterGridWidget::setSpatialResults (const std::vector<SpatialParamInfo>& results,
-                                              juce::AudioPluginInstance* plugin)
+                                              dc::PluginInstance* plugin)
 {
     spatialResults = results;
     spatialMode = true;
@@ -95,7 +85,9 @@ int ParameterGridWidget::getNumParameters() const
 {
     if (spatialMode)
         return static_cast<int> (spatialResults.size());
-    return static_cast<int> (parameters.size());
+    if (currentPlugin != nullptr)
+        return currentPlugin->getNumParameters();
+    return 0;
 }
 
 void ParameterGridWidget::paint (gfx::Canvas& canvas)
@@ -145,7 +137,7 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
         {
             // --- Spatial mode: render from spatialResults ---
             auto& info = spatialResults[static_cast<size_t> (i)];
-            bool isMapped = (info.juceParamIndex >= 0);
+            bool isMapped = (info.paramIndex >= 0);
 
             // Hint label
             {
@@ -173,29 +165,25 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
             canvas.drawText (name, x, rowY + rowHeight * 0.5f + 5.0f, font, nameColor);
             x += nameColWidth;
 
-            if (isMapped && pluginForValues != nullptr)
+            if (isMapped && pluginForValues != nullptr
+                && info.paramIndex < pluginForValues->getNumParameters())
             {
-                auto& params = pluginForValues->getParameters();
-                if (info.juceParamIndex < params.size())
-                {
-                    auto* param = params[info.juceParamIndex];
-                    float value = param->getValue();
+                float value = pluginForValues->getParameterValue (info.paramIndex);
 
-                    // Value bar
-                    float barX = x;
-                    float barY = rowY + 4.0f;
-                    float barH = rowHeight - 8.0f;
-                    canvas.fillRect (Rect (barX, barY, barColWidth, barH), Color::fromARGB (0xff313244));
-                    float fillW = value * barColWidth;
-                    Color barColor = isSelected ? theme.selection : theme.accent;
-                    canvas.fillRect (Rect (barX, barY, fillW, barH), barColor);
-                    x += barColWidth + 8.0f;
+                // Value bar
+                float barX = x;
+                float barY = rowY + 4.0f;
+                float barH = rowHeight - 8.0f;
+                canvas.fillRect (Rect (barX, barY, barColWidth, barH), Color::fromARGB (0xff313244));
+                float fillW = value * barColWidth;
+                Color barColor = isSelected ? theme.selection : theme.accent;
+                canvas.fillRect (Rect (barX, barY, fillW, barH), barColor);
+                x += barColWidth + 8.0f;
 
-                    // Value text
-                    auto valueText = param->getCurrentValueAsText().toStdString();
-                    canvas.drawText (valueText, x, rowY + rowHeight * 0.5f + 5.0f,
-                                     fm.getMonoFont(), Color::fromARGB (0xffa6adc8));
-                }
+                // Value text
+                auto valueText = pluginForValues->getParameterDisplay (info.paramIndex);
+                canvas.drawText (valueText, x, rowY + rowHeight * 0.5f + 5.0f,
+                                 fm.getMonoFont(), Color::fromARGB (0xffa6adc8));
             }
             else
             {
@@ -206,13 +194,12 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
         }
         else
         {
-            // --- JUCE param mode (fallback) ---
-            auto* param = parameters[i];
-            float value = param->getValue();
+            // --- dc::PluginInstance param mode ---
+            float value = currentPlugin->getParameterValue (i);
 
             // Hint label
             {
-                std::string hintLabel = VimEngine::generateHintLabel (i, static_cast<int> (parameters.size()));
+                std::string hintLabel = VimEngine::generateHintLabel (i, numParams);
 
                 if (! hintLabel.empty())
                 {
@@ -232,7 +219,9 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
             x += hintColWidth;
 
             // Parameter name
-            auto name = param->getName (24).toStdString();
+            auto name = currentPlugin->getParameterName (i);
+            if (name.size() > 24)
+                name = name.substr (0, 24);
             Color nameColor = isSelected
                 ? Color::fromARGB (0xffcdd6f4)
                 : Color::fromARGB (0xffa6adc8);
@@ -252,7 +241,7 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
             x += barColWidth + 8.0f;
 
             // Value text
-            auto valueText = param->getCurrentValueAsText().toStdString();
+            auto valueText = currentPlugin->getParameterDisplay (i);
             canvas.drawText (valueText, x, rowY + rowHeight * 0.5f + 5.0f,
                              fm.getMonoFont(), Color::fromARGB (0xffa6adc8));
         }

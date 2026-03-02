@@ -5,7 +5,6 @@
 #include "platform/linux/EmbeddedPluginEditor.h"
 #include "platform/linux/X11Compositor.h"
 #include "platform/linux/X11Reparent.h"
-#include <JuceHeader.h>
 
 namespace dc
 {
@@ -24,7 +23,7 @@ X11PluginEditorBridge::~X11PluginEditorBridge()
     embeddedEditor.reset();
 }
 
-void X11PluginEditorBridge::openEditor (juce::AudioPluginInstance* plugin)
+void X11PluginEditorBridge::openEditor (dc::PluginInstance* plugin)
 {
     if (compositor)
         compositor->stopRedirect();
@@ -143,7 +142,7 @@ bool X11PluginEditorBridge::isCompositing() const
     return compositorActive;
 }
 
-juce::AudioProcessorEditor* X11PluginEditorBridge::getEditor() const
+dc::PluginEditor* X11PluginEditorBridge::getEditor() const
 {
     return embeddedEditor ? embeddedEditor->getEditor() : nullptr;
 }

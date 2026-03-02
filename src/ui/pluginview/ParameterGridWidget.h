@@ -4,7 +4,7 @@
 #include "vim/VimContext.h"
 #include "vim/VimEngine.h"
 #include "plugins/ParameterFinderScanner.h"
-#include <JuceHeader.h>
+#include "dc/plugins/PluginInstance.h"
 #include <string>
 #include <vector>
 
@@ -21,7 +21,7 @@ public:
 
     void paint (gfx::Canvas& canvas) override;
 
-    void setPlugin (juce::AudioPluginInstance* plugin);
+    void setPlugin (dc::PluginInstance* plugin);
     void clearPlugin();
 
     void setSelectedParamIndex (int index);
@@ -33,14 +33,13 @@ public:
     /** Switch to spatial results mode — grid shows spatially-discovered controls
         instead of the full JUCE parameter list. */
     void setSpatialResults (const std::vector<SpatialParamInfo>& results,
-                            juce::AudioPluginInstance* plugin);
+                            dc::PluginInstance* plugin);
     void clearSpatialResults();
 
     int getNumParameters() const;
 
 private:
-    juce::AudioPluginInstance* currentPlugin = nullptr;
-    std::vector<juce::AudioProcessorParameter*> parameters;
+    dc::PluginInstance* currentPlugin = nullptr;
 
     int selectedParam = 0;
     VimContext::HintMode hintMode = VimContext::HintNone;
@@ -51,7 +50,7 @@ private:
     // Spatial mode: show spatially-discovered controls instead of JUCE params
     std::vector<SpatialParamInfo> spatialResults;
     bool spatialMode = false;
-    juce::AudioPluginInstance* pluginForValues = nullptr;
+    dc::PluginInstance* pluginForValues = nullptr;
 
     static constexpr float rowHeight = 24.0f;
     static constexpr float hintColWidth = 36.0f;

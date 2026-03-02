@@ -1,5 +1,6 @@
 #include "MainComponent.h"
 #include "engine/PluginProcessorNode.h"
+#include "dc/plugins/PluginDescription.h"
 #include "model/Track.h"
 #include "model/AudioClip.h"
 #include "model/MidiClip.h"
@@ -109,7 +110,7 @@ MainComponent::MainComponent()
     // Browser panel (hidden by default)
     pluginManager.loadPluginList (pluginManager.getDefaultPluginListFile());
     auto* browser = new BrowserPanel (pluginManager);
-    browser->onPluginSelected = [this] (const juce::PluginDescription& desc)
+    browser->onPluginSelected = [this] (const dc::PluginDescription& desc)
     {
         if (vimContext.isMasterStripSelected())
             insertPluginOnMaster (desc);
@@ -134,12 +135,19 @@ MainComponent::MainComponent()
     vimEngine->onPluginCommand = [this] (const std::string& pluginName)
     {
         auto& knownPlugins = pluginManager.getKnownPlugins();
-        auto types = knownPlugins.getTypes();
 
         // Fuzzy search: find first plugin whose name contains the search term (case-insensitive)
-        for (const auto& desc : types)
+        std::string queryLower = pluginName;
+        std::transform (queryLower.begin(), queryLower.end(), queryLower.begin(),
+                        [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
+
+        for (const auto& desc : knownPlugins)
         {
-            if (desc.name.containsIgnoreCase (pluginName))
+            std::string nameLower = desc.name;
+            std::transform (nameLower.begin(), nameLower.end(), nameLower.begin(),
+                            [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
+
+            if (nameLower.find (queryLower) != std::string::npos)
             {
                 insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
                 return;
@@ -556,15 +564,14 @@ void MainComponent::rebuildAudioGraph()
             auto pluginState = track.getPlugin (p);
             auto desc = PluginHost::descriptionFromPropertyTree (pluginState);
 
-            auto instance = PluginHost::createPluginSync (
-                pluginManager.getFormatManager(), desc, sampleRate, blockSize);
+            auto instance = pluginHost.createPluginSync (desc, sampleRate, blockSize);
 
             if (instance != nullptr)
             {
                 // Restore plugin state
-                auto base64State = pluginState.getProperty (IDs::pluginState, "").toString();
-                if (base64State.isNotEmpty())
-                    PluginHost::restorePluginState (*instance, base64State.toStdString());
+                std::string base64State = pluginState.getProperty (IDs::pluginState).getStringOr ("");
+                if (! base64State.empty())
+                    PluginHost::restorePluginState (*instance, base64State);
 
                 auto* pluginPtr = instance.get();
                 auto wrapper = std::make_unique<PluginProcessorNode> (std::move (instance));
@@ -1319,7 +1326,7 @@ void MainComponent::openMasterPluginEditor (int pluginIndex)
         pluginWindowManager.showEditorForPlugin (*plugin);
 }
 
-void MainComponent::insertPluginOnMaster (const juce::PluginDescription& desc)
+void MainComponent::insertPluginOnMaster (const dc::PluginDescription& desc)
 {
     auto masterBus = project.getMasterBusState();
     auto chain = masterBus.getChildWithType (IDs::PLUGIN_CHAIN);
@@ -1331,11 +1338,11 @@ void MainComponent::insertPluginOnMaster (const juce::PluginDescription& desc)
 
     // Add to model
     auto pluginNode = PropertyTree (IDs::PLUGIN);
-    pluginNode.setProperty (IDs::pluginName, desc.name.toStdString(), nullptr);
-    pluginNode.setProperty (IDs::pluginFormat, desc.pluginFormatName.toStdString(), nullptr);
-    pluginNode.setProperty (IDs::pluginManufacturer, desc.manufacturerName.toStdString(), nullptr);
-    pluginNode.setProperty (IDs::pluginUniqueId, desc.uniqueId, nullptr);
-    pluginNode.setProperty (IDs::pluginFileOrIdentifier, desc.fileOrIdentifier.toStdString(), nullptr);
+    pluginNode.setProperty (IDs::pluginName, desc.name, nullptr);
+    pluginNode.setProperty (IDs::pluginFormat, "VST3", nullptr);
+    pluginNode.setProperty (IDs::pluginManufacturer, desc.manufacturer, nullptr);
+    pluginNode.setProperty (IDs::pluginUniqueId, 0, nullptr);
+    pluginNode.setProperty (IDs::pluginFileOrIdentifier, desc.path.string(), nullptr);
     pluginNode.setProperty (IDs::pluginEnabled, true, nullptr);
     chain.addChild (pluginNode, -1, &project.getUndoManager());
 
@@ -1344,9 +1351,9 @@ void MainComponent::insertPluginOnMaster (const juce::PluginDescription& desc)
     auto blockSize = audioEngine.getBufferSize();
 
     pluginHost.createPluginAsync (desc, sampleRate, blockSize,
-        [this] (std::unique_ptr<juce::AudioPluginInstance> instance, const std::string& errorMessage)
+        [this] (std::unique_ptr<dc::PluginInstance> instance, const std::string& errorMessage)
         {
-            juce::ignoreUnused (errorMessage);
+            (void) errorMessage;
             if (instance == nullptr)
                 return;
 
@@ -1363,7 +1370,7 @@ void MainComponent::insertPluginOnMaster (const juce::PluginDescription& desc)
         });
 }
 
-void MainComponent::insertPluginOnTrack (int trackIndex, const juce::PluginDescription& desc)
+void MainComponent::insertPluginOnTrack (int trackIndex, const dc::PluginDescription& desc)
 {
     if (trackIndex < 0 || trackIndex >= project.getNumTracks())
         return;
@@ -1372,9 +1379,9 @@ void MainComponent::insertPluginOnTrack (int trackIndex, const juce::PluginDescr
     Track track (trackState);
 
     // Add to model
-    track.addPlugin (desc.name.toStdString(), desc.pluginFormatName.toStdString(),
-                     desc.manufacturerName.toStdString(),
-                     desc.uniqueId, desc.fileOrIdentifier.toStdString(),
+    track.addPlugin (desc.name, "VST3",
+                     desc.manufacturer,
+                     0, desc.path.string(),
                      &project.getUndoManager());
 
     // Async instantiate and add to graph
@@ -1382,9 +1389,9 @@ void MainComponent::insertPluginOnTrack (int trackIndex, const juce::PluginDescr
     auto blockSize = audioEngine.getBufferSize();
 
     pluginHost.createPluginAsync (desc, sampleRate, blockSize,
-        [this, trackIndex] (std::unique_ptr<juce::AudioPluginInstance> instance, const std::string& errorMessage)
+        [this, trackIndex] (std::unique_ptr<dc::PluginInstance> instance, const std::string& errorMessage)
         {
-            juce::ignoreUnused (errorMessage);
+            (void) errorMessage;
             if (instance == nullptr)
                 return;
 

@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include "plugins/PluginManager.h"
+#include "dc/plugins/PluginDescription.h"
 
 namespace dc
 {
@@ -30,7 +31,7 @@ public:
     void confirmSelection();
 
     // Callback when a plugin is selected
-    std::function<void (const juce::PluginDescription&)> onPluginSelected;
+    std::function<void (const dc::PluginDescription&)> onPluginSelected;
 
 private:
     PluginManager& pluginManager;
@@ -41,19 +42,19 @@ private:
     class PluginListModel : public juce::ListBoxModel
     {
     public:
-        explicit PluginListModel (std::vector<juce::PluginDescription>& types)
+        explicit PluginListModel (std::vector<dc::PluginDescription>& types)
             : filteredTypes (types) {}
         int getNumRows() override;
         void paintListBoxItem (int rowNumber, juce::Graphics& g,
                                int width, int height, bool rowIsSelected) override;
         void listBoxItemDoubleClicked (int row, const juce::MouseEvent&) override;
 
-        std::function<void (const juce::PluginDescription&)> onItemSelected;
+        std::function<void (const dc::PluginDescription&)> onItemSelected;
     private:
-        std::vector<juce::PluginDescription>& filteredTypes;
+        std::vector<dc::PluginDescription>& filteredTypes;
     };
 
-    std::vector<juce::PluginDescription> filteredTypes;
+    std::vector<dc::PluginDescription> filteredTypes;
     std::string searchFilter;
     PluginListModel listModel;
     juce::TextButton scanButton { "Scan Plugins" };

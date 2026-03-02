@@ -4,7 +4,7 @@
 #include "include/core/SkImage.h"
 #include "include/core/SkRefCnt.h"
 
-namespace juce { class AudioPluginInstance; class AudioProcessorEditor; }
+namespace dc { class PluginInstance; class PluginEditor; }
 
 namespace dc
 {
@@ -24,7 +24,7 @@ public:
     virtual ~PluginEditorBridge() = default;
 
     // Editor lifecycle
-    virtual void openEditor (juce::AudioPluginInstance* plugin) = 0;
+    virtual void openEditor (dc::PluginInstance* plugin) = 0;
     virtual void closeEditor() = 0;
     virtual bool isOpen() const = 0;
 
@@ -49,10 +49,10 @@ public:
     /** Returns true if compositing is active (pixel capture is available). */
     virtual bool isCompositing() const = 0;
 
-    /** Access the underlying JUCE editor (for ParameterFinderScanner). */
-    virtual juce::AudioProcessorEditor* getEditor() const = 0;
+    /** Access the underlying dc::PluginEditor (for ParameterFinderScanner). */
+    virtual dc::PluginEditor* getEditor() const = 0;
 
-    /** Content scale factor (logical points → physical pixels).
+    /** Content scale factor (logical points -> physical pixels).
         Used by MouseEventForwarder to convert widget-space deltas
         to X11 root-pixel deltas for XTest injection. */
     virtual float getContentScale() const { return 1.0f; }

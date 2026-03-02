@@ -4,7 +4,7 @@
 #include "ParameterGridWidget.h"
 #include "vim/VimContext.h"
 #include "plugins/ParameterFinderScanner.h"
-#include <JuceHeader.h>
+#include "dc/plugins/PluginInstance.h"
 #include <string>
 
 namespace dc
@@ -34,7 +34,7 @@ public:
     void mouseMove (const gfx::MouseEvent& e) override;
     bool mouseWheel (const gfx::WheelEvent& e) override;
 
-    void setPlugin (juce::AudioPluginInstance* plugin, const std::string& pluginName,
+    void setPlugin (dc::PluginInstance* plugin, const std::string& pluginName,
                     const std::string& fileOrIdentifier = {});
     void clearPlugin();
 
@@ -89,7 +89,7 @@ private:
     std::string pluginName;
     std::string pluginFileOrIdentifier;
     bool activeContext = false;
-    juce::AudioPluginInstance* currentPlugin = nullptr;
+    dc::PluginInstance* currentPlugin = nullptr;
 
     bool enlarged = false;
     static constexpr float headerHeight = 30.0f;

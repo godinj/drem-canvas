@@ -121,27 +121,30 @@ void BrowserWidget::filterPlugins()
 {
     displayedPlugins.clear();
     auto& knownPlugins = pluginManager.getKnownPlugins();
-    auto types = knownPlugins.getTypes();
 
     std::vector<std::string> names;
 
-    for (const auto& type : types)
+    for (const auto& type : knownPlugins)
     {
         if (! searchBuffer.empty())
         {
-            auto nameLower = type.name.toLowerCase();
-            auto mfgLower = type.manufacturerName.toLowerCase();
-            std::string queryLowerStd = searchBuffer;
-            std::transform (queryLowerStd.begin(), queryLowerStd.end(), queryLowerStd.begin(),
+            std::string nameLower = type.name;
+            std::transform (nameLower.begin(), nameLower.end(), nameLower.begin(),
                             [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
-            auto queryLower = queryLowerStd.c_str();
+            std::string mfgLower = type.manufacturer;
+            std::transform (mfgLower.begin(), mfgLower.end(), mfgLower.begin(),
+                            [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
+            std::string queryLower = searchBuffer;
+            std::transform (queryLower.begin(), queryLower.end(), queryLower.begin(),
+                            [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
 
-            if (! nameLower.contains (queryLower) && ! mfgLower.contains (queryLower))
+            if (nameLower.find (queryLower) == std::string::npos
+                && mfgLower.find (queryLower) == std::string::npos)
                 continue;
         }
 
         displayedPlugins.push_back (type);
-        names.push_back ((type.name + " (" + type.manufacturerName + ")").toStdString());
+        names.push_back (type.name + " (" + type.manufacturer + ")");
     }
 
     pluginList.setItems (names);

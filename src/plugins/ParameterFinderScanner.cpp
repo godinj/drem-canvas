@@ -1,15 +1,13 @@
 #include "ParameterFinderScanner.h"
-#include "VST3ParameterFinderSupport.h"
 #include "vim/VimEngine.h"
+#include "dc/foundation/assert.h"
 #include <algorithm>
 #include <map>
-#include <iostream>
 
 namespace dc
 {
 
-void ParameterFinderScanner::scan (VST3ParameterFinderSupport& finder,
-                                   juce::AudioPluginInstance* plugin,
+void ParameterFinderScanner::scan (dc::PluginInstance* plugin,
                                    int nativeWidth, int nativeHeight,
                                    int gridStep)
 {
@@ -32,9 +30,10 @@ void ParameterFinderScanner::scan (VST3ParameterFinderSupport& finder,
     {
         for (int x = 0; x < nativeWidth; x += gridStep)
         {
-            unsigned int paramId = 0;
-            if (finder.findParameterAt (x, y, paramId))
+            int paramIdx = plugin->findParameterAtPoint (x, y);
+            if (paramIdx >= 0)
             {
+                unsigned int paramId = static_cast<unsigned int> (plugin->getParameterId (paramIdx));
                 auto& acc = accumulators[paramId];
                 acc.sumX += x;
                 acc.sumY += y;
@@ -46,10 +45,9 @@ void ParameterFinderScanner::scan (VST3ParameterFinderSupport& finder,
     if (accumulators.empty())
         return;
 
-    auto& params = plugin->getParameters();
+    int numParams = plugin->getNumParameters();
 
-    // Build results with centroids, resolving finder ParamIDs to JUCE indices
-    // via the VST3ParameterFinderSupport interface (handles mismatched ID spaces)
+    // Build results with centroids
     int mapped = 0;
     for (auto& [paramId, acc] : accumulators)
     {
@@ -59,67 +57,49 @@ void ParameterFinderScanner::scan (VST3ParameterFinderSupport& finder,
         info.centerY = static_cast<int> (acc.sumY / acc.count);
         info.hitCount = acc.count;
 
-        int juceIdx = finder.resolveFinderParamIndex (paramId);
-        if (juceIdx >= 0 && juceIdx < params.size())
+        // Resolve ParamID to parameter index
+        for (int i = 0; i < numParams; ++i)
         {
-            info.juceParamIndex = juceIdx;
-            info.name = params[juceIdx]->getName (64).toStdString();
-            mapped++;
-        }
-        else
-        {
-            info.juceParamIndex = -1;
+            if (static_cast<unsigned int> (plugin->getParameterId (i)) == paramId)
+            {
+                info.paramIndex = i;
+                info.name = plugin->getParameterName (i);
+                mapped++;
+                break;
+            }
         }
 
         results.push_back (info);
     }
 
-    // Phase 2: wiggle-based fallback for unmapped params
-    int wiggled = 0;
+    // Phase 2: performEdit snoop fallback for unmapped params.
+    // Drain any stale events first.
+    while (plugin->popLastEdit().has_value()) {}
+
+    int snooped = 0;
     for (auto& info : results)
     {
-        if (info.juceParamIndex >= 0)
+        if (info.paramIndex >= 0)
             continue;
 
-        int idx = finder.resolveFinderParamByWiggle (info.paramId);
-        if (idx >= 0 && idx < params.size())
-        {
-            info.juceParamIndex = idx;
-            info.name = params[idx]->getName (64).toStdString();
-            wiggled++;
-        }
-    }
+        // Nudge the parameter via the finder coordinates — the plugin may call
+        // performEdit, which we catch via popLastEdit().
+        // This is a heuristic fallback: we re-query findParameterAtPoint and
+        // check if a performEdit event was generated.
+        plugin->findParameterAtPoint (info.centerX, info.centerY);
 
-    // Phase 3: reverse wiggle — nudge JUCE params and detect finder param changes.
-    // Useful when finder ParamIDs are outside the controller's param space.
-    int reverseWiggled = 0;
-    {
-        std::vector<unsigned int> unmappedFinderIds;
-        for (auto& info : results)
+        auto edit = plugin->popLastEdit();
+        if (edit.has_value())
         {
-            if (info.juceParamIndex < 0)
-                unmappedFinderIds.push_back (info.paramId);
-        }
-
-        if (! unmappedFinderIds.empty())
-        {
-            std::map<unsigned int, int> reverseMap;
-            int found = finder.resolveByReverseWiggle (unmappedFinderIds, reverseMap);
-
-            if (found > 0)
+            unsigned int editId = static_cast<unsigned int> (edit->paramId);
+            for (int i = 0; i < numParams; ++i)
             {
-                for (auto& info : results)
+                if (static_cast<unsigned int> (plugin->getParameterId (i)) == editId)
                 {
-                    if (info.juceParamIndex >= 0)
-                        continue;
-
-                    auto it = reverseMap.find (info.paramId);
-                    if (it != reverseMap.end() && it->second >= 0 && it->second < params.size())
-                    {
-                        info.juceParamIndex = it->second;
-                        info.name = params[it->second]->getName (64).toStdString();
-                        reverseWiggled++;
-                    }
+                    info.paramIndex = i;
+                    info.name = plugin->getParameterName (i);
+                    snooped++;
+                    break;
                 }
             }
         }
@@ -128,15 +108,12 @@ void ParameterFinderScanner::scan (VST3ParameterFinderSupport& finder,
     int unmapped = 0;
     for (auto& info : results)
     {
-        if (info.juceParamIndex < 0)
+        if (info.paramIndex < 0)
             unmapped++;
     }
 
-    std::cerr << "[SpatialScan] " << accumulators.size() << " finder params, "
-              << mapped << " direct, "
-              << wiggled << " wiggle, "
-              << reverseWiggled << " reverse, "
-              << unmapped << " unmapped\n";
+    dc_log ("[SpatialScan] %d finder params, %d direct, %d snooped, %d unmapped",
+            static_cast<int> (accumulators.size()), mapped, snooped, unmapped);
 
     // Sort by position: top-to-bottom rows (20px tolerance), then left-to-right
     static constexpr int rowTolerance = 20;
