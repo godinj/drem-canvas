@@ -9,4 +9,4 @@
     #define dc_assert(expr) assert(expr)
 #endif
 
-#define dc_log(msg) std::fprintf(stderr, "[DC] %s\n", (msg))
+#define dc_log(fmt, ...) std::fprintf(stderr, "[DC] " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
