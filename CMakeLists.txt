@@ -24,6 +24,21 @@ set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(yaml-cpp)
 
+# VST3 SDK for direct plugin hosting
+set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
+set(SMTG_ADD_VSTGUI OFF CACHE BOOL "" FORCE)
+set(SMTG_RUN_VST_VALIDATOR OFF CACHE BOOL "" FORCE)
+set(SMTG_ADD_VST3_PLUGINS_SAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    vst3sdk
+    GIT_REPOSITORY https://github.com/steinbergmedia/vst3sdk.git
+    GIT_TAG        v3.7.9_build_61
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(vst3sdk)
+
 # ─── Skia ─────────────────────────────────────────────────────
 set(SKIA_DIR "${CMAKE_SOURCE_DIR}/libs/skia")
 find_library(SKIA_LIB skia PATHS "${SKIA_DIR}/lib" NO_DEFAULT_PATH)
@@ -140,6 +155,9 @@ target_sources(DremCanvas PRIVATE
     src/dc/audio/DiskStreamer.cpp
     src/dc/audio/ThreadedRecorder.cpp
     src/dc/audio/PortAudioDeviceManager.cpp
+
+    # dc::plugins library
+    src/dc/plugins/VST3Module.cpp
 
     # Application entry point
     src/Main.cpp
@@ -331,6 +349,7 @@ target_include_directories(DremCanvas PRIVATE
     "${CMAKE_BINARY_DIR}/generated"
     "${SKIA_DIR}/include"
     "${SKIA_DIR}"
+    "${vst3sdk_SOURCE_DIR}"
 )
 
 # ─── Platform-specific include directories ────────────────────
@@ -399,6 +418,7 @@ target_link_libraries(DremCanvas PRIVATE
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
     yaml-cpp::yaml-cpp
+    sdk
     ${SKIA_LIB}
     PNG::PNG
 )
