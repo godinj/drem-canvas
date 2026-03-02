@@ -150,7 +150,7 @@ void EmbeddedPluginEditor::setBounds (int x, int y, int width, int height)
 
     // Move the X11 window
     if (editorXWindow != 0 && xDisplay != nullptr)
-        x11::moveResizeWindow (xDisplay, editorXWindow, offsetX, offsetY, scaledW, scaledH);
+        x11::moveResize (xDisplay, editorXWindow, offsetX, offsetY, scaledW, scaledH);
 }
 
 void EmbeddedPluginEditor::setScreenPosition (int screenX, int screenY)
@@ -163,7 +163,7 @@ void EmbeddedPluginEditor::setScreenPosition (int screenX, int screenY)
     {
         int w = nativeWidth > 0 ? nativeWidth : 400;
         int h = nativeHeight > 0 ? nativeHeight : 300;
-        x11::moveResizeWindow (xDisplay, editorXWindow, screenX, screenY, w, h);
+        x11::moveResize (xDisplay, editorXWindow, screenX, screenY, w, h);
     }
 }
 

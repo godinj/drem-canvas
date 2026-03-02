@@ -59,6 +59,19 @@ void reparent (void* display, unsigned long child, unsigned long parent, int x, 
     XFlush (d);
 }
 
+unsigned long createWindow (void* display, int width, int height)
+{
+    auto* d = static_cast<Display*> (display);
+    Window root = DefaultRootWindow (d);
+    Window win = XCreateSimpleWindow (d, root, 0, 0,
+                                      static_cast<unsigned int> (width),
+                                      static_cast<unsigned int> (height),
+                                      0, 0, 0);
+    XMapWindow (d, win);
+    XFlush (d);
+    return static_cast<unsigned long> (win);
+}
+
 void moveResize (void* display, unsigned long window, int x, int y, int w, int h)
 {
     auto* d = static_cast<Display*> (display);

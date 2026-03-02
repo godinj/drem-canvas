@@ -49,7 +49,7 @@ void SpatialScanCache::save (const std::string& pluginFileOrIdentifier,
     {
         out << YAML::BeginMap;
         out << YAML::Key << "param_id" << YAML::Value << info.paramId;
-        out << YAML::Key << "juce_param_index" << YAML::Value << info.juceParamIndex;
+        out << YAML::Key << "param_index" << YAML::Value << info.paramIndex;
         out << YAML::Key << "center_x" << YAML::Value << info.centerX;
         out << YAML::Key << "center_y" << YAML::Value << info.centerY;
         out << YAML::Key << "hit_count" << YAML::Value << info.hitCount;
@@ -110,7 +110,7 @@ bool SpatialScanCache::load (const std::string& pluginFileOrIdentifier,
             const auto& node = *it;
             SpatialParamInfo info;
             info.paramId = node["param_id"].as<unsigned int>();
-            info.juceParamIndex = node["juce_param_index"].as<int>();
+            info.paramIndex = node["param_index"].as<int>();
             info.centerX = node["center_x"].as<int>();
             info.centerY = node["center_y"].as<int>();
             info.hitCount = node["hit_count"].as<int>();

@@ -30,6 +30,9 @@ unsigned long getWindow (GLFWwindow* glfwWin);
 /** Reparent child into parent at (x, y) and map it. */
 void reparent (void* display, unsigned long child, unsigned long parent, int x, int y);
 
+/** Create a simple X11 container window (for Wayland/XWayland plugin hosting). */
+unsigned long createWindow (void* display, int width, int height);
+
 /** Move and resize an X11 window. */
 void moveResize (void* display, unsigned long window, int x, int y, int w, int h);
 

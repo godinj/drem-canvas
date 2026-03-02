@@ -364,13 +364,11 @@ void AppController::initialise()
 
             auto& info = results[static_cast<size_t> (paramIndex)];
 
-            if (info.juceParamIndex >= 0)
+            if (info.paramIndex >= 0 && info.paramIndex < plugin->getNumParameters())
             {
                 // Mapped: set via host API
-                auto& params = plugin->getParameters();
-                if (info.juceParamIndex < params.size())
-                    params[info.juceParamIndex]->setValueNotifyingHost (
-                        std::clamp (newValue, 0.0f, 1.0f));
+                plugin->setParameterValue (info.paramIndex,
+                    std::clamp (newValue, 0.0f, 1.0f));
             }
             else
             {
@@ -381,12 +379,11 @@ void AppController::initialise()
         }
         else
         {
-            // JUCE param mode (fallback)
-            auto& params = plugin->getParameters();
-            if (paramIndex < 0 || paramIndex >= params.size())
+            // dc::PluginInstance param mode — all params are mapped
+            if (paramIndex < 0 || paramIndex >= plugin->getNumParameters())
                 return;
 
-            params[paramIndex]->setValueNotifyingHost (std::clamp (newValue, 0.0f, 1.0f));
+            plugin->setParameterValue (paramIndex, std::clamp (newValue, 0.0f, 1.0f));
         }
     };
 
