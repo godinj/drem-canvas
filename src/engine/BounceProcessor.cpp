@@ -12,15 +12,15 @@ bool BounceProcessor::bounce (juce::AudioProcessorGraph& graph,
                               const BounceSettings& settings,
                               std::function<void (float progress)> progressCallback)
 {
-    if (settings.outputFile == juce::File{} || settings.lengthInSamples <= 0)
+    if (settings.outputFile.empty() || settings.lengthInSamples <= 0)
         return false;
 
     // Ensure the output directory exists
-    settings.outputFile.getParentDirectory().createDirectory();
+    std::filesystem::create_directories (settings.outputFile.parent_path());
 
     // Delete any existing file so we can write fresh
-    if (settings.outputFile.existsAsFile())
-        settings.outputFile.deleteFile();
+    if (std::filesystem::exists (settings.outputFile))
+        std::filesystem::remove (settings.outputFile);
 
     auto* wavFormat = formatManager.findFormatForFileExtension ("wav");
     if (wavFormat == nullptr)
@@ -30,7 +30,7 @@ bool BounceProcessor::bounce (juce::AudioProcessorGraph& graph,
     if (numChannels <= 0)
         return false;
 
-    auto fileStream = std::make_unique<juce::FileOutputStream> (settings.outputFile);
+    auto fileStream = std::make_unique<juce::FileOutputStream> (juce::File (settings.outputFile.string()));
     if (fileStream->failedToOpen())
         return false;
 

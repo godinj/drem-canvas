@@ -123,7 +123,7 @@ void TransportBarWidget::animationTick (double /*timestampMs*/)
 {
     auto pos = tempoMap.samplesToBarBeat (transportController.getPositionInSamples(),
                                           transportController.getSampleRate());
-    auto timeStr = tempoMap.formatBarBeat (pos).toStdString();
+    auto timeStr = tempoMap.formatBarBeat (pos);
     timeDisplay.setText (timeStr);
 
     if (transportController.isPlaying())

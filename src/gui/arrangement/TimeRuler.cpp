@@ -1,4 +1,8 @@
 #include "TimeRuler.h"
+#include "gui/common/ColourBridge.h"
+#include "dc/foundation/string_utils.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -12,7 +16,7 @@ void TimeRuler::paint (juce::Graphics& g)
     auto bounds = getLocalBounds();
 
     // Background
-    g.setColour (juce::Colour (0xff252535));
+    g.setColour (toJuce (0xff252535));
     g.fillRect (bounds);
 
     // Calculate visible time range (offset by header width)
@@ -36,7 +40,7 @@ void TimeRuler::paint (juce::Graphics& g)
     // Round start time down to nearest tick
     double firstTick = std::floor (startTime / tickInterval) * tickInterval;
 
-    g.setColour (juce::Colours::lightgrey);
+    g.setColour (toJuce (dc::Colours::lightgrey));
     g.setFont (juce::Font (11.0f));
 
     for (double t = firstTick; t <= endTime; t += tickInterval)
@@ -55,7 +59,7 @@ void TimeRuler::paint (juce::Graphics& g)
         int minutes = totalSeconds / 60;
         int seconds = totalSeconds % 60;
 
-        juce::String timeLabel = juce::String::formatted ("%02d:%02d", minutes, seconds);
+        std::string timeLabel = dc::format ("%02d:%02d", minutes, seconds);
 
         g.drawText (timeLabel,
                     juce::roundToInt (x) + 3, 0,
@@ -68,17 +72,17 @@ void TimeRuler::paint (juce::Graphics& g)
             for (double minor = t + 1.0; minor < t + tickInterval && minor <= endTime; minor += 1.0)
             {
                 float mx = static_cast<float> ((minor - startTime) * pixelsPerSecond) + static_cast<float> (headerWidth);
-                g.setColour (juce::Colours::lightgrey.withAlpha (0.3f));
+                g.setColour (toJuce (dc::Colours::lightgrey.withAlpha (0.3f)));
                 g.drawVerticalLine (juce::roundToInt (mx),
                                     static_cast<float> (bounds.getHeight()) * 0.75f,
                                     static_cast<float> (bounds.getHeight()) - 2.0f);
-                g.setColour (juce::Colours::lightgrey);
+                g.setColour (toJuce (dc::Colours::lightgrey));
             }
         }
     }
 
     // Bottom border line
-    g.setColour (juce::Colours::white.withAlpha (0.2f));
+    g.setColour (toJuce (dc::Colours::white.withAlpha (0.2f)));
     g.drawHorizontalLine (bounds.getHeight() - 1, 0.0f, static_cast<float> (bounds.getWidth()));
 }
 

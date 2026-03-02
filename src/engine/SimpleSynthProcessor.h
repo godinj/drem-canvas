@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "dc/foundation/types.h"
 #include <array>
 #include <cmath>
 
@@ -135,7 +136,7 @@ private:
             best->active         = true;
             best->noteNumber     = noteNumber;
             best->phase          = 0.0;
-            best->phaseIncrement = 2.0 * juce::MathConstants<double>::pi * freq / currentSampleRate;
+            best->phaseIncrement = 2.0 * dc::pi<double> * freq / currentSampleRate;
             best->level          = velocity * 0.3f;
         }
     }
@@ -155,7 +156,8 @@ private:
             v.active = false;
     }
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleSynthProcessor)
+    SimpleSynthProcessor (const SimpleSynthProcessor&) = delete;
+    SimpleSynthProcessor& operator= (const SimpleSynthProcessor&) = delete;
 };
 
 } // namespace dc

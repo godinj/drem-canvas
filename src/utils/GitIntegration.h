@@ -1,6 +1,10 @@
 #pragma once
-#include <JuceHeader.h>
+#include "dc/foundation/message_queue.h"
+#include "dc/foundation/string_utils.h"
+#include <filesystem>
 #include <functional>
+#include <string>
+#include <vector>
 
 namespace dc
 {
@@ -11,13 +15,14 @@ namespace dc
 class GitIntegration
 {
 public:
-    using ResultCallback = std::function<void (int exitCode, juce::String output)>;
+    using ResultCallback = std::function<void (int exitCode, std::string output)>;
 
-    explicit GitIntegration (const juce::File& sessionDirectory);
+    explicit GitIntegration (const std::filesystem::path& sessionDirectory,
+                             dc::MessageQueue& mq);
     ~GitIntegration();
 
-    void setSessionDirectory (const juce::File& dir);
-    juce::File getSessionDirectory() const;
+    void setSessionDirectory (const std::filesystem::path& dir);
+    std::filesystem::path getSessionDirectory() const;
 
     /** git init */
     void gitInit (ResultCallback callback);
@@ -29,29 +34,30 @@ public:
     void gitDiff (ResultCallback callback);
 
     /** git add -A && git commit -m "msg" */
-    void gitCommit (const juce::String& message, ResultCallback callback);
+    void gitCommit (const std::string& message, ResultCallback callback);
 
     /** git log --oneline -N */
     void gitLog (int n, ResultCallback callback);
 
     /** git checkout -b name */
-    void gitBranch (const juce::String& name, ResultCallback callback);
+    void gitBranch (const std::string& name, ResultCallback callback);
 
     /** git checkout branch */
-    void gitCheckout (const juce::String& branch, ResultCallback callback);
+    void gitCheckout (const std::string& branch, ResultCallback callback);
 
 private:
     /** Runs a git command asynchronously.  args are passed directly to
-        juce::ChildProcess::start().  The callback is always invoked on
-        the message thread. */
-    void runGitCommand (const juce::StringArray& args, ResultCallback callback);
+        the shell.  The callback is always invoked on the message thread. */
+    void runGitCommand (const std::vector<std::string>& args, ResultCallback callback);
 
     /** Runs a shell command string via /bin/sh -c asynchronously. */
-    void runShellCommand (const juce::String& command, ResultCallback callback);
+    void runShellCommand (const std::string& command, ResultCallback callback);
 
-    juce::File sessionDirectory;
+    std::filesystem::path sessionDirectory_;
+    dc::MessageQueue& messageQueue;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GitIntegration)
+    GitIntegration (const GitIntegration&) = delete;
+    GitIntegration& operator= (const GitIntegration&) = delete;
 };
 
 } // namespace dc

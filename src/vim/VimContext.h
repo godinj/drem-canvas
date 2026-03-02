@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <string>
 
 namespace dc
 {
@@ -17,7 +18,7 @@ public:
     Panel getPanel() const { return activePanel; }
     void setPanel (Panel p);
     void cyclePanel();
-    juce::String getPanelName() const;
+    std::string getPanelName() const;
 
     // State for the currently-open clip in the piano roll
     juce::ValueTree openClipState;
@@ -25,7 +26,7 @@ public:
     // Mixer parameter focus
     MixerFocus getMixerFocus() const { return mixerFocus; }
     void setMixerFocus (MixerFocus focus);
-    juce::String getMixerFocusName() const;
+    std::string getMixerFocusName() const;
 
     // Plugin slot selection (within Plugins focus)
     int getSelectedPluginSlot() const { return selectedPluginSlot; }
@@ -46,14 +47,14 @@ public:
     int getHintTotalCount() const { return hintTotalCount; }
     void setHintTotalCount (int count) { hintTotalCount = count; }
 
-    const juce::String& getHintBuffer() const { return hintBuffer; }
-    void setHintBuffer (const juce::String& buf) { hintBuffer = buf; }
+    const std::string& getHintBuffer() const { return hintBuffer; }
+    void setHintBuffer (const std::string& buf) { hintBuffer = buf; }
     void clearHintBuffer() { hintBuffer.clear(); }
 
     bool isNumberEntryActive() const { return numberEntryActive; }
-    const juce::String& getNumberBuffer() const { return numberBuffer; }
+    const std::string& getNumberBuffer() const { return numberBuffer; }
     void setNumberEntryActive (bool active) { numberEntryActive = active; }
-    void setNumberBuffer (const juce::String& buf) { numberBuffer = buf; }
+    void setNumberBuffer (const std::string& buf) { numberBuffer = buf; }
     void clearNumberEntry() { numberEntryActive = false; numberBuffer.clear(); }
 
     bool isPluginViewEnlarged() const { return pluginViewEnlarged; }
@@ -122,9 +123,9 @@ private:
     int selectedParamIndex = 0;
     HintMode hintMode = HintNone;
     int hintTotalCount = 0;
-    juce::String hintBuffer;
+    std::string hintBuffer;
     bool numberEntryActive = false;
-    juce::String numberBuffer;
+    std::string numberBuffer;
     bool pluginViewEnlarged = false;
     int64_t gridCursorPosition = 0;
     int seqRow  = 0;
@@ -132,7 +133,8 @@ private:
     VisualSelection visualSelection;
     GridVisualSelection gridVisualSelection;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VimContext)
+    VimContext (const VimContext&) = delete;
+    VimContext& operator= (const VimContext&) = delete;
 };
 
 } // namespace dc

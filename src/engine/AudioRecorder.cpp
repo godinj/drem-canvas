@@ -15,26 +15,26 @@ AudioRecorder::~AudioRecorder()
     writerThread.stopThread (1000);
 }
 
-bool AudioRecorder::startRecording (const juce::File& outputFile, double sampleRate,
+bool AudioRecorder::startRecording (const std::filesystem::path& outputFile, double sampleRate,
                                     int numChannels, int bitsPerSample)
 {
     stopRecording();
 
-    if (outputFile == juce::File{})
+    if (outputFile.empty())
         return false;
 
     // Ensure the parent directory exists
-    outputFile.getParentDirectory().createDirectory();
+    std::filesystem::create_directories (outputFile.parent_path());
 
     // Delete existing file so the writer can create a fresh one
-    if (outputFile.existsAsFile())
-        outputFile.deleteFile();
+    if (std::filesystem::exists (outputFile))
+        std::filesystem::remove (outputFile);
 
     auto* wavFormat = formatManager.findFormatForFileExtension ("wav");
     if (wavFormat == nullptr)
         return false;
 
-    auto fileStream = std::make_unique<juce::FileOutputStream> (outputFile);
+    auto fileStream = std::make_unique<juce::FileOutputStream> (juce::File (outputFile.string()));
     if (fileStream->failedToOpen())
         return false;
 

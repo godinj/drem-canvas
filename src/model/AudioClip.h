@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <filesystem>
 #include "Project.h"
 
 namespace dc
@@ -12,7 +13,7 @@ public:
 
     bool isValid() const { return state.isValid(); }
 
-    juce::File getSourceFile() const;
+    std::filesystem::path getSourceFile() const;
     int64_t getStartPosition() const;
     void setStartPosition (int64_t pos, juce::UndoManager* um = nullptr);
     int64_t getLength() const;

@@ -1,4 +1,5 @@
 #include "PluginWindowManager.h"
+#include "gui/common/ColourBridge.h"
 
 namespace dc
 {
@@ -8,7 +9,7 @@ namespace dc
 //==============================================================================
 
 PluginWindow::PluginWindow (juce::AudioProcessorEditor* editor, const juce::String& name)
-    : juce::DocumentWindow (name, juce::Colours::darkgrey, juce::DocumentWindow::allButtons)
+    : juce::DocumentWindow (name, dc::bridge::toJuce (dc::Colours::darkgrey), juce::DocumentWindow::allButtons)
 {
     setUsingNativeTitleBar (true);
     setResizable (true, false);
@@ -46,9 +47,9 @@ void PluginWindowManager::showEditorForPlugin (juce::AudioPluginInstance& plugin
 
     if (auto* editor = plugin.createEditorIfNeeded())
     {
-        auto* window = new PluginWindow (editor, plugin.getName());
-        windows.add (window);
-        pluginToWindow[&plugin] = window;
+        auto window = std::make_unique<PluginWindow> (editor, plugin.getName());
+        pluginToWindow[&plugin] = window.get();
+        windows.push_back (std::move (window));
     }
 }
 
@@ -60,14 +61,17 @@ void PluginWindowManager::closeEditorForPlugin (juce::AudioPluginInstance* plugi
     {
         auto* window = it->second;
         pluginToWindow.erase (it);
-        windows.removeObject (window, true);
+        windows.erase (
+            std::remove_if (windows.begin(), windows.end(),
+                            [window] (const std::unique_ptr<PluginWindow>& w) { return w.get() == window; }),
+            windows.end());
     }
 }
 
 void PluginWindowManager::closeAll()
 {
     pluginToWindow.clear();
-    windows.clear (true);
+    windows.clear();
 }
 
 } // namespace dc

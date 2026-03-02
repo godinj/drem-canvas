@@ -1,4 +1,11 @@
 #include "BrowserPanel.h"
+#include "gui/common/ColourBridge.h"
+#include "dc/foundation/types.h"
+#include <algorithm>
+#include <cctype>
+#include <string>
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -13,7 +20,7 @@ BrowserPanel::BrowserPanel (PluginManager& pm)
 {
     pluginListBox.setModel (&listModel);
     pluginListBox.setRowHeight (24);
-    pluginListBox.setColour (juce::ListBox::backgroundColourId, juce::Colour (0xff252535));
+    pluginListBox.setColour (juce::ListBox::backgroundColourId, toJuce (0xff252535));
     pluginListBox.setWantsKeyboardFocus (false);
     addAndMakeVisible (pluginListBox);
 
@@ -33,7 +40,7 @@ BrowserPanel::BrowserPanel (PluginManager& pm)
 
 void BrowserPanel::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff252535));
+    g.fillAll (toJuce (0xff252535));
 }
 
 void BrowserPanel::resized()
@@ -55,19 +62,23 @@ void BrowserPanel::rebuildFilteredList()
     filteredTypes.clear();
     auto allTypes = pluginManager.getKnownPlugins().getTypes();
 
-    if (searchFilter.isEmpty())
+    if (searchFilter.empty())
     {
         for (const auto& t : allTypes)
-            filteredTypes.add (t);
+            filteredTypes.push_back (t);
     }
     else
     {
-        auto queryLower = searchFilter.toLowerCase();
+        std::string queryLower;
+        queryLower.resize (searchFilter.size());
+        std::transform (searchFilter.begin(), searchFilter.end(), queryLower.begin(),
+                        [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
+
         for (const auto& t : allTypes)
         {
-            if (t.name.toLowerCase().contains (queryLower)
-                || t.manufacturerName.toLowerCase().contains (queryLower))
-                filteredTypes.add (t);
+            if (t.name.toLowerCase().contains (queryLower.c_str())
+                || t.manufacturerName.toLowerCase().contains (queryLower.c_str()))
+                filteredTypes.push_back (t);
         }
     }
 
@@ -75,7 +86,7 @@ void BrowserPanel::rebuildFilteredList()
     pluginListBox.repaint();
 }
 
-void BrowserPanel::setSearchFilter (const juce::String& query)
+void BrowserPanel::setSearchFilter (const std::string& query)
 {
     searchFilter = query;
     rebuildFilteredList();
@@ -93,7 +104,7 @@ void BrowserPanel::clearSearchFilter()
 
 int BrowserPanel::getNumPlugins() const
 {
-    return filteredTypes.size();
+    return static_cast<int> (filteredTypes.size());
 }
 
 int BrowserPanel::getSelectedPluginIndex() const
@@ -129,10 +140,10 @@ void BrowserPanel::confirmSelection()
 {
     int row = pluginListBox.getSelectedRow();
 
-    if (row >= 0 && row < filteredTypes.size())
+    if (row >= 0 && row < static_cast<int> (filteredTypes.size()))
     {
         if (onPluginSelected)
-            onPluginSelected (filteredTypes[row]);
+            onPluginSelected (filteredTypes[static_cast<size_t> (row)]);
     }
 }
 
@@ -142,22 +153,22 @@ void BrowserPanel::confirmSelection()
 
 int BrowserPanel::PluginListModel::getNumRows()
 {
-    return filteredTypes.size();
+    return static_cast<int> (filteredTypes.size());
 }
 
 void BrowserPanel::PluginListModel::paintListBoxItem (int rowNumber, juce::Graphics& g,
                                                        int width, int height,
                                                        bool rowIsSelected)
 {
-    if (rowNumber < 0 || rowNumber >= filteredTypes.size())
+    if (rowNumber < 0 || rowNumber >= static_cast<int> (filteredTypes.size()))
         return;
 
-    const auto& desc = filteredTypes[rowNumber];
+    const auto& desc = filteredTypes[static_cast<size_t> (rowNumber)];
 
     if (rowIsSelected)
-        g.fillAll (juce::Colour (0xff3a3a5a));
+        g.fillAll (toJuce (0xff3a3a5a));
 
-    g.setColour (juce::Colours::white);
+    g.setColour (toJuce (dc::Colours::white));
     g.setFont (juce::Font (14.0f));
 
     auto textArea = juce::Rectangle<int> (0, 0, width, height).reduced (6, 0);
@@ -166,15 +177,15 @@ void BrowserPanel::PluginListModel::paintListBoxItem (int rowNumber, juce::Graph
     g.drawText (desc.name, textArea, juce::Justification::centredLeft, true);
 
     // Manufacturer on the right
-    g.setColour (juce::Colours::lightgrey);
+    g.setColour (toJuce (dc::Colours::lightgrey));
     g.drawText (desc.manufacturerName, textArea, juce::Justification::centredRight, true);
 }
 
 void BrowserPanel::PluginListModel::listBoxItemDoubleClicked (int row, const juce::MouseEvent&)
 {
-    if (row >= 0 && row < filteredTypes.size())
+    if (row >= 0 && row < static_cast<int> (filteredTypes.size()))
     {
-        const auto& desc = filteredTypes[row];
+        const auto& desc = filteredTypes[static_cast<size_t> (row)];
 
         if (onItemSelected)
             onItemSelected (desc);

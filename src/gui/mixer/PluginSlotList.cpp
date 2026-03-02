@@ -1,4 +1,7 @@
 #include "PluginSlotList.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -33,44 +36,44 @@ void PluginSlotList::paint (juce::Graphics& g)
         auto slotBounds = juce::Rectangle<int> (0, i * slotHeight, getWidth(), slotHeight);
 
         // Background
-        g.setColour (i % 2 == 0 ? juce::Colour (0xff2a2a3a) : juce::Colour (0xff262636));
+        g.setColour (i % 2 == 0 ? toJuce (0xff2a2a3au) : toJuce (0xff262636u));
         g.fillRect (slotBounds);
 
         // Selected slot highlight — bright cursor bar + distinct background
         if (i == selectedSlotIndex)
         {
-            g.setColour (juce::Colour (0xff50c878).withAlpha (0.35f));
+            g.setColour (toJuce (dc::Colour (0xff50c878u).withAlpha (0.35f)));
             g.fillRect (slotBounds);
 
             // Solid green cursor bar on left edge
-            g.setColour (juce::Colour (0xff50c878));
+            g.setColour (toJuce (0xff50c878u));
             g.fillRect (slotBounds.getX(), slotBounds.getY(), 3, slotBounds.getHeight());
         }
 
         // Slot number prefix
-        juce::String prefix = juce::String (i + 1) + ": ";
+        std::string prefix = std::to_string (i + 1) + ": ";
         g.setFont (juce::Font (juce::FontOptions (11.0f)));
 
         if (i < numPlugins)
         {
             auto plugin = chain.getChild (i);
             bool enabled = plugin.getProperty (IDs::pluginEnabled, true);
-            juce::String name = plugin.getProperty (IDs::pluginName, "Plugin").toString();
+            std::string name = plugin.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
 
             // Dim colour when bypassed
-            g.setColour (enabled ? juce::Colour (0xffc0c0d0) : juce::Colour (0xff606070));
+            g.setColour (enabled ? toJuce (0xffc0c0d0u) : toJuce (0xff606070u));
             g.drawText (prefix + name, slotBounds.reduced (4, 0), juce::Justification::centredLeft, true);
         }
         else if (i == selectedSlotIndex)
         {
             // "Add" slot indicator when selected
-            g.setColour (juce::Colour (0xff50c878));
+            g.setColour (toJuce (0xff50c878u));
             g.drawText (prefix + "[+]", slotBounds.reduced (4, 0), juce::Justification::centredLeft, true);
         }
         else
         {
             // Empty slot — show number
-            g.setColour (juce::Colour (0xff484858));
+            g.setColour (toJuce (0xff484858u));
             g.drawText (prefix, slotBounds.reduced (4, 0), juce::Justification::centredLeft, true);
         }
     }

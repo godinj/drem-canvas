@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <atomic>
+#include <string>
 
 namespace dc
 {
@@ -29,7 +30,7 @@ public:
 
     // Time display helpers
     double getPositionInSeconds() const;
-    juce::String getTimeString() const;
+    std::string getTimeString() const;
 
     // Loop control
     bool isLooping() const { return loopEnabled.load(); }
@@ -57,7 +58,8 @@ private:
     // Record state
     std::atomic<bool> recordArmed { false };
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TransportController)
+    TransportController (const TransportController&) = delete;
+    TransportController& operator= (const TransportController&) = delete;
 };
 
 } // namespace dc

@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <atomic>
+#include <filesystem>
 
 namespace dc
 {
@@ -12,7 +13,7 @@ public:
     ~AudioRecorder();
 
     // Start recording to a file
-    bool startRecording (const juce::File& outputFile, double sampleRate,
+    bool startRecording (const std::filesystem::path& outputFile, double sampleRate,
                          int numChannels = 2, int bitsPerSample = 24);
     void stopRecording();
     bool isRecording() const { return recording.load(); }
@@ -20,7 +21,7 @@ public:
     // Call from audio callback to feed samples
     void writeAudioBlock (const juce::AudioBuffer<float>& buffer, int numSamples);
 
-    juce::File getRecordedFile() const { return recordedFile; }
+    std::filesystem::path getRecordedFile() const { return recordedFile; }
     int64_t getRecordedSampleCount() const { return recordedSamples.load(); }
 
 private:
@@ -30,9 +31,10 @@ private:
 
     std::atomic<bool> recording { false };
     std::atomic<int64_t> recordedSamples { 0 };
-    juce::File recordedFile;
+    std::filesystem::path recordedFile;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioRecorder)
+    AudioRecorder (const AudioRecorder&) = delete;
+    AudioRecorder& operator= (const AudioRecorder&) = delete;
 };
 
 } // namespace dc

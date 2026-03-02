@@ -1,6 +1,7 @@
 #include "GridSystem.h"
 #include <cmath>
 #include <algorithm>
+#include <cstdio>
 
 namespace dc
 {
@@ -75,7 +76,7 @@ int64_t GridSystem::moveByGridUnits (int64_t pos, int count, double sampleRate) 
     return std::max (result, static_cast<int64_t> (0));
 }
 
-juce::String GridSystem::formatGridPosition (int64_t pos, double sampleRate) const
+std::string GridSystem::formatGridPosition (int64_t pos, double sampleRate) const
 {
     auto bbp = tempoMap.samplesToBarBeat (pos, sampleRate);
 
@@ -83,10 +84,12 @@ juce::String GridSystem::formatGridPosition (int64_t pos, double sampleRate) con
     int sub = static_cast<int> (std::floor (bbp.tick * gridDivision)) + 1;
     sub = std::clamp (sub, 1, gridDivision);
 
-    return juce::String (bbp.bar) + "." + juce::String (bbp.beat) + "." + juce::String (sub);
+    char buf[32];
+    std::snprintf (buf, sizeof (buf), "%d.%d.%d", bbp.bar, bbp.beat, sub);
+    return std::string (buf);
 }
 
-juce::String GridSystem::getGridDivisionName() const
+std::string GridSystem::getGridDivisionName() const
 {
     switch (gridDivision)
     {
@@ -95,7 +98,7 @@ juce::String GridSystem::getGridDivisionName() const
         case 4:  return "1/16";
         case 8:  return "1/32";
         case 16: return "1/64";
-        default: return "1/" + juce::String (gridDivision * 4);
+        default: return "1/" + std::to_string (gridDivision * 4);
     }
 }
 

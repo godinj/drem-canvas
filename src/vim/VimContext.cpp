@@ -55,7 +55,7 @@ void VimContext::cyclePanel()
         mixerFocus = FocusNone;
 }
 
-juce::String VimContext::getPanelName() const
+std::string VimContext::getPanelName() const
 {
     switch (activePanel)
     {
@@ -76,7 +76,7 @@ void VimContext::setMixerFocus (MixerFocus focus)
         selectedPluginSlot = 0;
 }
 
-juce::String VimContext::getMixerFocusName() const
+std::string VimContext::getMixerFocusName() const
 {
     switch (mixerFocus)
     {

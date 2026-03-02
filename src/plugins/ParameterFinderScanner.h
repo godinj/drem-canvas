@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <string>
 #include <vector>
 
 namespace dc
@@ -16,8 +17,8 @@ struct SpatialParamInfo
     int centerX = 0;            // Centroid X in plugin native coords (unscaled)
     int centerY = 0;            // Centroid Y in plugin native coords (unscaled)
     int hitCount = 0;           // Grid cells that hit this param
-    juce::String name;          // Cached parameter name
-    juce::String hintLabel;     // Assigned hint label (a, s, d, ...)
+    std::string name;           // Cached parameter name
+    std::string hintLabel;      // Assigned hint label (a, s, d, ...)
 };
 
 /**
@@ -49,7 +50,8 @@ public:
 private:
     std::vector<SpatialParamInfo> results;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ParameterFinderScanner)
+    ParameterFinderScanner (const ParameterFinderScanner&) = delete;
+    ParameterFinderScanner& operator= (const ParameterFinderScanner&) = delete;
 };
 
 } // namespace dc

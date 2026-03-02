@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <filesystem>
 #include <vector>
 #include <array>
 #include <mutex>
@@ -34,7 +35,7 @@ public:
     ~WaveformCache();
 
     // Load from audio file (runs on background thread)
-    void loadFromFile (const juce::File& audioFile, juce::AudioFormatManager& formatManager);
+    void loadFromFile (const std::filesystem::path& audioFile, juce::AudioFormatManager& formatManager);
 
     // Load from existing audio buffer
     void loadFromBuffer (const juce::AudioBuffer<float>& buffer, double sampleRate);

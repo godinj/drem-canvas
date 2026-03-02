@@ -3,6 +3,8 @@
 #include "model/MidiClip.h"
 #include "model/Clipboard.h"
 #include "utils/UndoSystem.h"
+#include "dc/foundation/time.h"
+#include "dc/foundation/string_utils.h"
 #include <vector>
 #include <algorithm>
 #include <limits>
@@ -170,7 +172,7 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     if (pendingKey == 'g')
     {
         if (keyChar == 'g'
-            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
         {
             clearPending();
 
@@ -181,7 +183,7 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
                 executeOperator (pendingOperator, range);
                 pendingOperator = OpNone;
                 resetCounts();
-                listeners.call (&Listener::vimContextChanged);
+                listeners.call ([](Listener& l) { l.vimContextChanged(); });
             }
             else
             {
@@ -194,7 +196,7 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
                     int target = std::min (count, arrangement.getNumTracks()) - 1;
                     arrangement.selectTrack (target);
                     updateClipIndexFromGridCursor();
-                    listeners.call (&Listener::vimContextChanged);
+                    listeners.call ([](Listener& l) { l.vimContextChanged(); });
                 }
                 else
                 {
@@ -224,19 +226,19 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
         {
             pendingRegister = c;
             awaitingRegisterChar = false;
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
         // Invalid register char — cancel
         awaitingRegisterChar = false;
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
     if (keyChar == '"')
     {
         awaitingRegisterChar = true;
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -244,7 +246,7 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     if (isDigitForCount (keyChar))
     {
         accumulateDigit (keyChar);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -260,12 +262,12 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
             executeOperator (op, range);
             pendingOperator = OpNone;
             resetCounts();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
         }
         else
         {
             startOperator (op);
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
         }
         return true;
     }
@@ -283,7 +285,7 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
 
             pendingOperator = OpNone;
             resetCounts();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
         }
         else
         {
@@ -370,14 +372,14 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     {
         project.getUndoSystem().undo();
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
     if (keyChar == 'r' && modifiers.isCtrlDown())
     {
         project.getUndoSystem().redo();
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -394,7 +396,7 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
         if (sr > 0.0)
             context.setGridCursorPosition (gridSystem.snapFloor (context.getGridCursorPosition(), sr));
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
     if (keyChar == ']')
@@ -404,7 +406,7 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
         if (sr > 0.0)
             context.setGridCursorPosition (gridSystem.snapFloor (context.getGridCursorPosition(), sr));
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -425,8 +427,8 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     {
         mode = Command;
         commandBuffer.clear();
-        listeners.call (&Listener::vimModeChanged, Command);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimModeChanged (Command); });
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -443,7 +445,7 @@ void VimEngine::moveSelectionUp()
         arrangement.selectTrack (idx - 1);
         // Preserve grid cursor position (don't reset to 0)
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
@@ -455,7 +457,7 @@ void VimEngine::moveSelectionDown()
         arrangement.selectTrack (idx + 1);
         // Preserve grid cursor position (don't reset to 0)
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
@@ -468,7 +470,7 @@ void VimEngine::moveSelectionLeft()
     int64_t newPos = gridSystem.moveByGridUnits (pos, -1, sr);
     context.setGridCursorPosition (newPos);
     updateClipIndexFromGridCursor();
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::moveSelectionRight()
@@ -480,7 +482,7 @@ void VimEngine::moveSelectionRight()
     int64_t newPos = gridSystem.moveByGridUnits (pos, 1, sr);
     context.setGridCursorPosition (newPos);
     updateClipIndexFromGridCursor();
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::updateClipIndexFromGridCursor()
@@ -519,7 +521,7 @@ void VimEngine::jumpToFirstTrack()
     {
         arrangement.selectTrack (0);
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
@@ -530,7 +532,7 @@ void VimEngine::jumpToLastTrack()
     {
         arrangement.selectTrack (count - 1);
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
@@ -539,7 +541,7 @@ void VimEngine::jumpToLastTrack()
 void VimEngine::jumpToSessionStart()
 {
     transport.setPositionInSamples (0);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::jumpToSessionEnd()
@@ -560,7 +562,7 @@ void VimEngine::jumpToSessionEnd()
     }
 
     transport.setPositionInSamples (maxEnd);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::togglePlayStop()
@@ -583,8 +585,8 @@ void VimEngine::deleteSelectedRegions()
     {
         // Yank before delete (Vim semantics: x always yanks)
         char reg = consumeRegister();
-        juce::Array<Clipboard::ClipEntry> entries;
-        entries.add ({ track.getClip (clipIdx), 0, 0 });
+        std::vector<Clipboard::ClipEntry> entries;
+        entries.push_back ({ track.getClip (clipIdx), 0, 0 });
         project.getClipboard().storeClips (reg, entries, false, false);
 
         ScopedTransaction txn (project.getUndoSystem(), "Delete Clip");
@@ -593,7 +595,7 @@ void VimEngine::deleteSelectedRegions()
         if (clipIdx >= track.getNumClips() && track.getNumClips() > 0)
             context.setSelectedClipIndex (track.getNumClips() - 1);
 
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
@@ -609,8 +611,8 @@ void VimEngine::yankSelectedRegions()
     if (clipIdx >= 0 && clipIdx < track.getNumClips())
     {
         char reg = consumeRegister();
-        juce::Array<Clipboard::ClipEntry> entries;
-        entries.add ({ track.getClip (clipIdx), 0, 0 });
+        std::vector<Clipboard::ClipEntry> entries;
+        entries.push_back ({ track.getClip (clipIdx), 0, 0 });
         project.getClipboard().storeClips (reg, entries, false, true);
     }
 }
@@ -619,7 +621,7 @@ void VimEngine::yankSelectedRegions()
 // splitting any clip that overlaps those boundaries.
 static void carveGap (Track& track, int64_t gapStart, int64_t gapEnd, juce::UndoManager& um)
 {
-    juce::Array<juce::ValueTree> newClips;
+    std::vector<juce::ValueTree> newClips;
 
     for (int c = track.getNumClips() - 1; c >= 0; --c)
     {
@@ -650,7 +652,7 @@ static void carveGap (Track& track, int64_t gapStart, int64_t gapEnd, juce::Undo
             rightClip.setProperty (IDs::startPosition, static_cast<juce::int64> (gapEnd), nullptr);
             rightClip.setProperty (IDs::length, static_cast<juce::int64> (clipEnd - gapEnd), nullptr);
             rightClip.setProperty (IDs::trimStart, static_cast<juce::int64> (origTrimStart + rightOffset), nullptr);
-            newClips.add (rightClip);
+            newClips.push_back (rightClip);
         }
         else if (keepLeft)
         {
@@ -695,8 +697,8 @@ void VimEngine::pasteAfterPlayhead()
         Track track = arrangement.getTrack (targetTrack);
         auto clipData = clip.clipData.createCopy();
         int64_t finalPos = pastePos + clip.timeOffset;
-        auto pasteLen = static_cast<int64_t> (
-            static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
+        auto pasteLen = static_cast<int64_t> (static_cast<juce::int64> (
+            clipData.getProperty (IDs::length, 0)));
 
         carveGap (track, finalPos, finalPos + pasteLen, um);
 
@@ -706,7 +708,7 @@ void VimEngine::pasteAfterPlayhead()
     }
 
     updateClipIndexFromGridCursor();
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::pasteBeforePlayhead()
@@ -727,8 +729,8 @@ void VimEngine::pasteBeforePlayhead()
     int64_t maxEnd = 0;
     for (auto& clip : regEntry.clipEntries)
     {
-        auto len = static_cast<int64_t> (
-            static_cast<juce::int64> (clip.clipData.getProperty (IDs::length, 0)));
+        auto len = static_cast<int64_t> (static_cast<juce::int64> (
+            clip.clipData.getProperty (IDs::length, 0)));
         maxEnd = std::max (maxEnd, clip.timeOffset + len);
     }
 
@@ -744,8 +746,8 @@ void VimEngine::pasteBeforePlayhead()
         Track track = arrangement.getTrack (targetTrack);
         auto clipData = clip.clipData.createCopy();
         int64_t finalPos = pasteBase + clip.timeOffset;
-        auto pasteLen = static_cast<int64_t> (
-            static_cast<juce::int64> (clipData.getProperty (IDs::length, 0)));
+        auto pasteLen = static_cast<int64_t> (static_cast<juce::int64> (
+            clipData.getProperty (IDs::length, 0)));
 
         carveGap (track, finalPos, finalPos + pasteLen, um);
 
@@ -755,7 +757,7 @@ void VimEngine::pasteBeforePlayhead()
     }
 
     updateClipIndexFromGridCursor();
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::splitRegionAtPlayhead()
@@ -784,18 +786,18 @@ void VimEngine::splitRegionAtPlayhead()
 
     clipState.setProperty (IDs::length, static_cast<juce::int64> (splitOffset), &um);
     clipState.setProperty (IDs::trimEnd,
-        static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0))
-            + static_cast<juce::int64> (splitOffset), &um);
+        static_cast<juce::int64> (static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0)))
+            + splitOffset), &um);
 
     auto newClip = clipState.createCopy();
     newClip.setProperty (IDs::startPosition, static_cast<juce::int64> (playhead), &um);
     newClip.setProperty (IDs::length, static_cast<juce::int64> (clipLength - splitOffset), &um);
     newClip.setProperty (IDs::trimStart,
-        static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0))
-            + static_cast<juce::int64> (splitOffset), &um);
+        static_cast<juce::int64> (static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0)))
+            + splitOffset), &um);
 
     track.getState().appendChild (newClip, &um);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::duplicateSelectedClip()
@@ -823,7 +825,7 @@ void VimEngine::duplicateSelectedClip()
     track.getState().appendChild (newClip, &um);
 
     context.setSelectedClipIndex (track.getNumClips() - 1);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 // ── Track state ─────────────────────────────────────────────────────────────
@@ -837,7 +839,7 @@ void VimEngine::toggleMute()
     ScopedTransaction txn (project.getUndoSystem(), "Toggle Mute");
     Track track = arrangement.getTrack (idx);
     track.setMuted (! track.isMuted(), &project.getUndoManager());
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::toggleSolo()
@@ -849,7 +851,7 @@ void VimEngine::toggleSolo()
     ScopedTransaction txn (project.getUndoSystem(), "Toggle Solo");
     Track track = arrangement.getTrack (idx);
     track.setSolo (! track.isSolo(), &project.getUndoManager());
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::toggleRecordArm()
@@ -861,7 +863,7 @@ void VimEngine::toggleRecordArm()
     ScopedTransaction txn (project.getUndoSystem(), "Toggle Record Arm");
     Track track = arrangement.getTrack (idx);
     track.setArmed (! track.isArmed(), &project.getUndoManager());
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 // ── Command mode ────────────────────────────────────────────────────────
@@ -885,24 +887,24 @@ bool VimEngine::handleCommandKey (const juce::KeyPress& key)
 
     if (key == juce::KeyPress::backspaceKey)
     {
-        if (commandBuffer.isNotEmpty())
-            commandBuffer = commandBuffer.dropLastCharacters (1);
+        if (! commandBuffer.empty())
+            commandBuffer.pop_back();
 
-        if (commandBuffer.isEmpty())
+        if (commandBuffer.empty())
         {
             enterNormalMode();
             return true;
         }
 
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
     auto c = key.getTextCharacter();
     if (c >= 32)
     {
-        commandBuffer += juce::String::charToString (c);
-        listeners.call (&Listener::vimContextChanged);
+        commandBuffer += std::string (1, char (c));
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 
     return true;
@@ -910,18 +912,18 @@ bool VimEngine::handleCommandKey (const juce::KeyPress& key)
 
 void VimEngine::executeCommand()
 {
-    auto cmd = commandBuffer.trim();
+    auto cmd = dc::trim (commandBuffer);
 
-    if (cmd.startsWith ("plugin ") || cmd.startsWith ("plug "))
+    if (dc::startsWith (cmd, "plugin ") || dc::startsWith (cmd, "plug "))
     {
-        auto pluginName = cmd.fromFirstOccurrenceOf (" ", false, false).trim();
-        if (pluginName.isNotEmpty() && onPluginCommand)
+        auto pluginName = dc::trim (dc::afterFirst (cmd, " "));
+        if (! pluginName.empty() && onPluginCommand)
             onPluginCommand (pluginName);
     }
-    else if (cmd == "midi" || cmd.startsWith ("midi "))
+    else if (cmd == "midi" || dc::startsWith (cmd, "midi "))
     {
-        auto trackName = cmd.fromFirstOccurrenceOf (" ", false, false).trim();
-        if (trackName.isEmpty())
+        auto trackName = dc::trim (dc::afterFirst (cmd, " "));
+        if (trackName.empty())
             trackName = "MIDI";
         if (onCreateMidiTrack)
             onCreateMidiTrack (trackName);
@@ -933,7 +935,7 @@ void VimEngine::executeCommand()
 void VimEngine::enterInsertMode()
 {
     mode = Insert;
-    listeners.call (&Listener::vimModeChanged, Insert);
+    listeners.call ([](Listener& l) { l.vimModeChanged (Insert); });
 }
 
 void VimEngine::enterNormalMode()
@@ -945,7 +947,7 @@ void VimEngine::enterNormalMode()
     cancelOperator();
     clearPending();
     context.clearVisualSelection();
-    listeners.call (&Listener::vimModeChanged, Normal);
+    listeners.call ([](Listener& l) { l.vimModeChanged (Normal); });
 
     if (wasPluginMenu && onPluginMenuCancel)
         onPluginMenuCancel();
@@ -956,8 +958,8 @@ void VimEngine::enterPluginMenuMode()
     pluginSearchActive = false;
     pluginSearchBuffer.clear();
     mode = PluginMenu;
-    listeners.call (&Listener::vimModeChanged, PluginMenu);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimModeChanged (PluginMenu); });
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 bool VimEngine::handlePluginSearchKey (const juce::KeyPress& key)
@@ -969,7 +971,7 @@ bool VimEngine::handlePluginSearchKey (const juce::KeyPress& key)
         pluginSearchBuffer.clear();
         if (onPluginMenuClearFilter)
             onPluginMenuClearFilter();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -977,19 +979,19 @@ bool VimEngine::handlePluginSearchKey (const juce::KeyPress& key)
     if (key == juce::KeyPress::returnKey)
     {
         pluginSearchActive = false;
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
     // Backspace — remove last char
     if (key == juce::KeyPress::backspaceKey)
     {
-        if (pluginSearchBuffer.isNotEmpty())
-            pluginSearchBuffer = pluginSearchBuffer.dropLastCharacters (1);
+        if (! pluginSearchBuffer.empty())
+            pluginSearchBuffer.pop_back();
 
         if (onPluginMenuFilter)
             onPluginMenuFilter (pluginSearchBuffer);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -997,10 +999,10 @@ bool VimEngine::handlePluginSearchKey (const juce::KeyPress& key)
     auto c = key.getTextCharacter();
     if (c >= 32 && ! key.getModifiers().isCtrlDown() && ! key.getModifiers().isCommandDown())
     {
-        pluginSearchBuffer += juce::String::charToString (c);
+        pluginSearchBuffer += std::string (1, char (c));
         if (onPluginMenuFilter)
             onPluginMenuFilter (pluginSearchBuffer);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -1035,7 +1037,7 @@ bool VimEngine::handlePluginMenuKey (const juce::KeyPress& key)
     {
         pluginSearchActive = true;
         pluginSearchBuffer.clear();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -1084,7 +1086,7 @@ bool VimEngine::handlePluginMenuKey (const juce::KeyPress& key)
 void VimEngine::cycleFocusPanel()
 {
     context.cyclePanel();
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::openFocusedItem()
@@ -1112,7 +1114,7 @@ void VimEngine::openFocusedItem()
         if (onOpenPianoRoll)
             onOpenPianoRoll (clipState);
 
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
@@ -1129,7 +1131,7 @@ void VimEngine::closePianoRoll()
 
         context.openClipState = juce::ValueTree();
         context.setPanel (VimContext::Editor);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
@@ -1153,18 +1155,18 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
         {
             pendingRegister = c;
             awaitingRegisterChar = false;
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
         awaitingRegisterChar = false;
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
     if (keyChar == '"')
     {
         awaitingRegisterChar = true;
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -1187,7 +1189,7 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     if (pendingKey == 'g')
     {
         if (keyChar == 'g'
-            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
         {
             clearPending();
             if (onPianoRollJumpCursor) onPianoRollJumpCursor (-1, 127);
@@ -1223,14 +1225,14 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     {
         project.getUndoSystem().undo();
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
     if (keyChar == 'r' && modifiers.isCtrlDown())
     {
         project.getUndoSystem().redo();
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -1282,8 +1284,8 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     if (keyChar == 'g')
     {
         pendingKey = 'g';
-        pendingTimestamp = juce::Time::currentTimeMillis();
-        listeners.call (&Listener::vimContextChanged);
+        pendingTimestamp = dc::currentTimeMillis();
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -1350,8 +1352,8 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     if (keyChar == 'z')
     {
         pendingKey = 'z';
-        pendingTimestamp = juce::Time::currentTimeMillis();
-        listeners.call (&Listener::vimContextChanged);
+        pendingTimestamp = dc::currentTimeMillis();
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -1372,8 +1374,8 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     {
         mode = Command;
         commandBuffer.clear();
-        listeners.call (&Listener::vimModeChanged, Command);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimModeChanged (Command); });
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -1388,7 +1390,7 @@ void VimEngine::clearPending()
     pendingTimestamp = 0;
     pendingRegister = '\0';
     awaitingRegisterChar = false;
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 // ── Count helpers ───────────────────────────────────────────────────────────
@@ -1627,14 +1629,14 @@ VimEngine::MotionRange VimEngine::resolveLinewiseMotion (int count) const
 
 // ── Operator execution ──────────────────────────────────────────────────────
 
-juce::Array<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionRange& range) const
+std::vector<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionRange& range) const
 {
-    juce::Array<Clipboard::ClipEntry> entries;
+    std::vector<Clipboard::ClipEntry> entries;
     int baseTrack = range.startTrack;
     int64_t minStart = std::numeric_limits<int64_t>::max();
 
     struct RawClip { juce::ValueTree data; int trackIdx; int64_t startPos; };
-    juce::Array<RawClip> rawClips;
+    std::vector<RawClip> rawClips;
 
     if (range.linewise)
     {
@@ -1648,9 +1650,10 @@ juce::Array<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionR
             for (int c = 0; c < track.getNumClips(); ++c)
             {
                 auto clip = track.getClip (c);
-                auto startPos = static_cast<int64_t> (
-                    static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-                rawClips.add ({ clip, t, startPos });
+                auto startPos = static_cast<int64_t> (static_cast<juce::int64> (
+                    clip.getProperty (IDs::startPosition, 0)));
+                RawClip rc { clip, t, startPos };
+                rawClips.push_back (rc);
                 minStart = std::min (minStart, startPos);
             }
         }
@@ -1669,9 +1672,10 @@ juce::Array<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionR
             if (c >= 0 && c < track.getNumClips())
             {
                 auto clip = track.getClip (c);
-                auto startPos = static_cast<int64_t> (
-                    static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-                rawClips.add ({ clip, t, startPos });
+                auto startPos = static_cast<int64_t> (static_cast<juce::int64> (
+                    clip.getProperty (IDs::startPosition, 0)));
+                RawClip rc { clip, t, startPos };
+                rawClips.push_back (rc);
                 minStart = std::min (minStart, startPos);
             }
         }
@@ -1695,9 +1699,10 @@ juce::Array<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionR
                 if (c >= 0 && c < track.getNumClips())
                 {
                     auto clip = track.getClip (c);
-                    auto startPos = static_cast<int64_t> (
-                        static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-                    rawClips.add ({ clip, t, startPos });
+                    auto startPos = static_cast<int64_t> (static_cast<juce::int64> (
+                        clip.getProperty (IDs::startPosition, 0)));
+                    RawClip rc { clip, t, startPos };
+                    rawClips.push_back (rc);
                     minStart = std::min (minStart, startPos);
                 }
             }
@@ -1708,7 +1713,7 @@ juce::Array<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionR
         minStart = 0;
 
     for (auto& raw : rawClips)
-        entries.add ({ raw.data, raw.trackIdx - baseTrack, raw.startPos - minStart });
+        entries.push_back ({ raw.data, raw.trackIdx - baseTrack, raw.startPos - minStart });
 
     return entries;
 }
@@ -1732,7 +1737,7 @@ void VimEngine::executeDelete (const MotionRange& range)
     // Store deleted clips (Vim delete → unnamed + "1-"9 history)
     char reg = consumeRegister();
     auto entries = collectClipsForRange (range);
-    if (! entries.isEmpty())
+    if (! entries.empty())
         project.getClipboard().storeClips (reg, entries, range.linewise, false);
 
     auto& um = project.getUndoManager();
@@ -1817,16 +1822,16 @@ void VimEngine::executeDelete (const MotionRange& range)
         context.setSelectedClipIndex (remaining > 0 ? std::min (range.startClip, remaining - 1) : 0);
     }
 
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::executeYank (const MotionRange& range)
 {
     char reg = consumeRegister();
     auto entries = collectClipsForRange (range);
-    if (! entries.isEmpty())
+    if (! entries.empty())
         project.getClipboard().storeClips (reg, entries, range.linewise, true);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::executeChange (const MotionRange& range)
@@ -1864,7 +1869,7 @@ void VimEngine::executeMotion (juce_wchar key, int count)
             // Move grid cursor to start of timeline
             context.setGridCursorPosition (0);
             updateClipIndexFromGridCursor();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             break;
         }
 
@@ -1898,7 +1903,7 @@ void VimEngine::executeMotion (juce_wchar key, int count)
                 context.setGridCursorPosition (maxEnd);
             }
             updateClipIndexFromGridCursor();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             break;
         }
 
@@ -1911,7 +1916,7 @@ void VimEngine::executeMotion (juce_wchar key, int count)
                 {
                     arrangement.selectTrack (target);
                     updateClipIndexFromGridCursor();
-                    listeners.call (&Listener::vimContextChanged);
+                    listeners.call ([](Listener& l) { l.vimContextChanged(); });
                 }
             }
             else
@@ -1923,8 +1928,8 @@ void VimEngine::executeMotion (juce_wchar key, int count)
         case 'g':
             // Start of gg sequence
             pendingKey = 'g';
-            pendingTimestamp = juce::Time::currentTimeMillis();
-            listeners.call (&Listener::vimContextChanged);
+            pendingTimestamp = dc::currentTimeMillis();
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             break;
 
         case 'w':
@@ -1949,7 +1954,7 @@ void VimEngine::executeMotion (juce_wchar key, int count)
                 cursorPos = gridSystem.snapFloor (cursorPos, sr);
             context.setGridCursorPosition (cursorPos);
             updateClipIndexFromGridCursor();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             break;
         }
 
@@ -1978,7 +1983,7 @@ void VimEngine::executeMotion (juce_wchar key, int count)
                 cursorPos = gridSystem.snapFloor (cursorPos, sr);
             context.setGridCursorPosition (cursorPos);
             updateClipIndexFromGridCursor();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             break;
         }
 
@@ -2028,7 +2033,7 @@ void VimEngine::executeMotion (juce_wchar key, int count)
 
             context.setGridCursorPosition (cursorPos);
             updateClipIndexFromGridCursor();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             break;
         }
 
@@ -2047,7 +2052,7 @@ void VimEngine::enterVisualMode()
     mode = Visual;
 
     updateVisualSelection();
-    listeners.call (&Listener::vimModeChanged, Visual);
+    listeners.call ([](Listener& l) { l.vimModeChanged (Visual); });
 }
 
 void VimEngine::enterVisualLineMode()
@@ -2058,7 +2063,7 @@ void VimEngine::enterVisualLineMode()
     mode = VisualLine;
 
     updateVisualSelection();
-    listeners.call (&Listener::vimModeChanged, VisualLine);
+    listeners.call ([](Listener& l) { l.vimModeChanged (VisualLine); });
 }
 
 void VimEngine::exitVisualMode()
@@ -2068,8 +2073,8 @@ void VimEngine::exitVisualMode()
     mode = Normal;
     cancelOperator();
     clearPending();
-    listeners.call (&Listener::vimModeChanged, Normal);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimModeChanged (Normal); });
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::updateVisualSelection()
@@ -2094,7 +2099,7 @@ void VimEngine::updateVisualSelection()
     gridSel.endPos     = context.getGridCursorPosition();
     context.setGridVisualSelection (gridSel);
 
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 VimEngine::MotionRange VimEngine::getVisualRange() const
@@ -2240,7 +2245,7 @@ void VimEngine::executeGridVisualDelete()
         Track track = arrangement.getTrack (t);
 
         // Collect new clips to add (from splits) after iterating
-        juce::Array<juce::ValueTree> newClips;
+        std::vector<juce::ValueTree> newClips;
 
         // Process clips overlapping [minPos, maxPos) — iterate backwards for safe removal
         for (int c = track.getNumClips() - 1; c >= 0; --c)
@@ -2279,7 +2284,7 @@ void VimEngine::executeGridVisualDelete()
                 rightClip.setProperty (IDs::startPosition, static_cast<juce::int64> (maxPos), nullptr);
                 rightClip.setProperty (IDs::length, static_cast<juce::int64> (clipEnd - maxPos), nullptr);
                 rightClip.setProperty (IDs::trimStart, static_cast<juce::int64> (origTrimStart + rightOffset), nullptr);
-                newClips.add (rightClip);
+                newClips.push_back (rightClip);
             }
             else if (keepLeft)
             {
@@ -2308,7 +2313,7 @@ void VimEngine::executeGridVisualDelete()
     context.setGridCursorPosition (minPos);
     arrangement.selectTrack (minTrack);
     updateClipIndexFromGridCursor();
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::executeGridVisualYank (bool isYank)
@@ -2326,12 +2331,12 @@ void VimEngine::executeGridVisualYank (bool isYank)
     int minTrack = std::min (gridSel.startTrack, gridSel.endTrack);
     int maxTrack = std::max (gridSel.startTrack, gridSel.endTrack);
 
-    juce::Array<Clipboard::ClipEntry> entries;
+    std::vector<Clipboard::ClipEntry> entries;
     int64_t globalMinStart = std::numeric_limits<int64_t>::max();
 
     // First pass: collect trimmed clips with raw positions
     struct RawClip { juce::ValueTree data; int trackIdx; int64_t startPos; };
-    juce::Array<RawClip> rawClips;
+    std::vector<RawClip> rawClips;
 
     for (int t = minTrack; t <= maxTrack; ++t)
     {
@@ -2366,7 +2371,8 @@ void VimEngine::executeGridVisualYank (bool isYank)
             trimmedCopy.setProperty (IDs::trimStart,
                                      static_cast<juce::int64> (origTrimStart + trimDelta), nullptr);
 
-            rawClips.add ({ trimmedCopy, t, newStart });
+            RawClip rc { trimmedCopy, t, newStart };
+            rawClips.push_back (rc);
             globalMinStart = std::min (globalMinStart, newStart);
         }
     }
@@ -2376,10 +2382,10 @@ void VimEngine::executeGridVisualYank (bool isYank)
 
     // Second pass: build entries with relative offsets
     for (auto& raw : rawClips)
-        entries.add ({ raw.data, raw.trackIdx - minTrack, raw.startPos - globalMinStart });
+        entries.push_back ({ raw.data, raw.trackIdx - minTrack, raw.startPos - globalMinStart });
 
     project.getClipboard().storeClips (reg, entries, false, isYank);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::executeVisualMute()
@@ -2453,18 +2459,18 @@ bool VimEngine::handleVisualKey (const juce::KeyPress& key)
         {
             pendingRegister = c;
             awaitingRegisterChar = false;
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
         awaitingRegisterChar = false;
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
     if (keyChar == '"')
     {
         awaitingRegisterChar = true;
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -2473,7 +2479,7 @@ bool VimEngine::handleVisualKey (const juce::KeyPress& key)
     {
         mode = VisualLine;
         updateVisualSelection();
-        listeners.call (&Listener::vimModeChanged, VisualLine);
+        listeners.call ([](Listener& l) { l.vimModeChanged (VisualLine); });
         return true;
     }
 
@@ -2481,7 +2487,7 @@ bool VimEngine::handleVisualKey (const juce::KeyPress& key)
     if (pendingKey == 'g')
     {
         if (keyChar == 'g'
-            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
         {
             clearPending();
             int count = getEffectiveCount();
@@ -2529,7 +2535,7 @@ bool VimEngine::handleVisualKey (const juce::KeyPress& key)
     if (isDigitForCount (keyChar))
     {
         accumulateDigit (keyChar);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -2581,18 +2587,18 @@ bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
         {
             pendingRegister = c;
             awaitingRegisterChar = false;
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
         awaitingRegisterChar = false;
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
     if (keyChar == '"')
     {
         awaitingRegisterChar = true;
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -2601,7 +2607,7 @@ bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
     {
         mode = Visual;
         updateVisualSelection();
-        listeners.call (&Listener::vimModeChanged, Visual);
+        listeners.call ([](Listener& l) { l.vimModeChanged (Visual); });
         return true;
     }
 
@@ -2609,7 +2615,7 @@ bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
     if (pendingKey == 'g')
     {
         if (keyChar == 'g'
-            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
         {
             clearPending();
             int count = getEffectiveCount();
@@ -2657,7 +2663,7 @@ bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
     if (isDigitForCount (keyChar))
     {
         accumulateDigit (keyChar);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -2674,8 +2680,8 @@ bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
     if (keyChar == 'g')
     {
         pendingKey = 'g';
-        pendingTimestamp = juce::Time::currentTimeMillis();
-        listeners.call (&Listener::vimContextChanged);
+        pendingTimestamp = dc::currentTimeMillis();
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -2706,14 +2712,14 @@ bool VimEngine::hasPendingState() const
         || pendingRegister != '\0' || awaitingRegisterChar;
 }
 
-juce::String VimEngine::getPendingDisplay() const
+std::string VimEngine::getPendingDisplay() const
 {
-    juce::String display;
+    std::string display;
 
     if (pendingRegister != '\0')
     {
         display += "\"";
-        display += juce::String::charToString (static_cast<juce_wchar> (pendingRegister));
+        display += std::string (1, pendingRegister);
     }
     else if (awaitingRegisterChar)
     {
@@ -2721,7 +2727,7 @@ juce::String VimEngine::getPendingDisplay() const
     }
 
     if (countAccumulator > 0)
-        display += juce::String (countAccumulator);
+        display += std::to_string (countAccumulator);
 
     switch (pendingOperator)
     {
@@ -2732,10 +2738,10 @@ juce::String VimEngine::getPendingDisplay() const
     }
 
     if (operatorCount > 0)
-        display += juce::String (operatorCount);
+        display += std::to_string (operatorCount);
 
     if (pendingKey != 0)
-        display += juce::String::charToString (pendingKey);
+        display += std::string (1, char (pendingKey));
 
     return display;
 }
@@ -2759,14 +2765,14 @@ bool VimEngine::handleSequencerNormalKey (const juce::KeyPress& key)
     {
         project.getUndoSystem().undo();
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
     if (keyChar == 'r' && modifiers.isCtrlDown())
     {
         project.getUndoSystem().redo();
         updateClipIndexFromGridCursor();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -2774,7 +2780,7 @@ bool VimEngine::handleSequencerNormalKey (const juce::KeyPress& key)
     if (pendingKey == 'g')
     {
         if (keyChar == 'g'
-            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
         {
             clearPending();
             seqJumpFirstRow();
@@ -2796,8 +2802,8 @@ bool VimEngine::handleSequencerNormalKey (const juce::KeyPress& key)
     if (keyChar == 'g')
     {
         pendingKey = 'g';
-        pendingTimestamp = juce::Time::currentTimeMillis();
-        listeners.call (&Listener::vimContextChanged);
+        pendingTimestamp = dc::currentTimeMillis();
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -2839,7 +2845,7 @@ void VimEngine::seqMoveLeft()
     if (step > 0)
     {
         context.setSeqStep (step - 1);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
@@ -2858,7 +2864,7 @@ void VimEngine::seqMoveRight()
     if (step < maxStep)
     {
         context.setSeqStep (step + 1);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
@@ -2868,7 +2874,7 @@ void VimEngine::seqMoveUp()
     if (row > 0)
     {
         context.setSeqRow (row - 1);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
@@ -2884,14 +2890,14 @@ void VimEngine::seqMoveDown()
     if (row < maxRow)
     {
         context.setSeqRow (row + 1);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
 }
 
 void VimEngine::seqJumpFirstStep()
 {
     context.setSeqStep (0);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::seqJumpLastStep()
@@ -2905,13 +2911,13 @@ void VimEngine::seqJumpLastStep()
 
     int lastStep = static_cast<int> (pattern.getProperty (IDs::numSteps, 16)) - 1;
     context.setSeqStep (std::max (0, lastStep));
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::seqJumpFirstRow()
 {
     context.setSeqRow (0);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::seqJumpLastRow()
@@ -2922,7 +2928,7 @@ void VimEngine::seqJumpLastRow()
     StepSequencer seq (seqState);
     int lastRow = seq.getNumRows() - 1;
     context.setSeqRow (std::max (0, lastRow));
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::seqToggleStep()
@@ -2941,7 +2947,7 @@ void VimEngine::seqToggleStep()
     bool isActive = StepSequencer::isStepActive (step);
     step.setProperty (IDs::active, ! isActive, &project.getUndoManager());
 
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::seqAdjustVelocity (int delta)
@@ -2957,12 +2963,12 @@ void VimEngine::seqAdjustVelocity (int delta)
     if (! step.isValid()) return;
 
     int vel = StepSequencer::getStepVelocity (step) + delta;
-    vel = juce::jlimit (1, 127, vel);
+    vel = std::clamp (vel, 1, 127);
 
     ScopedTransaction txn (project.getUndoSystem(), "Adjust Velocity");
     step.setProperty (IDs::velocity, vel, &project.getUndoManager());
 
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::seqCycleVelocity()
@@ -2997,7 +3003,7 @@ void VimEngine::seqCycleVelocity()
     ScopedTransaction txn (project.getUndoSystem(), "Cycle Velocity");
     step.setProperty (IDs::velocity, presets[nextIdx], &project.getUndoManager());
 
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::seqToggleRowMute()
@@ -3013,7 +3019,7 @@ void VimEngine::seqToggleRowMute()
     bool muted = StepSequencer::isRowMuted (row);
     row.setProperty (IDs::mute, ! muted, &project.getUndoManager());
 
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::seqToggleRowSolo()
@@ -3029,7 +3035,7 @@ void VimEngine::seqToggleRowSolo()
     bool soloed = StepSequencer::isRowSoloed (row);
     row.setProperty (IDs::solo, ! soloed, &project.getUndoManager());
 
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 // ── Keyboard mode ───────────────────────────────────────────────────────────
@@ -3037,8 +3043,8 @@ void VimEngine::seqToggleRowSolo()
 void VimEngine::enterKeyboardMode()
 {
     mode = Keyboard;
-    listeners.call (&Listener::vimModeChanged, Keyboard);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimModeChanged (Keyboard); });
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::exitKeyboardMode()
@@ -3053,8 +3059,8 @@ void VimEngine::exitKeyboardMode()
     keyboardState.notifyListeners();
 
     mode = Normal;
-    listeners.call (&Listener::vimModeChanged, Normal);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimModeChanged (Normal); });
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 bool VimEngine::handleKeyboardKey (const juce::KeyPress& key)
@@ -3073,25 +3079,25 @@ bool VimEngine::handleKeyboardKey (const juce::KeyPress& key)
         case 'z': case 'Z':
             keyboardState.octaveDown();
             keyboardState.notifyListeners();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
 
         case 'x': case 'X':
             keyboardState.octaveUp();
             keyboardState.notifyListeners();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
 
         case 'c': case 'C':
             keyboardState.velocityDown();
             keyboardState.notifyListeners();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
 
         case 'v': case 'V':
             keyboardState.velocityUp();
             keyboardState.notifyListeners();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
 
         default:
@@ -3106,7 +3112,7 @@ bool VimEngine::handleKeyboardKey (const juce::KeyPress& key)
 
         if (onLiveMidiNote)
             onLiveMidiNote (juce::MidiMessage::noteOn (keyboardState.midiChannel, note,
-                                                        static_cast<juce::uint8> (keyboardState.velocity)));
+                                                        static_cast<uint8_t> (keyboardState.velocity)));
 
         keyboardState.notifyListeners();
         return true;
@@ -3183,14 +3189,14 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
     if (pendingKey == 'g')
     {
         if (keyChar == 'p'
-            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
         {
             clearPending();
             if (onToggleBrowser) onToggleBrowser();
             return true;
         }
         if (keyChar == 'k'
-            && (juce::Time::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
         {
             clearPending();
             enterKeyboardMode();
@@ -3202,8 +3208,8 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
     if (keyChar == 'g')
     {
         pendingKey = 'g';
-        pendingTimestamp = juce::Time::currentTimeMillis();
-        listeners.call (&Listener::vimContextChanged);
+        pendingTimestamp = dc::currentTimeMillis();
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3225,7 +3231,7 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
                 arrangement.selectTrack (idx - 1);
         }
         context.setSelectedPluginSlot (0);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3247,7 +3253,7 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
             }
         }
         context.setSelectedPluginSlot (0);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3266,18 +3272,18 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
             if (slot < maxSlot)
             {
                 context.setSelectedPluginSlot (slot + 1);
-                listeners.call (&Listener::vimContextChanged);
+                listeners.call ([](Listener& l) { l.vimContextChanged(); });
             }
         }
         else if (focus == VimContext::FocusVolume)
         {
             context.setMixerFocus (VimContext::FocusPan);
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
         }
         else if (focus == VimContext::FocusPan)
         {
             context.setMixerFocus (VimContext::FocusPlugins);
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
         }
         return true;
     }
@@ -3290,24 +3296,24 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
             if (slot > 0)
             {
                 context.setSelectedPluginSlot (slot - 1);
-                listeners.call (&Listener::vimContextChanged);
+                listeners.call ([](Listener& l) { l.vimContextChanged(); });
             }
             else
             {
                 // At slot 0, exit back to Pan focus
                 context.setMixerFocus (VimContext::FocusPan);
-                listeners.call (&Listener::vimContextChanged);
+                listeners.call ([](Listener& l) { l.vimContextChanged(); });
             }
         }
         else if (focus == VimContext::FocusPan)
         {
             context.setMixerFocus (VimContext::FocusVolume);
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
         }
         else if (focus == VimContext::FocusPlugins)
         {
             context.setMixerFocus (VimContext::FocusPan);
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
         }
         return true;
     }
@@ -3345,7 +3351,7 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
             int newNum = getMixerPluginCount();
             if (context.getSelectedPluginSlot() > newNum)
                 context.setSelectedPluginSlot (newNum);
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
         }
         return true;
     }
@@ -3373,7 +3379,7 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
         {
             onMixerPluginReorder (trackIdx, slot, slot + 1);
             context.setSelectedPluginSlot (slot + 1);
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
         }
         return true;
     }
@@ -3387,7 +3393,7 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
         {
             onMixerPluginReorder (trackIdx, slot, slot - 1);
             context.setSelectedPluginSlot (slot - 1);
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
         }
         return true;
     }
@@ -3411,8 +3417,8 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
     {
         mode = Command;
         commandBuffer.clear();
-        listeners.call (&Listener::vimModeChanged, Command);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimModeChanged (Command); });
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3421,7 +3427,7 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
 
 // ─── Plugin View ─────────────────────────────────────────────────────────────
 
-juce::String VimEngine::generateHintLabel (int index, int totalCount)
+std::string VimEngine::generateHintLabel (int index, int totalCount)
 {
     // Home-row keys for hint labels: a,s,d,f,g,h,j,k,l
     // All hints are uniform length to avoid prefix conflicts
@@ -3433,7 +3439,7 @@ juce::String VimEngine::generateHintLabel (int index, int totalCount)
     {
         // Single-char hints: a, s, d, ...
         if (index < numKeys)
-            return juce::String::charToString (keys[index]);
+            return std::string (1, keys[index]);
     }
     else if (totalCount <= numKeys * numKeys)
     {
@@ -3441,25 +3447,25 @@ juce::String VimEngine::generateHintLabel (int index, int totalCount)
         int first = index / numKeys;
         int second = index % numKeys;
         if (first < numKeys)
-            return juce::String::charToString (keys[first])
-                 + juce::String::charToString (keys[second]);
+            return std::string (1, keys[first])
+                 + std::string (1, keys[second]);
     }
 
     // Three-char for > 81 params (unlikely but safe)
     int first = (index / (numKeys * numKeys)) % numKeys;
     int second = (index / numKeys) % numKeys;
     int third = index % numKeys;
-    return juce::String::charToString (keys[first])
-         + juce::String::charToString (keys[second])
-         + juce::String::charToString (keys[third]);
+    return std::string (1, keys[first])
+         + std::string (1, keys[second])
+         + std::string (1, keys[third]);
 }
 
-int VimEngine::resolveHintLabel (const juce::String& label, int totalCount)
+int VimEngine::resolveHintLabel (const std::string& label, int totalCount)
 {
     static const char keys[] = "asdfghjkl";
     static const int numKeys = 9;
 
-    auto indexOf = [] (juce_wchar c) -> int
+    auto indexOf = [] (char c) -> int
     {
         for (int i = 0; i < numKeys; ++i)
             if (keys[i] == c) return i;
@@ -3472,7 +3478,7 @@ int VimEngine::resolveHintLabel (const juce::String& label, int totalCount)
                     : 3;
 
     // Only resolve when label reaches the expected length
-    if (label.length() < expectedLen)
+    if (static_cast<int> (label.size()) < expectedLen)
         return -1;
 
     if (expectedLen == 1)
@@ -3491,7 +3497,7 @@ int VimEngine::resolveHintLabel (const juce::String& label, int totalCount)
     }
 
     // Three-char
-    if (label.length() >= 3)
+    if (label.size() >= 3)
     {
         int first = indexOf (label[0]);
         int second = indexOf (label[1]);
@@ -3512,7 +3518,7 @@ void VimEngine::openPluginView (int trackIndex, int pluginIndex)
     if (onOpenPluginView)
         onOpenPluginView (trackIndex, pluginIndex);
 
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 void VimEngine::closePluginView()
@@ -3523,7 +3529,7 @@ void VimEngine::closePluginView()
         onClosePluginView();
 
     context.setPanel (VimContext::Mixer);
-    listeners.call (&Listener::vimContextChanged);
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
@@ -3536,48 +3542,48 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
         if (keyChar >= '0' && keyChar <= '9')
         {
             auto buf = context.getNumberBuffer();
-            buf += juce::String::charToString (keyChar);
+            buf += std::string (1, char (keyChar));
             context.setNumberBuffer (buf);
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
 
-        if (keyChar == '.' && ! context.getNumberBuffer().contains ("."))
+        if (keyChar == '.' && context.getNumberBuffer().find ('.') == std::string::npos)
         {
             auto buf = context.getNumberBuffer();
             buf += ".";
             context.setNumberBuffer (buf);
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
 
         if (key == juce::KeyPress::returnKey)
         {
-            float pct = context.getNumberBuffer().getFloatValue();
-            pct = juce::jlimit (0.0f, 100.0f, pct);
+            float pct = std::stof (context.getNumberBuffer());
+            pct = std::clamp (pct, 0.0f, 100.0f);
             if (onPluginParamChanged)
                 onPluginParamChanged (context.getSelectedParamIndex(), pct / 100.0f);
             context.clearNumberEntry();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
 
         if (isEscapeOrCtrlC (key))
         {
             context.clearNumberEntry();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
 
         if (key == juce::KeyPress::backspaceKey)
         {
             auto buf = context.getNumberBuffer();
-            if (buf.isNotEmpty())
+            if (! buf.empty())
             {
-                buf = buf.dropLastCharacters (1);
+                buf.pop_back();
                 context.setNumberBuffer (buf);
             }
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
 
@@ -3594,15 +3600,15 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
         {
             context.setHintMode (VimContext::HintNone);
             context.clearHintBuffer();
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
 
         // Accept home-row hint chars
-        static const juce::String hintChars ("asdfghjkl");
-        if (hintChars.containsChar (keyChar))
+        static const std::string hintChars ("asdfghjkl");
+        if (hintChars.find (char (keyChar)) != std::string::npos)
         {
-            auto buf = context.getHintBuffer() + juce::String::charToString (keyChar);
+            auto buf = context.getHintBuffer() + std::string (1, char (keyChar));
             context.setHintBuffer (buf);
 
             int resolved = resolveHintLabel (buf, context.getHintTotalCount());
@@ -3622,19 +3628,19 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
 
                 context.setHintMode (VimContext::HintNone);
                 context.clearHintBuffer();
-                listeners.call (&Listener::vimContextChanged);
+                listeners.call ([](Listener& l) { l.vimContextChanged(); });
                 return true;
             }
 
             // Could be a partial match (first char of two-char label) — wait for more
-            listeners.call (&Listener::vimContextChanged);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
 
         // Non-hint char cancels hint mode
         context.setHintMode (VimContext::HintNone);
         context.clearHintBuffer();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3663,7 +3669,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
             context.setHintTotalCount (paramCount);
         }
         context.clearHintBuffer();
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3671,7 +3677,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     if (keyChar == 'j')
     {
         context.setSelectedParamIndex (context.getSelectedParamIndex() + 1);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3680,7 +3686,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
         int idx = context.getSelectedParamIndex();
         if (idx > 0)
             context.setSelectedParamIndex (idx - 1);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3689,7 +3695,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     {
         if (onPluginParamAdjust)
             onPluginParamAdjust (context.getSelectedParamIndex(), -0.05f);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3697,7 +3703,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     {
         if (onPluginParamAdjust)
             onPluginParamAdjust (context.getSelectedParamIndex(), 0.05f);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3706,7 +3712,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     {
         if (onPluginParamAdjust)
             onPluginParamAdjust (context.getSelectedParamIndex(), -0.01f);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3714,7 +3720,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     {
         if (onPluginParamAdjust)
             onPluginParamAdjust (context.getSelectedParamIndex(), 0.01f);
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3722,8 +3728,8 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     if (keyChar >= '0' && keyChar <= '9')
     {
         context.setNumberEntryActive (true);
-        context.setNumberBuffer (juce::String::charToString (keyChar));
-        listeners.call (&Listener::vimContextChanged);
+        context.setNumberBuffer (std::string (1, char (keyChar)));
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -3741,7 +3747,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     if (keyChar == 'z')
     {
         context.setPluginViewEnlarged (! context.isPluginViewEnlarged());
-        listeners.call (&Listener::vimContextChanged);
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 

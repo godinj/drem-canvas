@@ -3,6 +3,8 @@
 #include "graphics/theme/FontManager.h"
 #include "model/Track.h"
 #include "model/Project.h"
+#include <filesystem>
+#include <string>
 
 namespace dc
 {
@@ -37,8 +39,8 @@ void TrackLaneWidget::paint (gfx::Canvas& canvas)
     }
 
     // Track name
-    juce::String trackName = trackState.getProperty ("name", "Untitled");
-    canvas.drawText (trackName.toStdString(), 8.0f, h * 0.5f + 4.0f, font, theme.defaultText);
+    std::string trackName = trackState.getProperty ("name", "Untitled").toString().toStdString();
+    canvas.drawText (trackName, 8.0f, h * 0.5f + 4.0f, font, theme.defaultText);
 
     // Track lane background (right of header)
     float laneWidth = getWidth() - headerWidth;
@@ -322,11 +324,11 @@ void TrackLaneWidget::rebuildClipViews()
         {
             // Create waveform cache and load audio data
             auto cache = std::make_unique<gfx::WaveformCache>();
-            juce::String sourceFilePath = child.getProperty ("sourceFile", "");
-            if (sourceFilePath.isNotEmpty())
+            std::string sourceFilePath = child.getProperty ("sourceFile", "").toString().toStdString();
+            if (! sourceFilePath.empty())
             {
-                juce::File sourceFile (sourceFilePath);
-                if (sourceFile.existsAsFile())
+                std::filesystem::path sourceFile (sourceFilePath);
+                if (std::filesystem::exists (sourceFile) && std::filesystem::is_regular_file (sourceFile))
                     cache->loadFromFile (sourceFile, formatManager);
             }
 

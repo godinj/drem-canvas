@@ -3,6 +3,10 @@
 #include "graphics/theme/Theme.h"
 #include "graphics/theme/FontManager.h"
 #include "include/core/SkFont.h"
+#include <algorithm>
+#include <cctype>
+#include <string>
+#include <vector>
 
 namespace dc
 {
@@ -24,7 +28,7 @@ BrowserWidget::BrowserWidget (PluginManager& pm)
 
     pluginList.onDoubleClick = [this] (int index)
     {
-        if (index >= 0 && index < displayedPlugins.size() && onPluginSelected)
+        if (index >= 0 && index < static_cast<int> (displayedPlugins.size()) && onPluginSelected)
             onPluginSelected (displayedPlugins[index]);
     };
 
@@ -92,13 +96,13 @@ bool BrowserWidget::keyDown (const gfx::KeyEvent&)
     return false;
 }
 
-void BrowserWidget::setSearchFilter (const juce::String& query)
+void BrowserWidget::setSearchFilter (const std::string& query)
 {
-    searchBuffer = query.toStdString();
+    searchBuffer = query;
     searchActive = true;
     filterPlugins();
     // Auto-select first result
-    if (displayedPlugins.size() > 0)
+    if (! displayedPlugins.empty())
         selectPlugin (0);
     repaint();
 }
@@ -108,7 +112,7 @@ void BrowserWidget::clearSearchFilter()
     searchBuffer.clear();
     searchActive = false;
     filterPlugins();
-    if (displayedPlugins.size() > 0)
+    if (! displayedPlugins.empty())
         selectPlugin (0);
     repaint();
 }
@@ -127,13 +131,16 @@ void BrowserWidget::filterPlugins()
         {
             auto nameLower = type.name.toLowerCase();
             auto mfgLower = type.manufacturerName.toLowerCase();
-            auto queryLower = juce::String (searchBuffer).toLowerCase();
+            std::string queryLowerStd = searchBuffer;
+            std::transform (queryLowerStd.begin(), queryLowerStd.end(), queryLowerStd.begin(),
+                            [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
+            auto queryLower = queryLowerStd.c_str();
 
             if (! nameLower.contains (queryLower) && ! mfgLower.contains (queryLower))
                 continue;
         }
 
-        displayedPlugins.add (type);
+        displayedPlugins.push_back (type);
         names.push_back ((type.name + " (" + type.manufacturerName + ")").toStdString());
     }
 
@@ -148,7 +155,7 @@ void BrowserWidget::refreshPluginList()
 
 int BrowserWidget::getNumPlugins() const
 {
-    return displayedPlugins.size();
+    return static_cast<int> (displayedPlugins.size());
 }
 
 int BrowserWidget::getSelectedPluginIndex() const
@@ -158,7 +165,7 @@ int BrowserWidget::getSelectedPluginIndex() const
 
 void BrowserWidget::selectPlugin (int index)
 {
-    int numRows = displayedPlugins.size();
+    int numRows = static_cast<int> (displayedPlugins.size());
     if (numRows == 0) return;
 
     index = ((index % numRows) + numRows) % numRows;
@@ -184,7 +191,7 @@ void BrowserWidget::scrollByHalfPage (int direction)
 void BrowserWidget::confirmSelection()
 {
     int idx = pluginList.getSelectedIndex();
-    if (idx >= 0 && idx < displayedPlugins.size() && onPluginSelected)
+    if (idx >= 0 && idx < static_cast<int> (displayedPlugins.size()) && onPluginSelected)
         onPluginSelected (displayedPlugins[idx]);
 }
 

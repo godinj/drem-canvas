@@ -35,7 +35,8 @@ private:
     juce::AudioProcessorGraph::Node::Ptr midiInputNode;
     juce::AudioProcessorGraph::Node::Ptr midiOutputNode;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioEngine)
+    AudioEngine (const AudioEngine&) = delete;
+    AudioEngine& operator= (const AudioEngine&) = delete;
 };
 
 } // namespace dc

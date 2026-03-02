@@ -1,4 +1,5 @@
 #include "TransportController.h"
+#include "dc/foundation/string_utils.h"
 
 namespace dc
 {
@@ -54,7 +55,7 @@ double TransportController::getPositionInSeconds() const
     return static_cast<double> (positionInSamples.load()) / sr;
 }
 
-juce::String TransportController::getTimeString() const
+std::string TransportController::getTimeString() const
 {
     double totalSeconds = getPositionInSeconds();
 
@@ -62,7 +63,7 @@ juce::String TransportController::getTimeString() const
     int seconds      = static_cast<int> (totalSeconds) % 60;
     int milliseconds = static_cast<int> ((totalSeconds - std::floor (totalSeconds)) * 1000.0);
 
-    return juce::String::formatted ("%02d:%02d.%03d", minutes, seconds, milliseconds);
+    return dc::format ("%02d:%02d.%03d", minutes, seconds, milliseconds);
 }
 
 } // namespace dc

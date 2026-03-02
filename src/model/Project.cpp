@@ -2,6 +2,8 @@
 #include "StepSequencer.h"
 #include "serialization/SessionWriter.h"
 #include "serialization/SessionReader.h"
+#include "dc/foundation/types.h"
+#include "dc/foundation/file_utils.h"
 
 namespace dc
 {
@@ -28,14 +30,14 @@ void Project::createDefaultState()
     state.appendChild (StepSequencer::createDefaultState(), nullptr);
 }
 
-bool Project::saveToFile (const juce::File& file) const
+bool Project::saveToFile (const std::filesystem::path& file) const
 {
-    return file.replaceWithText (state.toXmlString());
+    return dc::writeStringToFile (file, state.toXmlString().toStdString());
 }
 
-bool Project::loadFromFile (const juce::File& file)
+bool Project::loadFromFile (const std::filesystem::path& file)
 {
-    auto xml = juce::parseXML (file);
+    auto xml = juce::parseXML (dc::readFileToString (file));
 
     if (xml == nullptr)
         return false;
@@ -49,16 +51,16 @@ bool Project::loadFromFile (const juce::File& file)
     return true;
 }
 
-juce::ValueTree Project::addTrack (const juce::String& trackName)
+juce::ValueTree Project::addTrack (const std::string& trackName)
 {
     juce::ValueTree track (IDs::TRACK);
-    track.setProperty (IDs::name, trackName, nullptr);
+    track.setProperty (IDs::name, trackName.c_str(), nullptr);
     track.setProperty (IDs::volume, 1.0f, nullptr);
     track.setProperty (IDs::pan, 0.0f, nullptr);
     track.setProperty (IDs::mute, false, nullptr);
     track.setProperty (IDs::solo, false, nullptr);
     track.setProperty (IDs::armed, false, nullptr);
-    track.setProperty (IDs::colour, static_cast<int> (juce::Random::getSystemRandom().nextInt()), nullptr);
+    track.setProperty (IDs::colour, dc::randomInt (0, 0x7FFFFFFF), nullptr);
 
     state.getChildWithName (IDs::TRACKS).appendChild (track, &undoManager);
     return track;
@@ -134,12 +136,12 @@ void Project::setTimeSigDenominator (int den)
     state.setProperty (IDs::timeSigDenominator, den, &undoManager);
 }
 
-bool Project::saveSessionToDirectory (const juce::File& sessionDir) const
+bool Project::saveSessionToDirectory (const std::filesystem::path& sessionDir) const
 {
     return SessionWriter::writeSession (state, sessionDir);
 }
 
-bool Project::loadSessionFromDirectory (const juce::File& sessionDir)
+bool Project::loadSessionFromDirectory (const std::filesystem::path& sessionDir)
 {
     auto newState = SessionReader::readSession (sessionDir);
 

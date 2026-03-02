@@ -1,0 +1,13 @@
+#pragma once
+
+#define DC_APP_NAME "@CMAKE_PROJECT_NAME@"
+#define DC_APP_VERSION "@CMAKE_PROJECT_VERSION@"
+
+// Platform detection
+#if defined(__APPLE__)
+    #define DC_MAC 1
+    #define DC_LINUX 0
+#elif defined(__linux__)
+    #define DC_MAC 0
+    #define DC_LINUX 1
+#endif

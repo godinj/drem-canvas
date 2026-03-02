@@ -1,5 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
+#include <string>
+#include <filesystem>
 #include "utils/UndoSystem.h"
 #include "Clipboard.h"
 
@@ -74,15 +76,15 @@ public:
     Project();
 
     // Serialization (XML)
-    bool saveToFile (const juce::File& file) const;
-    bool loadFromFile (const juce::File& file);
+    bool saveToFile (const std::filesystem::path& file) const;
+    bool loadFromFile (const std::filesystem::path& file);
 
     // Serialization (YAML session directory)
-    bool saveSessionToDirectory (const juce::File& sessionDir) const;
-    bool loadSessionFromDirectory (const juce::File& sessionDir);
+    bool saveSessionToDirectory (const std::filesystem::path& sessionDir) const;
+    bool loadSessionFromDirectory (const std::filesystem::path& sessionDir);
 
     // Track management
-    juce::ValueTree addTrack (const juce::String& name);
+    juce::ValueTree addTrack (const std::string& name);
     void removeTrack (int index);
     int getNumTracks() const;
     juce::ValueTree getTrack (int index) const;

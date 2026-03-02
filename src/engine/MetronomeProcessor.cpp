@@ -1,4 +1,5 @@
 #include "MetronomeProcessor.h"
+#include "dc/foundation/types.h"
 #include <cmath>
 
 namespace dc
@@ -69,7 +70,7 @@ void MetronomeProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             double freq = isDownbeat ? clickFrequency : clickFrequencyOff;
 
             // Generate sine wave
-            double phase = 2.0 * juce::MathConstants<double>::pi * freq
+            double phase = 2.0 * dc::pi<double> * freq
                            * static_cast<double> (clickSamplePos) / currentSampleRate;
             float sample = static_cast<float> (std::sin (phase));
 

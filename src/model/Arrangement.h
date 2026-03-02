@@ -14,7 +14,7 @@ public:
     int getNumTracks() const;
     Track getTrack (int index) const;
 
-    Track addTrack (const juce::String& name);
+    Track addTrack (const std::string& name);
     void removeTrack (int index);
     void moveTrack (int fromIndex, int toIndex);
 

@@ -1,4 +1,5 @@
 #include "AudioEngine.h"
+#include <string>
 
 namespace dc
 {
@@ -73,15 +74,15 @@ void AudioEngine::connectNodes (juce::AudioProcessorGraph::NodeID source, int so
 
     if (! ok)
     {
-        juce::String srcName = "?", dstName = "?";
+        std::string srcName = "?", dstName = "?";
         if (auto* srcNode = graph->getNodeForId (source))
-            srcName = srcNode->getProcessor()->getName();
+            srcName = srcNode->getProcessor()->getName().toStdString();
         if (auto* dstNode = graph->getNodeForId (dest))
-            dstName = dstNode->getProcessor()->getName();
+            dstName = dstNode->getProcessor()->getName().toStdString();
 
         fprintf (stderr, "AudioEngine: FAILED connection %s[%d] -> %s[%d]\n",
-                 srcName.toRawUTF8(), sourceChannel,
-                 dstName.toRawUTF8(), destChannel);
+                 srcName.c_str(), sourceChannel,
+                 dstName.c_str(), destChannel);
         fflush (stderr);
     }
 }

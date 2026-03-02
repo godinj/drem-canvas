@@ -1,4 +1,7 @@
 #include "StepSequencerView.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -24,7 +27,7 @@ StepSequencerView::~StepSequencerView()
 
 void StepSequencerView::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff1a1a2a));
+    g.fillAll (toJuce (0xff1a1a2au));
 }
 
 void StepSequencerView::resized()

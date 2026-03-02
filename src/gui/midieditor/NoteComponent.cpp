@@ -1,4 +1,8 @@
 #include "NoteComponent.h"
+#include "gui/common/ColourBridge.h"
+#include "dc/foundation/types.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -18,10 +22,10 @@ void NoteComponent::paint (juce::Graphics& g)
 
     // Velocity-based colour: blend from dark blue (low) to bright cyan (high)
     float velocityNorm = static_cast<float> (velocity) / 127.0f;
-    auto noteColour = juce::Colour::fromHSV (0.55f,                            // hue: blue-cyan
+    auto noteColour = toJuce (dc::Colour::fromHSV (0.55f,                            // hue: blue-cyan
                                               0.6f + 0.3f * (1.0f - velocityNorm), // less saturated at higher velocity
                                               0.4f + 0.6f * velocityNorm,          // brighter at higher velocity
-                                              1.0f);
+                                              1.0f));
 
     // Fill the note rectangle with rounded corners
     g.setColour (noteColour);
@@ -30,7 +34,7 @@ void NoteComponent::paint (juce::Graphics& g)
     // Draw selected outline
     if (selected)
     {
-        g.setColour (juce::Colours::white);
+        g.setColour (toJuce (dc::Colours::white));
         g.drawRoundedRectangle (bounds.reduced (0.5f), 2.0f, 1.5f);
     }
     else

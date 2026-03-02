@@ -47,7 +47,8 @@ private:
     std::atomic<float> peakRight { 0.0f };
     std::atomic<float> masterGain { 1.0f };
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MixBusProcessor)
+    MixBusProcessor (const MixBusProcessor&) = delete;
+    MixBusProcessor& operator= (const MixBusProcessor&) = delete;
 };
 
 } // namespace dc

@@ -1,4 +1,7 @@
 #include "MeterComponent.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -66,7 +69,7 @@ void MeterComponent::paint (juce::Graphics& g)
     auto drawBar = [&] (juce::Rectangle<float> area, float displayLevel, float holdLevel)
     {
         // Background
-        g.setColour (juce::Colour (0xff2a2a2a));
+        g.setColour (toJuce (0xff2a2a2au));
         g.fillRect (area);
 
         // Clamp display level to 0..1 range for drawing
@@ -76,12 +79,12 @@ void MeterComponent::paint (juce::Graphics& g)
         if (filledHeight > 0.0f)
         {
             // Create gradient: green (bottom) -> yellow (middle) -> red (top)
-            juce::ColourGradient gradient (juce::Colours::green,
+            juce::ColourGradient gradient (toJuce (dc::Colours::green),
                                            area.getX(), area.getBottom(),
-                                           juce::Colours::red,
+                                           toJuce (dc::Colours::red),
                                            area.getX(), area.getY(),
                                            false);
-            gradient.addColour (0.5, juce::Colours::yellow);
+            gradient.addColour (0.5, toJuce (dc::Colours::yellow));
 
             g.setGradientFill (gradient);
             g.fillRect (area.getX(),
@@ -95,7 +98,7 @@ void MeterComponent::paint (juce::Graphics& g)
         if (clampedHold > 0.01f)
         {
             const float holdY = area.getBottom() - (clampedHold * area.getHeight());
-            g.setColour (juce::Colours::white);
+            g.setColour (toJuce (dc::Colours::white));
             g.drawHorizontalLine (static_cast<int> (holdY), area.getX(), area.getRight());
         }
     };
@@ -104,7 +107,7 @@ void MeterComponent::paint (juce::Graphics& g)
     drawBar (rightBarBounds, displayRight, holdRight);
 
     // Draw dB markings
-    g.setColour (juce::Colour (0xffaaaaaa));
+    g.setColour (toJuce (0xffaaaaaau));
     g.setFont (juce::Font (9.0f));
 
     const float labelX = bounds.getRight() - dbLabelWidth;
@@ -134,11 +137,11 @@ void MeterComponent::paint (juce::Graphics& g)
                         juce::Justification::centredLeft);
 
             // Draw tick line across meters
-            g.setColour (juce::Colour (0xff555555));
+            g.setColour (toJuce (0xff555555u));
             g.drawHorizontalLine (static_cast<int> (y),
                                   bounds.getX(),
                                   bounds.getX() + usableWidth);
-            g.setColour (juce::Colour (0xffaaaaaa));
+            g.setColour (toJuce (0xffaaaaaau));
         }
     }
 }

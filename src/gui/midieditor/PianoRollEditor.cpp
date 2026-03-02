@@ -1,5 +1,9 @@
 #include "PianoRollEditor.h"
+#include "gui/common/ColourBridge.h"
+#include "dc/foundation/types.h"
 #include <cmath>
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -98,20 +102,20 @@ void PianoRollEditor::paint (juce::Graphics& g)
                          || noteInOctave == 8 || noteInOctave == 10);
 
         if (blackKey)
-            g.setColour (juce::Colour (0xFF2A2A2A)); // Darker for black keys
+            g.setColour (toJuce (0xFF2A2A2A)); // Darker for black keys
         else
-            g.setColour (juce::Colour (0xFF333333)); // Lighter for white keys
+            g.setColour (toJuce (0xFF333333)); // Lighter for white keys
 
         g.fillRect (gridArea.getX(), y, gridArea.getWidth(), noteHeight);
 
         // Draw horizontal grid line
-        g.setColour (juce::Colour (0xFF222222));
+        g.setColour (toJuce (0xFF222222));
         g.drawHorizontalLine (y, static_cast<float> (gridArea.getX()),
                               static_cast<float> (gridArea.getRight()));
     }
 
     // Draw vertical grid lines at beat divisions
-    g.setColour (juce::Colour (0xFF444444));
+    g.setColour (toJuce (0xFF444444));
 
     double beatStep = 1.0 / static_cast<double> (gridDivision);
     for (double beat = 0.0; beat <= totalBeats; beat += beatStep)
@@ -123,11 +127,11 @@ void PianoRollEditor::paint (juce::Graphics& g)
         bool isBarLine = (std::fmod (beat, 4.0) < 0.001); // Assuming 4/4
 
         if (isBarLine)
-            g.setColour (juce::Colour (0xFF666666));
+            g.setColour (toJuce (0xFF666666));
         else if (isWholeBeat)
-            g.setColour (juce::Colour (0xFF4A4A4A));
+            g.setColour (toJuce (0xFF4A4A4A));
         else
-            g.setColour (juce::Colour (0xFF3A3A3A));
+            g.setColour (toJuce (0xFF3A3A3A));
 
         g.drawVerticalLine (static_cast<int> (x), 0.0f, static_cast<float> (getHeight()));
     }

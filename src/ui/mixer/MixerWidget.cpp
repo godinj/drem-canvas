@@ -3,6 +3,7 @@
 #include "graphics/theme/Theme.h"
 #include "model/Track.h"
 #include "vim/VimContext.h"
+#include <string>
 
 namespace dc
 {
@@ -72,9 +73,9 @@ void MixerWidget::rebuildStrips()
         for (int p = 0; p < track.getNumPlugins(); ++p)
         {
             auto pluginState = track.getPlugin (p);
-            juce::String name = pluginState.getProperty (IDs::pluginName, "Plugin");
+            std::string name = pluginState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
             bool enabled = track.isPluginEnabled (p);
-            slots.push_back ({ name.toStdString(), ! enabled });
+            slots.push_back ({ name, ! enabled });
         }
         strip->getPluginSlots().setSlots (slots);
 

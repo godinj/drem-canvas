@@ -1,23 +1,25 @@
 #include "GitIntegration.h"
+#include <cstdio>
+#include <thread>
 
 namespace dc
 {
 
-GitIntegration::GitIntegration (const juce::File& dir)
-    : sessionDirectory (dir)
+GitIntegration::GitIntegration (const std::filesystem::path& dir, dc::MessageQueue& mq)
+    : sessionDirectory_ (dir), messageQueue (mq)
 {
 }
 
 GitIntegration::~GitIntegration() = default;
 
-void GitIntegration::setSessionDirectory (const juce::File& dir)
+void GitIntegration::setSessionDirectory (const std::filesystem::path& dir)
 {
-    sessionDirectory = dir;
+    sessionDirectory_ = dir;
 }
 
-juce::File GitIntegration::getSessionDirectory() const
+std::filesystem::path GitIntegration::getSessionDirectory() const
 {
-    return sessionDirectory;
+    return sessionDirectory_;
 }
 
 void GitIntegration::gitInit (ResultCallback callback)
@@ -35,56 +37,55 @@ void GitIntegration::gitDiff (ResultCallback callback)
     runGitCommand ({ "git", "diff" }, std::move (callback));
 }
 
-void GitIntegration::gitCommit (const juce::String& message, ResultCallback callback)
+void GitIntegration::gitCommit (const std::string& message, ResultCallback callback)
 {
-    // Escape characters that are special inside double-quoted shell strings
-    auto escaped = message.replace ("\\", "\\\\")
-                          .replace ("\"", "\\\"")
-                          .replace ("$", "\\$")
-                          .replace ("`", "\\`");
+    auto dirQuoted = dc::shellQuote (sessionDirectory_.string());
+    auto msgQuoted = dc::shellQuote (message);
 
-    auto cmd = "cd " + sessionDirectory.getFullPathName().quoted()
-             + " && git add -A && git commit -m \"" + escaped + "\"";
+    auto cmd = "cd " + dirQuoted
+             + " && git add -A && git commit -m " + msgQuoted;
 
     runShellCommand (cmd, std::move (callback));
 }
 
 void GitIntegration::gitLog (int n, ResultCallback callback)
 {
-    runGitCommand ({ "git", "log", "--oneline", "-" + juce::String (n) }, std::move (callback));
+    runGitCommand ({ "git", "log", "--oneline", "-" + std::to_string (n) }, std::move (callback));
 }
 
-void GitIntegration::gitBranch (const juce::String& name, ResultCallback callback)
+void GitIntegration::gitBranch (const std::string& name, ResultCallback callback)
 {
     runGitCommand ({ "git", "checkout", "-b", name }, std::move (callback));
 }
 
-void GitIntegration::gitCheckout (const juce::String& branch, ResultCallback callback)
+void GitIntegration::gitCheckout (const std::string& branch, ResultCallback callback)
 {
     runGitCommand ({ "git", "checkout", branch }, std::move (callback));
 }
 
 //==============================================================================
-void GitIntegration::runGitCommand (const juce::StringArray& args, ResultCallback callback)
+void GitIntegration::runGitCommand (const std::vector<std::string>& args, ResultCallback callback)
 {
-    // juce::ChildProcess doesn't support setting a working directory,
-    // so we go through the shell with a cd prefix for all commands.
-    auto cmd = "cd " + sessionDirectory.getFullPathName().quoted()
-             + " && " + args.joinIntoString (" ");
+    auto dirQuoted = dc::shellQuote (sessionDirectory_.string());
+
+    std::string cmd = "cd " + dirQuoted + " &&";
+    for (const auto& arg : args)
+        cmd += " " + dc::shellQuote (arg);
 
     runShellCommand (cmd, std::move (callback));
 }
 
-void GitIntegration::runShellCommand (const juce::String& command, ResultCallback callback)
+void GitIntegration::runShellCommand (const std::string& command, ResultCallback callback)
 {
-    std::thread ([command, cb = std::move (callback)]() mutable
+    std::thread ([this, command, cb = std::move (callback)]() mutable
     {
-        juce::ChildProcess process;
+        std::string shellCmd = "/bin/sh -c " + dc::shellQuote (command);
+        FILE* pipe = popen (shellCmd.c_str(), "r");
 
-        if (! process.start ("/bin/sh -c " + command.quoted()))
+        if (pipe == nullptr)
         {
             auto errorCb = std::move (cb);
-            juce::MessageManager::callAsync ([ecb = std::move (errorCb)]()
+            messageQueue.post ([ecb = std::move (errorCb)]()
             {
                 if (ecb)
                     ecb (-1, "Failed to start shell process");
@@ -92,12 +93,16 @@ void GitIntegration::runShellCommand (const juce::String& command, ResultCallbac
             return;
         }
 
-        auto output = process.readAllProcessOutput();
-        process.waitForProcessToFinish (-1);
-        auto exitCode = static_cast<int> (process.getExitCode());
-        auto resultCb = std::move (cb);
+        std::string output;
+        char buf[256];
+        while (fgets (buf, sizeof (buf), pipe) != nullptr)
+            output += buf;
 
-        juce::MessageManager::callAsync ([rcb = std::move (resultCb), exitCode, out = std::move (output)]()
+        int status = pclose (pipe);
+        int exitCode = WIFEXITED (status) ? WEXITSTATUS (status) : -1;
+
+        auto resultCb = std::move (cb);
+        messageQueue.post ([rcb = std::move (resultCb), exitCode, out = std::move (output)]()
         {
             if (rcb)
                 rcb (exitCode, out);

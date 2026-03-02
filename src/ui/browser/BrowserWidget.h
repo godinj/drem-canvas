@@ -6,6 +6,7 @@
 #include "plugins/PluginManager.h"
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace dc
 {
@@ -24,7 +25,7 @@ public:
     void refreshPluginList();
 
     // External filter API (driven by VimEngine)
-    void setSearchFilter (const juce::String& query);
+    void setSearchFilter (const std::string& query);
     void clearSearchFilter();
 
     // Keyboard navigation
@@ -43,7 +44,7 @@ private:
     PluginManager& pluginManager;
     gfx::ButtonWidget scanButton;
     gfx::ListBoxWidget pluginList;
-    juce::Array<juce::PluginDescription> displayedPlugins;
+    std::vector<juce::PluginDescription> displayedPlugins;
     std::string searchBuffer;
     bool searchActive = false;
 

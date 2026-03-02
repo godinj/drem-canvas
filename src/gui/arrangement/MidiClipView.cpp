@@ -1,4 +1,7 @@
 #include "MidiClipView.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -16,13 +19,13 @@ void MidiClipView::paint (juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
 
     // Fill background with a darker shade of the clip colour
-    g.setColour (clipColour.darker (0.6f));
+    g.setColour (toJuce (clipColour.darker (0.6f)));
     g.fillRoundedRectangle (bounds, 3.0f);
 
     if (sequence.getNumEvents() == 0)
     {
         // Draw clip border and return
-        g.setColour (clipColour);
+        g.setColour (toJuce (clipColour));
         g.drawRoundedRectangle (bounds.reduced (0.5f), 3.0f, 1.0f);
         return;
     }
@@ -70,7 +73,7 @@ void MidiClipView::paint (juce::Graphics& g)
     juce::MidiMessageSequence workingSeq (sequence);
     workingSeq.updateMatchedPairs();
 
-    g.setColour (clipColour.brighter (0.3f));
+    g.setColour (toJuce (clipColour.brighter (0.3f)));
 
     for (int i = 0; i < workingSeq.getNumEvents(); ++i)
     {
@@ -100,7 +103,7 @@ void MidiClipView::paint (juce::Graphics& g)
     }
 
     // Draw clip border
-    g.setColour (clipColour);
+    g.setColour (toJuce (clipColour));
     g.drawRoundedRectangle (bounds.reduced (0.5f), 3.0f, 1.0f);
 }
 

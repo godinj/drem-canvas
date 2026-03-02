@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "dc/foundation/types.h"
 
 namespace dc
 {
@@ -31,7 +32,7 @@ private:
     bool selected = false;
     bool playhead = false;
 
-    juce::Colour getVelocityColour() const;
+    dc::Colour getVelocityColour() const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StepButton)
 };

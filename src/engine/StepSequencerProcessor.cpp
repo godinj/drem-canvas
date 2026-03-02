@@ -1,4 +1,5 @@
 #include "StepSequencerProcessor.h"
+#include "dc/foundation/types.h"
 #include <cmath>
 
 namespace dc
@@ -105,17 +106,17 @@ void StepSequencerProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 // Probability check
                 if (step.probability < 1.0)
                 {
-                    double rand = static_cast<double> (juce::Random::getSystemRandom().nextFloat());
+                    double rand = static_cast<double> (dc::randomFloat());
                     if (rand > step.probability)
                         continue;
                 }
 
-                int vel = juce::jlimit (1, 127, step.velocity);
+                int vel = std::clamp (step.velocity, 1, 127);
                 int channel = 10; // MIDI drum channel
 
                 // Note on
                 midiMessages.addEvent (
-                    juce::MidiMessage::noteOn (channel, row.noteNumber, static_cast<juce::uint8> (vel)),
+                    juce::MidiMessage::noteOn (channel, row.noteNumber, static_cast<uint8_t> (vel)),
                     sampleIdx);
 
                 // Schedule note-off

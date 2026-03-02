@@ -1,5 +1,7 @@
 #include "TempoMap.h"
+#include "dc/foundation/assert.h"
 #include <cmath>
+#include <cstdio>
 
 namespace dc
 {
@@ -8,13 +10,13 @@ TempoMap::TempoMap() {}
 
 void TempoMap::setTempo (double bpm)
 {
-    jassert (bpm > 0.0);
+    dc_assert (bpm > 0.0);
     tempo = bpm;
 }
 
 void TempoMap::setTimeSig (int numerator, int denominator)
 {
-    jassert (numerator > 0 && denominator > 0);
+    dc_assert (numerator > 0 && denominator > 0);
     timeSigNum = numerator;
     timeSigDen = denominator;
 }
@@ -70,13 +72,14 @@ TempoMap::BarBeatPosition TempoMap::samplesToBarBeat (int64_t samples, double sa
     return { bar, beat, tick };
 }
 
-juce::String TempoMap::formatBarBeat (const BarBeatPosition& pos) const
+std::string TempoMap::formatBarBeat (const BarBeatPosition& pos) const
 {
     // Display tick as 0-999 range (like standard DAW tick display)
     int tickDisplay = static_cast<int> (std::round (pos.tick * 960.0));
 
-    return juce::String (pos.bar) + "." + juce::String (pos.beat) + "."
-           + juce::String (tickDisplay).paddedLeft ('0', 3);
+    char buf[32];
+    std::snprintf (buf, sizeof (buf), "%d.%d.%03d", pos.bar, pos.beat, tickDisplay);
+    return std::string (buf);
 }
 
 } // namespace dc

@@ -1,4 +1,5 @@
 #include "StepSequencer.h"
+#include "dc/foundation/assert.h"
 
 namespace dc
 {
@@ -6,7 +7,7 @@ namespace dc
 StepSequencer::StepSequencer (juce::ValueTree sequencerState)
     : state (sequencerState)
 {
-    jassert (state.hasType (IDs::STEP_SEQUENCER));
+    dc_assert (state.hasType (IDs::STEP_SEQUENCER));
 }
 
 // --- Global properties ---
@@ -131,9 +132,9 @@ int StepSequencer::getRowNoteNumber (const juce::ValueTree& row)
     return row.getProperty (IDs::noteNumber, 36);
 }
 
-juce::String StepSequencer::getRowName (const juce::ValueTree& row)
+std::string StepSequencer::getRowName (const juce::ValueTree& row)
 {
-    return row.getProperty (IDs::name, "---");
+    return row.getProperty (IDs::name, "---").toString().toStdString();
 }
 
 bool StepSequencer::isRowMuted (const juce::ValueTree& row)
@@ -162,13 +163,13 @@ juce::ValueTree StepSequencer::createDefaultState()
 }
 
 juce::ValueTree StepSequencer::createDefaultPattern (int bankVal, int slotVal,
-                                                      const juce::String& patternName,
+                                                      const std::string& patternName,
                                                       int numStepsVal)
 {
     juce::ValueTree pattern (IDs::STEP_PATTERN);
     pattern.setProperty (IDs::bank, bankVal, nullptr);
     pattern.setProperty (IDs::slot, slotVal, nullptr);
-    pattern.setProperty (IDs::name, patternName, nullptr);
+    pattern.setProperty (IDs::name, patternName.c_str(), nullptr);
     pattern.setProperty (IDs::numSteps, numStepsVal, nullptr);
     pattern.setProperty (IDs::stepDivision, 4, nullptr);
 
@@ -189,7 +190,7 @@ juce::ValueTree StepSequencer::createDefaultPattern (int bankVal, int slotVal,
     {
         juce::ValueTree row (IDs::STEP_ROW);
         row.setProperty (IDs::noteNumber, dr.note, nullptr);
-        row.setProperty (IDs::name, juce::String (dr.name), nullptr);
+        row.setProperty (IDs::name, dr.name, nullptr);
         row.setProperty (IDs::mute, false, nullptr);
         row.setProperty (IDs::solo, false, nullptr);
 

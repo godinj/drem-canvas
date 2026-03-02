@@ -35,6 +35,9 @@
 #include "ui/keyboard/VirtualKeyboardWidget.h"
 #include "ui/pluginview/PluginViewWidget.h"
 #include "model/RecentProjects.h"
+#include "dc/foundation/message_queue.h"
+#include <filesystem>
+#include <vector>
 
 namespace dc
 {
@@ -99,10 +102,10 @@ private:
     // Session management
     void saveSession();
     void loadSession();
-    void loadSessionFromDirectory (const juce::File& dir);
+    void loadSessionFromDirectory (const std::filesystem::path& dir);
     void openFile();
-    void addTrackFromFile (const juce::File& file);
-    void addMidiTrack (const juce::String& name);
+    void addTrackFromFile (const std::filesystem::path& file);
+    void addMidiTrack (const std::string& name);
     void showAudioSettings();
 
     // Panel visibility
@@ -124,16 +127,17 @@ private:
     AudioEngine audioEngine;
     TransportController transportController;
     juce::AudioProcessorGraph::Node::Ptr mixBusNode;
-    juce::Array<TrackProcessor*> trackProcessors;
-    juce::Array<MidiClipProcessor*> midiClipProcessors;
-    juce::Array<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
-    juce::Array<juce::Array<PluginNodeInfo>> trackPluginChains;
-    juce::Array<MeterTapProcessor*> meterTapProcessors;
-    juce::Array<juce::AudioProcessorGraph::Node::Ptr> meterTapNodes;
-    juce::Array<juce::AudioProcessorGraph::Node::Ptr> fallbackSynthNodes;
+    std::vector<TrackProcessor*> trackProcessors;
+    std::vector<MidiClipProcessor*> midiClipProcessors;
+    std::vector<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
+    std::vector<std::vector<PluginNodeInfo>> trackPluginChains;
+    std::vector<MeterTapProcessor*> meterTapProcessors;
+    std::vector<juce::AudioProcessorGraph::Node::Ptr> meterTapNodes;
+    std::vector<juce::AudioProcessorGraph::Node::Ptr> fallbackSynthNodes;
     StepSequencerProcessor* sequencerProcessor = nullptr;
     juce::AudioProcessorGraph::Node::Ptr sequencerNode;
-    MidiEngine midiEngine;
+    dc::MessageQueue messageQueue;
+    MidiEngine midiEngine { messageQueue };
 
     // ─── Model ───────────────────────────────────────────
     Project project;
@@ -145,7 +149,7 @@ private:
     ActionRegistry actionRegistry;
     RecentProjects recentProjects;
 
-    juce::File currentSessionDirectory;
+    std::filesystem::path currentSessionDirectory;
 
     // ─── UI widgets ──────────────────────────────────────
     std::unique_ptr<TransportBarWidget> transportBar;

@@ -1,4 +1,7 @@
 #include "MixerPanel.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -88,11 +91,11 @@ void MixerPanel::setSelectedStripIndex (int index)
 
 void MixerPanel::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff1e1e2e));
+    g.fillAll (toJuce (0xff1e1e2eu));
 
     // Draw separator line before master strip
     const int separatorX = static_cast<int> (strips.size()) * stripWidth + 8;
-    g.setColour (juce::Colour (0xff555565));
+    g.setColour (toJuce (0xff555565u));
     g.drawVerticalLine (separatorX, 0.0f, static_cast<float> (getHeight()));
 }
 
@@ -121,12 +124,12 @@ void MixerPanel::paintOverChildren (juce::Graphics& g)
 {
     if (activeContext)
     {
-        g.setColour (juce::Colour (0xff50c878));
+        g.setColour (toJuce (0xff50c878u));
         g.fillRect (0, 0, getWidth(), 2);
     }
     else
     {
-        g.setColour (juce::Colour (0x28000000));
+        g.setColour (toJuce (0x28000000u));
         g.fillRect (getLocalBounds());
     }
 }

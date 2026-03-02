@@ -1,4 +1,5 @@
 #include "MidiClip.h"
+#include "dc/foundation/assert.h"
 
 namespace dc
 {
@@ -11,7 +12,7 @@ namespace
 MidiClip::MidiClip (const juce::ValueTree& s)
     : state (s)
 {
-    jassert (state.hasType (IDs::MIDI_CLIP));
+    dc_assert (state.hasType (IDs::MIDI_CLIP));
 }
 
 int64_t MidiClip::getStartPosition() const
@@ -38,8 +39,8 @@ juce::MidiMessageSequence MidiClip::getMidiSequence() const
 {
     juce::MidiMessageSequence result;
 
-    juce::String base64Data = state.getProperty (midiDataId, juce::String());
-    if (base64Data.isEmpty())
+    std::string base64Data = state.getProperty (midiDataId, "").toString().toStdString();
+    if (base64Data.empty())
         return result;
 
     juce::MemoryBlock block;
@@ -83,7 +84,7 @@ void MidiClip::setMidiSequence (const juce::MidiMessageSequence& seq, juce::Undo
     }
 
     juce::MemoryBlock block (stream.getData(), stream.getDataSize());
-    juce::String base64Data = block.toBase64Encoding();
+    auto base64Data = block.toBase64Encoding();
 
     state.setProperty (midiDataId, base64Data, um);
 }

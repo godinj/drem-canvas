@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "PluginManager.h"
+#include <string>
 
 namespace dc
 {
@@ -11,14 +12,20 @@ public:
     explicit PluginHost (PluginManager& manager);
 
     // Async plugin creation
-    using PluginCallback = std::function<void (std::unique_ptr<juce::AudioPluginInstance>, const juce::String& error)>;
+    using PluginCallback = std::function<void (std::unique_ptr<juce::AudioPluginInstance>, const std::string& error)>;
     void createPluginAsync (const juce::PluginDescription& desc,
                             double sampleRate, int blockSize,
                             PluginCallback callback);
 
+    // Synchronous plugin creation (wraps JUCE error output parameter)
+    static std::unique_ptr<juce::AudioPluginInstance> createPluginSync (
+        juce::AudioPluginFormatManager& formatManager,
+        const juce::PluginDescription& desc,
+        double sampleRate, int blockSize);
+
     // State save/restore as base64
-    static juce::String savePluginState (juce::AudioPluginInstance& plugin);
-    static void restorePluginState (juce::AudioPluginInstance& plugin, const juce::String& base64State);
+    static std::string savePluginState (juce::AudioPluginInstance& plugin);
+    static void restorePluginState (juce::AudioPluginInstance& plugin, const std::string& base64State);
 
     // Reconstruct PluginDescription from a PLUGIN ValueTree node
     static juce::PluginDescription descriptionFromValueTree (const juce::ValueTree& pluginNode);
@@ -26,7 +33,8 @@ public:
 private:
     PluginManager& pluginManager;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginHost)
+    PluginHost (const PluginHost&) = delete;
+    PluginHost& operator= (const PluginHost&) = delete;
 };
 
 } // namespace dc

@@ -74,8 +74,19 @@ juce_add_gui_app(DremCanvas
 
 juce_generate_juce_header(DremCanvas)
 
+# ─── dc::foundation config header ────────────────────────────
+configure_file(
+    "${CMAKE_SOURCE_DIR}/src/dc/foundation/config.h.in"
+    "${CMAKE_BINARY_DIR}/generated/dc/foundation/config.h"
+)
+
 # ─── Common sources ──────────────────────────────────────────
 target_sources(DremCanvas PRIVATE
+    # dc::foundation library
+    src/dc/foundation/base64.cpp
+    src/dc/foundation/message_queue.cpp
+    src/dc/foundation/worker_thread.cpp
+
     # Application entry point
     src/Main.cpp
 
@@ -257,6 +268,7 @@ endif()
 
 target_include_directories(DremCanvas PRIVATE
     src
+    "${CMAKE_BINARY_DIR}/generated"
     "${SKIA_DIR}/include"
     "${SKIA_DIR}"
 )

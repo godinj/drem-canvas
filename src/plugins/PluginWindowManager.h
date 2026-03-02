@@ -1,5 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
+#include <memory>
+#include <vector>
 
 namespace dc
 {
@@ -22,10 +24,11 @@ public:
     void closeAll();
 
 private:
-    juce::OwnedArray<PluginWindow> windows;
+    std::vector<std::unique_ptr<PluginWindow>> windows;
     std::map<juce::AudioPluginInstance*, PluginWindow*> pluginToWindow;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginWindowManager)
+    PluginWindowManager (const PluginWindowManager&) = delete;
+    PluginWindowManager& operator= (const PluginWindowManager&) = delete;
 };
 
 } // namespace dc

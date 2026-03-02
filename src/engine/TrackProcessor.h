@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "TransportController.h"
+#include <filesystem>
 
 namespace dc
 {
@@ -11,7 +12,7 @@ public:
     TrackProcessor (TransportController& transport);
     ~TrackProcessor() override;
 
-    bool loadFile (const juce::File& file);
+    bool loadFile (const std::filesystem::path& file);
     void clearFile();
 
     // AudioProcessor interface
@@ -63,7 +64,8 @@ private:
     std::atomic<float> peakLeft { 0.0f };
     std::atomic<float> peakRight { 0.0f };
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TrackProcessor)
+    TrackProcessor (const TrackProcessor&) = delete;
+    TrackProcessor& operator= (const TrackProcessor&) = delete;
 };
 
 } // namespace dc

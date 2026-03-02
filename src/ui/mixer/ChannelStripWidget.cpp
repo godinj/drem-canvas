@@ -1,6 +1,7 @@
 #include "ChannelStripWidget.h"
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/Theme.h"
+#include <string>
 
 namespace dc
 {
@@ -14,8 +15,8 @@ ChannelStripWidget::ChannelStripWidget (const juce::ValueTree& state)
       soloButton ("S"),
       fader (gfx::SliderWidget::LinearVertical)
 {
-    juce::String name = trackState.getProperty ("name", "Track");
-    nameLabel.setText (name.toStdString());
+    std::string name = trackState.getProperty ("name", "Track").toString().toStdString();
+    nameLabel.setText (name);
     nameLabel.setAlignment (gfx::LabelWidget::Centre);
     nameLabel.setFontSize (11.0f);
 

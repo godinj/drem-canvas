@@ -1,5 +1,10 @@
 #include "VimStatusBar.h"
 #include "model/Track.h"
+#include "gui/common/ColourBridge.h"
+#include "dc/foundation/types.h"
+#include <string>
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -20,7 +25,7 @@ VimStatusBar::~VimStatusBar()
 void VimStatusBar::paint (juce::Graphics& g)
 {
     auto area = getLocalBounds();
-    g.fillAll (juce::Colour (0xff181825));
+    g.fillAll (toJuce (0xff181825));
 
     auto font = juce::Font (juce::FontOptions (14.0f));
     g.setFont (font);
@@ -28,7 +33,7 @@ void VimStatusBar::paint (juce::Graphics& g)
     // ── Command mode — full-width command line ────────────────────────
     if (engine.getMode() == VimEngine::Command)
     {
-        g.setColour (juce::Colour (0xffcdd6f4));
+        g.setColour (toJuce (0xffcdd6f4));
         g.drawText (":" + engine.getCommandBuffer(), area.reduced (6, 0),
                     juce::Justification::centredLeft);
         return;
@@ -37,7 +42,7 @@ void VimStatusBar::paint (juce::Graphics& g)
     // ── Plugin search — full-width search line ──────────────────────────
     if (engine.getMode() == VimEngine::PluginMenu && engine.isPluginSearchActive())
     {
-        g.setColour (juce::Colour (0xffcdd6f4));
+        g.setColour (toJuce (0xffcdd6f4));
         g.drawText ("/" + engine.getPluginSearchBuffer(), area.reduced (6, 0),
                     juce::Justification::centredLeft);
         return;
@@ -45,51 +50,51 @@ void VimStatusBar::paint (juce::Graphics& g)
 
     // ── Mode segment ────────────────────────────────────────────────────
     auto modeArea = area.removeFromLeft (160);
-    juce::Colour modeColour;
+    dc::Colour modeColour;
     const char* modeText;
 
     switch (engine.getMode())
     {
-        case VimEngine::Normal:     modeColour = juce::Colour (0xff50c878); modeText = "-- NORMAL --"; break;
-        case VimEngine::Insert:     modeColour = juce::Colour (0xff4a9eff); modeText = "-- INSERT --"; break;
-        case VimEngine::PluginMenu: modeColour = juce::Colour (0xffcba6f7); modeText = "-- PLUGIN --"; break;
-        case VimEngine::Visual:     modeColour = juce::Colour (0xffff9944); modeText = "-- VISUAL --"; break;
-        case VimEngine::VisualLine: modeColour = juce::Colour (0xffff9944); modeText = "-- V-LINE --"; break;
-        default:                    modeColour = juce::Colour (0xff50c878); modeText = "-- NORMAL --"; break;
+        case VimEngine::Normal:     modeColour = dc::Colour (0xff50c878); modeText = "-- NORMAL --"; break;
+        case VimEngine::Insert:     modeColour = dc::Colour (0xff4a9eff); modeText = "-- INSERT --"; break;
+        case VimEngine::PluginMenu: modeColour = dc::Colour (0xffcba6f7); modeText = "-- PLUGIN --"; break;
+        case VimEngine::Visual:     modeColour = dc::Colour (0xffff9944); modeText = "-- VISUAL --"; break;
+        case VimEngine::VisualLine: modeColour = dc::Colour (0xffff9944); modeText = "-- V-LINE --"; break;
+        default:                    modeColour = dc::Colour (0xff50c878); modeText = "-- NORMAL --"; break;
     }
 
-    g.setColour (modeColour);
+    g.setColour (toJuce (modeColour));
     g.fillRect (modeArea);
 
-    g.setColour (juce::Colour (0xff181825));
+    g.setColour (toJuce (0xff181825));
     g.drawText (modeText, modeArea.reduced (6, 0), juce::Justification::centredLeft);
 
     // ── Pending state indicator ─────────────────────────────────────────
     if (engine.hasPendingState())
     {
         auto pendingArea = area.removeFromLeft (80);
-        g.setColour (juce::Colour (0xffffcc00)); // yellow
+        g.setColour (toJuce (0xffffcc00)); // yellow
         g.drawText (engine.getPendingDisplay(), pendingArea.reduced (4, 0),
                     juce::Justification::centredLeft);
     }
 
     // ── Context panel segment (prominent green on dark bg) ─────────────
     auto panelArea = area.removeFromLeft (120);
-    g.setColour (juce::Colour (0xff202030));
+    g.setColour (toJuce (0xff202030));
     g.fillRect (panelArea);
-    g.setColour (juce::Colour (0xff50c878));
+    g.setColour (toJuce (0xff50c878));
     g.drawText (context.getPanelName(), panelArea.reduced (6, 0),
                 juce::Justification::centredLeft);
 
     // ── Breadcrumb info segment (context-dependent) ─────────────────────
     auto cursorArea = area.removeFromLeft (280);
     int trackIdx = arrangement.getSelectedTrackIndex();
-    juce::String breadcrumb;
+    std::string breadcrumb;
 
     if (trackIdx >= 0 && trackIdx < arrangement.getNumTracks())
     {
         Track track = arrangement.getTrack (trackIdx);
-        juce::String trackInfo = "T" + juce::String (trackIdx + 1) + ":"
+        std::string trackInfo = "T" + std::to_string (trackIdx + 1) + ":"
                                + track.getName();
 
         auto panel = context.getPanel();
@@ -101,26 +106,26 @@ void VimStatusBar::paint (juce::Graphics& g)
 
             if (visSel.linewise)
             {
-                breadcrumb = "> T" + juce::String (minT) + "-T" + juce::String (maxT);
+                breadcrumb = "> T" + std::to_string (minT) + "-T" + std::to_string (maxT);
             }
             else
             {
                 int minC = std::min (visSel.startClip, visSel.endClip) + 1;
                 int maxC = std::max (visSel.startClip, visSel.endClip) + 1;
-                breadcrumb = "> T" + juce::String (minT) + "-T" + juce::String (maxT)
-                           + " > C" + juce::String (minC) + "-C" + juce::String (maxC);
+                breadcrumb = "> T" + std::to_string (minT) + "-T" + std::to_string (maxT)
+                           + " > C" + std::to_string (minC) + "-C" + std::to_string (maxC);
             }
         }
         else if (panel == VimContext::Editor)
         {
             breadcrumb = "> " + trackInfo + " > C"
-                       + juce::String (context.getSelectedClipIndex() + 1);
+                       + std::to_string (context.getSelectedClipIndex() + 1);
         }
         else if (panel == VimContext::Mixer && ! context.isMasterStripSelected())
         {
             auto focusName = context.getMixerFocusName();
             breadcrumb = "> " + trackInfo;
-            if (focusName.isNotEmpty())
+            if (! focusName.empty())
                 breadcrumb += " > " + focusName;
 
             if (context.getMixerFocus() == VimContext::FocusPlugins)
@@ -139,15 +144,15 @@ void VimStatusBar::paint (juce::Graphics& g)
         }
         else if (panel == VimContext::Sequencer)
         {
-            breadcrumb = "> R" + juce::String (context.getSeqRow() + 1)
-                       + " > S" + juce::String (context.getSeqStep() + 1);
+            breadcrumb = "> R" + std::to_string (context.getSeqRow() + 1)
+                       + " > S" + std::to_string (context.getSeqStep() + 1);
         }
     }
     else if (context.getPanel() == VimContext::Mixer && context.isMasterStripSelected())
     {
         auto focusName = context.getMixerFocusName();
         breadcrumb = "> Master";
-        if (focusName.isNotEmpty())
+        if (! focusName.empty())
             breadcrumb += " > " + focusName;
 
         if (context.getMixerFocus() == VimContext::FocusPlugins)
@@ -173,13 +178,13 @@ void VimStatusBar::paint (juce::Graphics& g)
         breadcrumb = "No track selected";
     }
 
-    g.setColour (juce::Colour (0xffa6adc8));
+    g.setColour (toJuce (0xffa6adc8));
     g.drawText (breadcrumb, cursorArea.reduced (6, 0),
                 juce::Justification::centredLeft);
 
     // ── Playhead info (right-aligned) ───────────────────────────────────
     auto playheadArea = area;
-    g.setColour (juce::Colour (0xffa6adc8));
+    g.setColour (toJuce (0xffa6adc8));
     g.drawText (transport.getTimeString(), playheadArea.reduced (6, 0),
                 juce::Justification::centredRight);
 }

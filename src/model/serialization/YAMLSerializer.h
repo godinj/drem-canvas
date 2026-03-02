@@ -1,6 +1,9 @@
 #pragma once
 #include <JuceHeader.h>
 #include <yaml-cpp/yaml.h>
+#include <string>
+#include <filesystem>
+#include "dc/foundation/types.h"
 
 namespace dc
 {
@@ -12,13 +15,13 @@ public:
     static YAML::Node emitSessionMeta (const juce::ValueTree& projectState, int trackCount);
 
     // Emit a single track as YAML
-    static YAML::Node emitTrack (const juce::ValueTree& trackState, const juce::File& sessionDir);
+    static YAML::Node emitTrack (const juce::ValueTree& trackState, const std::filesystem::path& sessionDir);
 
     // Parse session metadata YAML into a PROJECT ValueTree (without TRACKS children)
     static juce::ValueTree parseSessionMeta (const YAML::Node& node);
 
     // Parse a single track YAML into a TRACK ValueTree
-    static juce::ValueTree parseTrack (const YAML::Node& node, const juce::File& sessionDir);
+    static juce::ValueTree parseTrack (const YAML::Node& node, const std::filesystem::path& sessionDir);
 
     // Emit step sequencer as YAML
     static YAML::Node emitStepSequencer (const juce::ValueTree& sequencerState);
@@ -31,17 +34,17 @@ public:
     static void parsePluginChain (const YAML::Node& pluginsNode, juce::ValueTree& trackState);
 
 private:
-    static YAML::Node emitAudioClip (const juce::ValueTree& clipState, const juce::File& sessionDir);
+    static YAML::Node emitAudioClip (const juce::ValueTree& clipState, const std::filesystem::path& sessionDir);
     static YAML::Node emitMidiClip (const juce::ValueTree& clipState);
 
-    static juce::ValueTree parseAudioClip (const YAML::Node& node, const juce::File& sessionDir);
+    static juce::ValueTree parseAudioClip (const YAML::Node& node, const std::filesystem::path& sessionDir);
     static juce::ValueTree parseMidiClip (const YAML::Node& node);
 
-    static juce::String colourToHex (juce::Colour c);
-    static juce::Colour hexToColour (const juce::String& hex);
+    static std::string colourToHex (dc::Colour c);
+    static dc::Colour hexToColour (const std::string& hex);
 
-    static juce::String makeRelativePath (const juce::File& file, const juce::File& sessionDir);
-    static juce::File resolveRelativePath (const juce::String& relativePath, const juce::File& sessionDir);
+    static std::string makeRelativePath (const std::filesystem::path& file, const std::filesystem::path& sessionDir);
+    static std::filesystem::path resolveRelativePath (const std::string& relativePath, const std::filesystem::path& sessionDir);
 
     static YAML::Node emitStepPattern (const juce::ValueTree& patternState);
     static YAML::Node emitStepRow (const juce::ValueTree& rowState);

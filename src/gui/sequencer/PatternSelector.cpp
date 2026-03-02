@@ -1,4 +1,7 @@
 #include "PatternSelector.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -11,9 +14,9 @@ PatternSelector::PatternSelector (Project& p)
 
 void PatternSelector::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff1e1e2e));
+    g.fillAll (toJuce (0xff1e1e2eu));
 
-    g.setColour (juce::Colour (0xffcccccc));
+    g.setColour (toJuce (0xffccccccu));
     g.setFont (13.0f);
     g.drawText ("Pattern:", 4, 0, 60, preferredHeight, juce::Justification::centredLeft);
 }

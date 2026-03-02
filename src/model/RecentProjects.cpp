@@ -1,7 +1,10 @@
 #include "RecentProjects.h"
 #include "serialization/SessionReader.h"
+#include "dc/foundation/file_utils.h"
+#include "dc/foundation/time.h"
 #include <yaml-cpp/yaml.h>
 #include <algorithm>
+#include <fstream>
 
 namespace dc
 {
@@ -11,12 +14,12 @@ void RecentProjects::load()
     entries.clear();
 
     auto file = getRecentProjectsFile();
-    if (! file.existsAsFile())
+    if (! std::filesystem::exists (file))
         return;
 
     try
     {
-        auto root = YAML::LoadFile (file.getFullPathName().toStdString());
+        auto root = YAML::LoadFile (file.string());
         auto projects = root["recent_projects"];
 
         if (! projects.IsDefined() || ! projects.IsSequence())
@@ -44,7 +47,7 @@ void RecentProjects::load()
 void RecentProjects::save()
 {
     auto file = getRecentProjectsFile();
-    file.getParentDirectory().createDirectory();
+    std::filesystem::create_directories (file.parent_path());
 
     YAML::Emitter emitter;
     emitter << YAML::BeginMap;
@@ -63,17 +66,14 @@ void RecentProjects::save()
     emitter << YAML::EndSeq;
     emitter << YAML::EndMap;
 
-    // Atomic write: write to .tmp, then move into place
-    auto tmpFile = file.getSiblingFile (file.getFileName() + ".tmp");
-    if (tmpFile.replaceWithText (juce::String (emitter.c_str())))
-        tmpFile.moveFileTo (file);
+    dc::writeStringToFile (file, emitter.c_str());
 }
 
-void RecentProjects::addProject (const juce::File& dir)
+void RecentProjects::addProject (const std::filesystem::path& dir)
 {
-    auto fullPath = dir.getFullPathName().toStdString();
-    auto name = dir.getFileName().toStdString();
-    auto now = juce::Time::currentTimeMillis() / 1000;
+    auto fullPath = dir.string();
+    auto name = dir.filename().string();
+    auto now = dc::currentTimeMillis() / 1000;
 
     // Remove existing entry with the same path
     entries.erase (
@@ -107,16 +107,14 @@ void RecentProjects::pruneInvalid()
         std::remove_if (entries.begin(), entries.end(),
             [] (const RecentProjectEntry& e)
             {
-                return ! SessionReader::isValidSessionDirectory (juce::File (e.path));
+                return ! SessionReader::isValidSessionDirectory (e.path);
             }),
         entries.end());
 }
 
-juce::File RecentProjects::getRecentProjectsFile()
+std::filesystem::path RecentProjects::getRecentProjectsFile()
 {
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-               .getChildFile ("DremCanvas")
-               .getChildFile ("recent.yaml");
+    return dc::getUserAppDataDirectory() / "recent.yaml";
 }
 
 } // namespace dc

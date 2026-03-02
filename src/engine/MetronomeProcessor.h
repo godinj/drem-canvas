@@ -55,7 +55,8 @@ private:
 
     double previousBeatPosition = 0.0;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MetronomeProcessor)
+    MetronomeProcessor (const MetronomeProcessor&) = delete;
+    MetronomeProcessor& operator= (const MetronomeProcessor&) = delete;
 };
 
 } // namespace dc

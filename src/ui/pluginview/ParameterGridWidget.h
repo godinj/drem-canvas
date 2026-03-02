@@ -4,7 +4,9 @@
 #include "vim/VimContext.h"
 #include "vim/VimEngine.h"
 #include <JuceHeader.h>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace dc
 {
@@ -24,33 +26,34 @@ public:
 
     void setSelectedParamIndex (int index);
     void setHintMode (VimContext::HintMode mode);
-    void setHintBuffer (const juce::String& buffer);
+    void setHintBuffer (const std::string& buffer);
     void setNumberEntryActive (bool active);
-    void setNumberBuffer (const juce::String& buffer);
+    void setNumberBuffer (const std::string& buffer);
 
     /** Set spatial hint labels keyed by JUCE parameter index.
         When non-empty, these labels are shown instead of generated hints. */
-    void setSpatialHintMap (std::unordered_map<int, juce::String> map);
+    void setSpatialHintMap (std::unordered_map<int, std::string> map);
 
     int getNumParameters() const;
 
 private:
     juce::AudioPluginInstance* currentPlugin = nullptr;
-    juce::Array<juce::AudioProcessorParameter*> parameters;
+    std::vector<juce::AudioProcessorParameter*> parameters;
 
     int selectedParam = 0;
     VimContext::HintMode hintMode = VimContext::HintNone;
-    juce::String hintBuffer;
+    std::string hintBuffer;
     bool numberEntry = false;
-    juce::String numberBuffer;
-    std::unordered_map<int, juce::String> spatialHintMap;
+    std::string numberBuffer;
+    std::unordered_map<int, std::string> spatialHintMap;
 
     static constexpr float rowHeight = 24.0f;
     static constexpr float hintColWidth = 36.0f;
     static constexpr float nameColWidth = 180.0f;
     static constexpr float barColWidth = 120.0f;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ParameterGridWidget)
+    ParameterGridWidget (const ParameterGridWidget&) = delete;
+    ParameterGridWidget& operator= (const ParameterGridWidget&) = delete;
 };
 
 } // namespace ui

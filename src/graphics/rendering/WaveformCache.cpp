@@ -15,9 +15,9 @@ WaveformCache::~WaveformCache()
 {
 }
 
-void WaveformCache::loadFromFile (const juce::File& audioFile, juce::AudioFormatManager& formatManager)
+void WaveformCache::loadFromFile (const std::filesystem::path& audioFile, juce::AudioFormatManager& formatManager)
 {
-    std::unique_ptr<juce::AudioFormatReader> reader (formatManager.createReaderFor (audioFile));
+    std::unique_ptr<juce::AudioFormatReader> reader (formatManager.createReaderFor (juce::File (audioFile.string())));
     if (!reader)
         return;
 

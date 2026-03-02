@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <vector>
 
 namespace dc
 {
@@ -26,8 +27,8 @@ public:
 
         ContentType type = Empty;
         bool linewise = false;
-        juce::Array<ClipEntry> clipEntries;
-        juce::Array<NoteEntry> noteEntries;
+        std::vector<ClipEntry> clipEntries;
+        std::vector<NoteEntry> noteEntries;
 
         bool isEmpty() const    { return type == Empty; }
         bool hasClips() const   { return type == ClipContent; }
@@ -41,14 +42,14 @@ public:
     // reg = '\0' means unnamed register only (no explicit "x prefix)
     // isYank = true  → also writes "0 (yank register)
     // isYank = false → also rotates "1-"9 (delete history)
-    void storeClips (char reg, const juce::Array<ClipEntry>& entries,
+    void storeClips (char reg, const std::vector<ClipEntry>& entries,
                      bool linewise, bool isYank);
-    void storeNotes (char reg, const juce::Array<NoteEntry>& entries,
+    void storeNotes (char reg, const std::vector<NoteEntry>& entries,
                      bool isYank);
 
     // Convenience: store into unnamed register (backwards compat)
-    void storeClips (const juce::Array<ClipEntry>& entries, bool linewise);
-    void storeNotes (const juce::Array<NoteEntry>& entries);
+    void storeClips (const std::vector<ClipEntry>& entries, bool linewise);
+    void storeNotes (const std::vector<NoteEntry>& entries);
 
     // ─── Read access ────────────────────────────────────────────────
     // reg = '\0' means unnamed register
@@ -60,8 +61,8 @@ public:
     bool hasNotes() const   { return unnamed.hasNotes(); }
     bool isLinewise() const { return unnamed.linewise; }
 
-    const juce::Array<ClipEntry>& getClipEntries() const { return unnamed.clipEntries; }
-    const juce::Array<NoteEntry>& getNoteEntries() const { return unnamed.noteEntries; }
+    const std::vector<ClipEntry>& getClipEntries() const { return unnamed.clipEntries; }
+    const std::vector<NoteEntry>& getNoteEntries() const { return unnamed.noteEntries; }
     int getTrackSpan() const { return unnamed.getTrackSpan(); }
 
     // ─── Register validation ────────────────────────────────────────
@@ -71,10 +72,10 @@ public:
     static bool isNumberedRegister (char c);    // 0-9
 
 private:
-    void setRegister (RegisterEntry& reg, const juce::Array<ClipEntry>& entries, bool linewise);
-    void setRegister (RegisterEntry& reg, const juce::Array<NoteEntry>& entries);
-    void appendRegister (RegisterEntry& reg, const juce::Array<ClipEntry>& entries);
-    void appendRegister (RegisterEntry& reg, const juce::Array<NoteEntry>& entries);
+    void setRegister (RegisterEntry& reg, const std::vector<ClipEntry>& entries, bool linewise);
+    void setRegister (RegisterEntry& reg, const std::vector<NoteEntry>& entries);
+    void appendRegister (RegisterEntry& reg, const std::vector<ClipEntry>& entries);
+    void appendRegister (RegisterEntry& reg, const std::vector<NoteEntry>& entries);
     void rotateDeleteHistory();
 
     RegisterEntry& resolve (char reg);

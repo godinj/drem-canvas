@@ -1,4 +1,5 @@
 #include "UndoSystem.h"
+#include "dc/foundation/time.h"
 
 namespace dc
 {
@@ -8,9 +9,9 @@ UndoSystem::UndoSystem (juce::UndoManager& um)
 {
 }
 
-void UndoSystem::beginTransaction (const juce::String& name)
+void UndoSystem::beginTransaction (const std::string& name)
 {
-    undoManager.beginNewTransaction (name);
+    undoManager.beginNewTransaction (name.c_str());
     currentCoalescingName.clear();
     lastCoalescingTime = 0;
 }
@@ -21,9 +22,9 @@ void UndoSystem::endTransaction()
     // Provided for symmetry with beginTransaction.
 }
 
-void UndoSystem::beginCoalescedTransaction (const juce::String& name, int windowMs)
+void UndoSystem::beginCoalescedTransaction (const std::string& name, int windowMs)
 {
-    auto now = juce::Time::currentTimeMillis();
+    auto now = dc::currentTimeMillis();
 
     bool shouldCoalesce = (name == currentCoalescingName)
                           && (lastCoalescingTime != 0)
@@ -31,7 +32,7 @@ void UndoSystem::beginCoalescedTransaction (const juce::String& name, int window
 
     if (! shouldCoalesce)
     {
-        undoManager.beginNewTransaction (name);
+        undoManager.beginNewTransaction (name.c_str());
         currentCoalescingName = name;
         coalescingWindowMs = windowMs;
     }
@@ -59,14 +60,14 @@ bool UndoSystem::canRedo() const
     return undoManager.canRedo();
 }
 
-juce::String UndoSystem::getUndoDescription() const
+std::string UndoSystem::getUndoDescription() const
 {
-    return undoManager.getUndoDescription();
+    return undoManager.getUndoDescription().toStdString();
 }
 
-juce::String UndoSystem::getRedoDescription() const
+std::string UndoSystem::getRedoDescription() const
 {
-    return undoManager.getRedoDescription();
+    return undoManager.getRedoDescription().toStdString();
 }
 
 } // namespace dc

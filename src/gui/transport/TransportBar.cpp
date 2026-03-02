@@ -1,4 +1,10 @@
 #include "TransportBar.h"
+#include "gui/common/ColourBridge.h"
+#include "dc/foundation/types.h"
+#include "dc/foundation/string_utils.h"
+#include <string>
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -29,7 +35,7 @@ TransportBar::TransportBar (TransportController& transport, Project& proj, Tempo
     addAndMakeVisible (timeDisplay);
     timeDisplay.setFont (juce::Font (juce::Font::getDefaultMonospacedFontName(), 16.0f, juce::Font::plain));
     timeDisplay.setJustificationType (juce::Justification::centred);
-    timeDisplay.setColour (juce::Label::textColourId, juce::Colours::white);
+    timeDisplay.setColour (juce::Label::textColourId, toJuce (dc::Colours::white));
     timeDisplay.setText ("00:00.000", juce::dontSendNotification);
     timeDisplay.setInterceptsMouseClicks (true, false);
     timeDisplay.onClick = [this]
@@ -41,18 +47,18 @@ TransportBar::TransportBar (TransportController& transport, Project& proj, Tempo
     addAndMakeVisible (tempoDisplay);
     tempoDisplay.setFont (juce::Font (juce::Font::getDefaultMonospacedFontName(), 14.0f, juce::Font::plain));
     tempoDisplay.setJustificationType (juce::Justification::centred);
-    tempoDisplay.setColour (juce::Label::textColourId, juce::Colours::white);
+    tempoDisplay.setColour (juce::Label::textColourId, toJuce (dc::Colours::white));
     tempoDisplay.setEditable (false, true); // single-click: no, double-click: yes
-    tempoDisplay.setText (juce::String (project.getTempo(), 1) + " BPM", juce::dontSendNotification);
+    tempoDisplay.setText (dc::format ("%.1f", project.getTempo()) + " BPM", juce::dontSendNotification);
     tempoDisplay.addListener (this);
 
     // Time signature display (read-only)
     addAndMakeVisible (timeSigDisplay);
     timeSigDisplay.setFont (juce::Font (juce::Font::getDefaultMonospacedFontName(), 14.0f, juce::Font::plain));
     timeSigDisplay.setJustificationType (juce::Justification::centred);
-    timeSigDisplay.setColour (juce::Label::textColourId, juce::Colours::white);
-    timeSigDisplay.setText (juce::String (project.getTimeSigNumerator()) + "/"
-                            + juce::String (project.getTimeSigDenominator()),
+    timeSigDisplay.setColour (juce::Label::textColourId, toJuce (dc::Colours::white));
+    timeSigDisplay.setText (std::to_string (project.getTimeSigNumerator()) + "/"
+                            + std::to_string (project.getTimeSigDenominator()),
                             juce::dontSendNotification);
 
     // Toggle buttons
@@ -108,24 +114,24 @@ void TransportBar::timerCallback()
     bool armed = transportController.isRecordArmed();
     recordButton.setToggleState (armed, juce::dontSendNotification);
     recordButton.setColour (juce::TextButton::buttonColourId,
-                            armed ? juce::Colour (0xffcc3333) : juce::Colour (0xff3d3d5c));
+                            armed ? toJuce (0xffcc3333) : toJuce (0xff3d3d5c));
 
     // Update loop button state
     loopButton.setToggleState (transportController.isLooping(), juce::dontSendNotification);
 
     // Update tempo display (if not being edited)
     if (! tempoDisplay.isBeingEdited())
-        tempoDisplay.setText (juce::String (project.getTempo(), 1) + " BPM", juce::dontSendNotification);
+        tempoDisplay.setText (dc::format ("%.1f", project.getTempo()) + " BPM", juce::dontSendNotification);
 
     // Update time signature display
-    timeSigDisplay.setText (juce::String (project.getTimeSigNumerator()) + "/"
-                            + juce::String (project.getTimeSigDenominator()),
+    timeSigDisplay.setText (std::to_string (project.getTimeSigNumerator()) + "/"
+                            + std::to_string (project.getTimeSigDenominator()),
                             juce::dontSendNotification);
 }
 
 void TransportBar::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff2d2d3d));
+    g.fillAll (toJuce (0xff2d2d3d));
 }
 
 void TransportBar::resized()

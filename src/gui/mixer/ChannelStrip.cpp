@@ -1,4 +1,7 @@
 #include "ChannelStrip.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -89,7 +92,7 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state, UndoSystem* us)
     nameLabel.setText (trackState.getProperty (IDs::name, "Track").toString(),
                        juce::dontSendNotification);
     nameLabel.setJustificationType (juce::Justification::centred);
-    nameLabel.setColour (juce::Label::textColourId, juce::Colour (0xffe0e0e0));
+    nameLabel.setColour (juce::Label::textColourId, toJuce (0xffe0e0e0u));
     nameLabel.setFont (juce::Font (12.0f));
     addAndMakeVisible (nameLabel);
 
@@ -132,18 +135,18 @@ void ChannelStrip::setSelected (bool shouldBeSelected)
 void ChannelStrip::paint (juce::Graphics& g)
 {
     // Background fill — slightly brighter when selected
-    g.fillAll (selected ? juce::Colour (0xff33334a) : juce::Colour (0xff2a2a3a));
+    g.fillAll (selected ? toJuce (0xff33334au) : toJuce (0xff2a2a3au));
 
     // Top colour bar from track colour
     const auto colourValue = trackState.getProperty (IDs::colour, static_cast<int> (0xff4a9eff));
-    const auto trackColour = juce::Colour (static_cast<juce::uint32> (static_cast<int> (colourValue)));
+    const auto trackColour = toJuce (static_cast<uint32_t> (static_cast<int> (colourValue)));
     g.setColour (trackColour);
     g.fillRect (0, 0, getWidth(), 4);
 
     // Selection border
     if (selected)
     {
-        g.setColour (juce::Colour (0xff50c878));
+        g.setColour (toJuce (0xff50c878u));
         g.drawRect (getLocalBounds(), 2);
     }
 }
@@ -171,16 +174,16 @@ void ChannelStrip::paintOverChildren (juce::Graphics& g)
         {
             // Plugins: only draw a subtle border — individual slot highlights
             // inside PluginSlotList handle the per-slot selection feedback
-            g.setColour (juce::Colour (0xff50c878).withAlpha (0.4f));
+            g.setColour (toJuce (dc::Colour (0xff50c878u).withAlpha (0.4f)));
             g.drawRoundedRectangle (focusBounds, 2.0f, 1.0f);
         }
         else
         {
             // Volume / Pan: full highlight
-            g.setColour (juce::Colour (0xff50c878).withAlpha (0.18f));
+            g.setColour (toJuce (dc::Colour (0xff50c878u).withAlpha (0.18f)));
             g.fillRoundedRectangle (focusBounds, 2.0f);
 
-            g.setColour (juce::Colour (0xff50c878));
+            g.setColour (toJuce (0xff50c878u));
             g.drawRoundedRectangle (focusBounds, 2.0f, 1.5f);
         }
     }

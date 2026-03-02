@@ -57,50 +57,50 @@ const Clipboard::RegisterEntry& Clipboard::resolveConst (char reg) const
 }
 
 void Clipboard::setRegister (RegisterEntry& reg,
-                             const juce::Array<ClipEntry>& entries, bool isLinewise)
+                             const std::vector<ClipEntry>& entries, bool isLinewise)
 {
     reg.clipEntries.clear();
     reg.noteEntries.clear();
 
     for (auto& e : entries)
-        reg.clipEntries.add ({ e.clipData.createCopy(), e.trackOffset, e.timeOffset });
+        reg.clipEntries.push_back ({ e.clipData.createCopy(), e.trackOffset, e.timeOffset });
 
     reg.linewise = isLinewise;
-    reg.type = reg.clipEntries.isEmpty() ? RegisterEntry::Empty
+    reg.type = reg.clipEntries.empty() ? RegisterEntry::Empty
                                          : RegisterEntry::ClipContent;
 }
 
 void Clipboard::setRegister (RegisterEntry& reg,
-                             const juce::Array<NoteEntry>& entries)
+                             const std::vector<NoteEntry>& entries)
 {
     reg.clipEntries.clear();
     reg.noteEntries.clear();
 
     for (auto& e : entries)
-        reg.noteEntries.add ({ e.noteData.createCopy(), e.beatOffset });
+        reg.noteEntries.push_back ({ e.noteData.createCopy(), e.beatOffset });
 
     reg.linewise = false;
-    reg.type = reg.noteEntries.isEmpty() ? RegisterEntry::Empty
+    reg.type = reg.noteEntries.empty() ? RegisterEntry::Empty
                                          : RegisterEntry::NoteContent;
 }
 
 void Clipboard::appendRegister (RegisterEntry& reg,
-                                const juce::Array<ClipEntry>& entries)
+                                const std::vector<ClipEntry>& entries)
 {
     for (auto& e : entries)
-        reg.clipEntries.add ({ e.clipData.createCopy(), e.trackOffset, e.timeOffset });
+        reg.clipEntries.push_back ({ e.clipData.createCopy(), e.trackOffset, e.timeOffset });
 
-    if (! reg.clipEntries.isEmpty())
+    if (! reg.clipEntries.empty())
         reg.type = RegisterEntry::ClipContent;
 }
 
 void Clipboard::appendRegister (RegisterEntry& reg,
-                                const juce::Array<NoteEntry>& entries)
+                                const std::vector<NoteEntry>& entries)
 {
     for (auto& e : entries)
-        reg.noteEntries.add ({ e.noteData.createCopy(), e.beatOffset });
+        reg.noteEntries.push_back ({ e.noteData.createCopy(), e.beatOffset });
 
-    if (! reg.noteEntries.isEmpty())
+    if (! reg.noteEntries.empty())
         reg.type = RegisterEntry::NoteContent;
 }
 
@@ -120,7 +120,7 @@ void Clipboard::rotateDeleteHistory()
 
 // ─── Public store methods ───────────────────────────────────────────────────
 
-void Clipboard::storeClips (char reg, const juce::Array<ClipEntry>& entries,
+void Clipboard::storeClips (char reg, const std::vector<ClipEntry>& entries,
                             bool linewise, bool isYank)
 {
     // Always write the unnamed register
@@ -148,7 +148,7 @@ void Clipboard::storeClips (char reg, const juce::Array<ClipEntry>& entries,
     }
 }
 
-void Clipboard::storeNotes (char reg, const juce::Array<NoteEntry>& entries,
+void Clipboard::storeNotes (char reg, const std::vector<NoteEntry>& entries,
                             bool isYank)
 {
     setRegister (unnamed, entries);
@@ -174,12 +174,12 @@ void Clipboard::storeNotes (char reg, const juce::Array<NoteEntry>& entries,
 }
 
 // Backwards compat: unnamed register, yank semantics
-void Clipboard::storeClips (const juce::Array<ClipEntry>& entries, bool linewise)
+void Clipboard::storeClips (const std::vector<ClipEntry>& entries, bool linewise)
 {
     storeClips ('\0', entries, linewise, true);
 }
 
-void Clipboard::storeNotes (const juce::Array<NoteEntry>& entries)
+void Clipboard::storeNotes (const std::vector<NoteEntry>& entries)
 {
     storeNotes ('\0', entries, true);
 }

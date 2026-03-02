@@ -1,4 +1,5 @@
 #include "AudioClip.h"
+#include "dc/foundation/assert.h"
 
 namespace dc
 {
@@ -6,12 +7,12 @@ namespace dc
 AudioClip::AudioClip (const juce::ValueTree& s)
     : state (s)
 {
-    jassert (state.hasType (IDs::AUDIO_CLIP));
+    dc_assert (state.hasType (IDs::AUDIO_CLIP));
 }
 
-juce::File AudioClip::getSourceFile() const
+std::filesystem::path AudioClip::getSourceFile() const
 {
-    return juce::File (state.getProperty (IDs::sourceFile, juce::String()));
+    return std::filesystem::path (state.getProperty (IDs::sourceFile, "").toString().toStdString());
 }
 
 int64_t AudioClip::getStartPosition() const

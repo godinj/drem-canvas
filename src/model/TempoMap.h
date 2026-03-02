@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <string>
 
 namespace dc
 {
@@ -33,7 +34,7 @@ public:
     };
 
     BarBeatPosition samplesToBarBeat (int64_t samples, double sampleRate) const;
-    juce::String formatBarBeat (const BarBeatPosition& pos) const;
+    std::string formatBarBeat (const BarBeatPosition& pos) const;
 
 private:
     double tempo = 120.0;

@@ -1,6 +1,7 @@
 #include "StepSequencerWidget.h"
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/Theme.h"
+#include <string>
 
 namespace dc
 {
@@ -71,8 +72,9 @@ void StepSequencerWidget::rebuildFromModel()
     for (int r = 0; r < numRows; ++r)
     {
         auto row = seq.getRow (r);
-        juce::String label = row.getProperty ("label", "Row " + juce::String (r + 1));
-        labels.push_back (label.toStdString());
+        auto defaultLabel = "Row " + std::to_string (r + 1);
+        std::string label = row.getProperty ("label", defaultLabel.c_str()).toString().toStdString();
+        labels.push_back (label);
 
         for (int s = 0; s < numSteps; ++s)
         {

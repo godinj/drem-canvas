@@ -6,12 +6,12 @@
 namespace dc
 {
 
-bool SessionReader::isValidSessionDirectory (const juce::File& dir)
+bool SessionReader::isValidSessionDirectory (const std::filesystem::path& dir)
 {
-    return dir.isDirectory() && dir.getChildFile ("session.yaml").existsAsFile();
+    return std::filesystem::is_directory (dir) && std::filesystem::exists (dir / "session.yaml");
 }
 
-juce::ValueTree SessionReader::readSession (const juce::File& sessionDir)
+juce::ValueTree SessionReader::readSession (const std::filesystem::path& sessionDir)
 {
     if (! isValidSessionDirectory (sessionDir))
         return {};
@@ -19,8 +19,7 @@ juce::ValueTree SessionReader::readSession (const juce::File& sessionDir)
     try
     {
         // Parse session.yaml
-        auto sessionFile = sessionDir.getChildFile ("session.yaml");
-        auto sessionNode = YAML::LoadFile (sessionFile.getFullPathName().toStdString());
+        auto sessionNode = YAML::LoadFile ((sessionDir / "session.yaml").string());
 
         auto projectState = YAMLSerializer::parseSessionMeta (sessionNode);
         if (! projectState.isValid())
@@ -33,13 +32,12 @@ juce::ValueTree SessionReader::readSession (const juce::File& sessionDir)
 
         for (int i = 0; i < trackCount; ++i)
         {
-            auto filename = juce::String ("track-") + juce::String (i) + ".yaml";
-            auto trackFile = sessionDir.getChildFile (filename);
+            auto trackFile = sessionDir / ("track-" + std::to_string (i) + ".yaml");
 
-            if (! trackFile.existsAsFile())
+            if (! std::filesystem::exists (trackFile))
                 continue;
 
-            auto trackNode = YAML::LoadFile (trackFile.getFullPathName().toStdString());
+            auto trackNode = YAML::LoadFile (trackFile.string());
             auto trackState = YAMLSerializer::parseTrack (trackNode, sessionDir);
 
             if (trackState.isValid())
@@ -47,10 +45,10 @@ juce::ValueTree SessionReader::readSession (const juce::File& sessionDir)
         }
 
         // Parse sequencer.yaml if it exists
-        auto sequencerFile = sessionDir.getChildFile ("sequencer.yaml");
-        if (sequencerFile.existsAsFile())
+        auto sequencerFile = sessionDir / "sequencer.yaml";
+        if (std::filesystem::exists (sequencerFile))
         {
-            auto seqNode = YAML::LoadFile (sequencerFile.getFullPathName().toStdString());
+            auto seqNode = YAML::LoadFile (sequencerFile.string());
             auto seqState = YAMLSerializer::parseStepSequencer (seqNode);
             if (seqState.isValid())
                 projectState.appendChild (seqState, nullptr);

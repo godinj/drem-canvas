@@ -1,5 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
+#include <string>
+#include <vector>
 #include "plugins/PluginManager.h"
 
 namespace dc
@@ -16,7 +18,7 @@ public:
     void refreshPluginList();
 
     // External filter API (driven by VimEngine)
-    void setSearchFilter (const juce::String& query);
+    void setSearchFilter (const std::string& query);
     void clearSearchFilter();
 
     // Keyboard navigation
@@ -39,7 +41,7 @@ private:
     class PluginListModel : public juce::ListBoxModel
     {
     public:
-        explicit PluginListModel (juce::Array<juce::PluginDescription>& types)
+        explicit PluginListModel (std::vector<juce::PluginDescription>& types)
             : filteredTypes (types) {}
         int getNumRows() override;
         void paintListBoxItem (int rowNumber, juce::Graphics& g,
@@ -48,11 +50,11 @@ private:
 
         std::function<void (const juce::PluginDescription&)> onItemSelected;
     private:
-        juce::Array<juce::PluginDescription>& filteredTypes;
+        std::vector<juce::PluginDescription>& filteredTypes;
     };
 
-    juce::Array<juce::PluginDescription> filteredTypes;
-    juce::String searchFilter;
+    std::vector<juce::PluginDescription> filteredTypes;
+    std::string searchFilter;
     PluginListModel listModel;
     juce::TextButton scanButton { "Scan Plugins" };
 

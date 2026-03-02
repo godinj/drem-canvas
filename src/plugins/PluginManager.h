@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <filesystem>
 
 namespace dc
 {
@@ -18,16 +19,17 @@ public:
     juce::AudioPluginFormatManager& getFormatManager() { return formatManager; }
 
     // Persistence
-    void savePluginList (const juce::File& file) const;
-    void loadPluginList (const juce::File& file);
+    void savePluginList (const std::filesystem::path& file) const;
+    void loadPluginList (const std::filesystem::path& file);
 
-    juce::File getDefaultPluginListFile() const;
+    std::filesystem::path getDefaultPluginListFile() const;
 
 private:
     juce::AudioPluginFormatManager formatManager;
     juce::KnownPluginList knownPlugins;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginManager)
+    PluginManager (const PluginManager&) = delete;
+    PluginManager& operator= (const PluginManager&) = delete;
 };
 
 } // namespace dc

@@ -102,7 +102,8 @@ private:
     void addNoteOff (int noteNumber, int channel, int64_t offSample);
     void processNoteOffs (juce::MidiBuffer& midiMessages, int64_t blockStart, int numSamples);
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StepSequencerProcessor)
+    StepSequencerProcessor (const StepSequencerProcessor&) = delete;
+    StepSequencerProcessor& operator= (const StepSequencerProcessor&) = delete;
 };
 
 } // namespace dc

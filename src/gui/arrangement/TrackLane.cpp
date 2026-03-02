@@ -1,4 +1,8 @@
 #include "TrackLane.h"
+#include "gui/common/ColourBridge.h"
+#include <filesystem>
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -22,25 +26,25 @@ void TrackLane::paint (juce::Graphics& g)
     // Draw header area
     auto headerArea = bounds.removeFromLeft (headerWidth);
 
-    auto trackColour = juce::Colour (static_cast<juce::uint32> (static_cast<int> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4488aa)))));
+    dc::Colour trackColour (static_cast<uint32_t> (static_cast<int> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4488aa)))));
 
     if (selected || inVisualSelection)
     {
         // Brighter header when selected
-        g.setColour (trackColour.darker (0.2f));
+        g.setColour (toJuce (trackColour.darker (0.2f)));
         g.fillRect (headerArea);
 
         // Accent strip on left edge — orange for visual, green for normal
-        g.setColour (inVisualSelection ? juce::Colour (0xffff9944) : juce::Colour (0xff50c878));
+        g.setColour (inVisualSelection ? toJuce (0xffff9944) : toJuce (0xff50c878));
         g.fillRect (headerArea.removeFromLeft (3));
     }
     else
     {
-        g.setColour (trackColour.darker (0.5f));
+        g.setColour (toJuce (trackColour.darker (0.5f)));
         g.fillRect (headerArea);
     }
 
-    g.setColour (juce::Colours::white);
+    g.setColour (toJuce (dc::Colours::white));
     g.setFont (juce::Font (14.0f));
     g.drawText (trackState.getProperty (IDs::name, "Untitled").toString(),
                 headerArea.reduced (8, 0),
@@ -50,13 +54,13 @@ void TrackLane::paint (juce::Graphics& g)
     // Subtle tint over lane body when selected or in visual selection
     if (selected || inVisualSelection)
     {
-        auto tintColour = inVisualSelection ? juce::Colour (0xffff9944) : juce::Colour (0xff50c878);
-        g.setColour (tintColour.withAlpha (0.06f));
+        dc::Colour tintColour = inVisualSelection ? dc::Colour (0xffff9944) : dc::Colour (0xff50c878);
+        g.setColour (toJuce (tintColour.withAlpha (0.06f)));
         g.fillRect (bounds);
     }
 
     // Draw horizontal separator at bottom
-    g.setColour (juce::Colours::white.withAlpha (0.15f));
+    g.setColour (toJuce (dc::Colours::white.withAlpha (0.15f)));
     g.drawHorizontalLine (getHeight() - 1, 0.0f, static_cast<float> (getWidth()));
 }
 
@@ -65,7 +69,7 @@ void TrackLane::paintOverChildren (juce::Graphics& g)
     // Visual selection highlight
     if (inVisualSelection)
     {
-        auto highlightColour = juce::Colour (0xffff9944); // orange
+        dc::Colour highlightColour (0xffff9944); // orange
 
         if (visualLinewise)
         {
@@ -73,9 +77,9 @@ void TrackLane::paintOverChildren (juce::Graphics& g)
             for (auto* clipView : clipViews)
             {
                 auto clipBounds = clipView->getBounds().toFloat();
-                g.setColour (highlightColour.withAlpha (0.25f));
+                g.setColour (toJuce (highlightColour.withAlpha (0.25f)));
                 g.fillRoundedRectangle (clipBounds.expanded (2.0f), 3.0f);
-                g.setColour (highlightColour);
+                g.setColour (toJuce (highlightColour));
                 g.drawRoundedRectangle (clipBounds, 3.0f, 2.0f);
             }
         }
@@ -89,9 +93,9 @@ void TrackLane::paintOverChildren (juce::Graphics& g)
             {
                 auto* clipView = clipViews[i];
                 auto clipBounds = clipView->getBounds().toFloat();
-                g.setColour (highlightColour.withAlpha (0.25f));
+                g.setColour (toJuce (highlightColour.withAlpha (0.25f)));
                 g.fillRoundedRectangle (clipBounds.expanded (2.0f), 3.0f);
-                g.setColour (highlightColour);
+                g.setColour (toJuce (highlightColour));
                 g.drawRoundedRectangle (clipBounds, 3.0f, 2.0f);
             }
         }
@@ -106,11 +110,11 @@ void TrackLane::paintOverChildren (juce::Graphics& g)
     auto clipBounds = clipView->getBounds().toFloat();
 
     // Outer glow
-    g.setColour (juce::Colour (0xff50c878).withAlpha (0.25f));
+    g.setColour (toJuce (dc::Colour (0xff50c878).withAlpha (0.25f)));
     g.fillRoundedRectangle (clipBounds.expanded (2.0f), 3.0f);
 
     // Selection border
-    g.setColour (juce::Colour (0xff50c878));
+    g.setColour (toJuce (0xff50c878));
     g.drawRoundedRectangle (clipBounds, 3.0f, 2.0f);
 }
 
@@ -150,7 +154,7 @@ void TrackLane::rebuildClipViews()
 {
     clipViews.clear();
 
-    auto trackColour = juce::Colour (static_cast<juce::uint32> (static_cast<int> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4488aa)))));
+    dc::Colour trackColour (static_cast<uint32_t> (static_cast<int> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4488aa)))));
 
     for (int i = 0; i < trackState.getNumChildren(); ++i)
     {
@@ -161,10 +165,10 @@ void TrackLane::rebuildClipViews()
             auto* clipView = clipViews.add (new WaveformView());
             clipView->setWaveformColour (trackColour);
 
-            juce::String filePath = child.getProperty (IDs::sourceFile, "").toString();
+            std::string filePath = child.getProperty (IDs::sourceFile, "").toString().toStdString();
 
-            if (filePath.isNotEmpty())
-                clipView->setFile (juce::File (filePath));
+            if (! filePath.empty())
+                clipView->setFile (std::filesystem::path (filePath));
 
             addAndMakeVisible (clipView);
         }

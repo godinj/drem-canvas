@@ -1,4 +1,5 @@
 #include "TrackProcessor.h"
+#include "dc/foundation/types.h"
 #include <cmath>
 
 namespace dc
@@ -18,9 +19,9 @@ TrackProcessor::~TrackProcessor()
     readerSource.reset();
 }
 
-bool TrackProcessor::loadFile (const juce::File& file)
+bool TrackProcessor::loadFile (const std::filesystem::path& file)
 {
-    auto* reader = formatManager.createReaderFor (file);
+    auto* reader = formatManager.createReaderFor (juce::File (file.string())); // JUCE API boundary
 
     if (reader == nullptr)
         return false;
@@ -90,7 +91,7 @@ void TrackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // Equal-power panning
     // pan ranges from -1.0 (full left) to 1.0 (full right), 0.0 = center
-    float angle   = currentPan * juce::MathConstants<float>::pi * 0.25f + juce::MathConstants<float>::pi * 0.25f;
+    float angle   = currentPan * dc::pi<float> * 0.25f + dc::pi<float> * 0.25f;
     float leftAmp  = currentGain * std::cos (angle);
     float rightAmp = currentGain * std::sin (angle);
 

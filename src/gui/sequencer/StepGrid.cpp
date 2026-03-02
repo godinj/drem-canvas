@@ -1,5 +1,8 @@
 #include "StepGrid.h"
 #include "utils/UndoSystem.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -23,7 +26,7 @@ StepGrid::~StepGrid()
 
 void StepGrid::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff1a1a2a));
+    g.fillAll (toJuce (0xff1a1a2au));
 
     // Draw row labels
     auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
@@ -43,11 +46,11 @@ void StepGrid::paint (juce::Graphics& g)
         auto labelBounds = juce::Rectangle<int> (4, r * rowHeight, rowLabelWidth - 8, rowHeight);
 
         if (muted)
-            g.setColour (juce::Colour (0xff666666));
+            g.setColour (toJuce (0xff666666u));
         else if (soloed)
-            g.setColour (juce::Colour (0xffffff00));
+            g.setColour (toJuce (0xffffff00u));
         else
-            g.setColour (juce::Colour (0xffcccccc));
+            g.setColour (toJuce (0xffccccccu));
 
         g.drawText (rowName, labelBounds, juce::Justification::centredLeft, true);
     }
@@ -55,7 +58,7 @@ void StepGrid::paint (juce::Graphics& g)
     // Draw beat-group separators
     if (numSteps > 0)
     {
-        g.setColour (juce::Colour (0xff444466));
+        g.setColour (toJuce (0xff444466u));
         for (int s = 4; s < numSteps; s += 4)
         {
             int x = rowLabelWidth + s * stepSize;

@@ -70,8 +70,8 @@ public:
 
     // ─── Identification ──────────────────────────────────
 
-    void setId (const juce::String& newId) { widgetId = newId; }
-    const juce::String& getId() const { return widgetId; }
+    void setId (const std::string& newId) { widgetId = newId; }
+    const std::string& getId() const { return widgetId; }
 
     // ─── ValueTree::Listener overrides (empty defaults) ──
 
@@ -90,7 +90,7 @@ protected:
     bool focused = false;
     bool focusable = false;
     bool animating = false;
-    juce::String widgetId;
+    std::string widgetId;
 
 private:
     static Widget* globalFocusedWidget;

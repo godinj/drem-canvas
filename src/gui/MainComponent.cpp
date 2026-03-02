@@ -5,6 +5,12 @@
 #include "model/StepSequencer.h"
 #include "gui/mixer/ChannelStrip.h"
 #include "gui/browser/BrowserPanel.h"
+#include "gui/common/ColourBridge.h"
+#include "dc/foundation/types.h"
+#include <filesystem>
+#include <string>
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -121,7 +127,7 @@ MainComponent::MainComponent()
     vimEngine->addListener (this);
 
     // Wire :plugin command
-    vimEngine->onPluginCommand = [this] (const juce::String& pluginName)
+    vimEngine->onPluginCommand = [this] (const std::string& pluginName)
     {
         auto& knownPlugins = pluginManager.getKnownPlugins();
         auto types = knownPlugins.getTypes();
@@ -164,13 +170,13 @@ MainComponent::MainComponent()
             // Master strip
             if (pluginIndex < masterPluginChain.size())
             {
-                auto& info = masterPluginChain.getReference (pluginIndex);
+                auto& info = masterPluginChain[static_cast<size_t> (pluginIndex)];
                 pluginWindowManager.closeEditorForPlugin (info.plugin);
 
                 audioEngine.getGraph().suspendProcessing (true);
                 disconnectMasterPluginChain();
                 audioEngine.removeProcessor (info.node->nodeID);
-                masterPluginChain.remove (pluginIndex);
+                masterPluginChain.erase (masterPluginChain.begin() + pluginIndex);
 
                 // Remove from model
                 auto masterBus = project.getMasterBusState();
@@ -191,13 +197,14 @@ MainComponent::MainComponent()
             if (trackIdx < trackPluginChains.size()
                 && pluginIndex < trackPluginChains[trackIdx].size())
             {
-                auto& info = trackPluginChains[trackIdx].getReference (pluginIndex);
+                auto& info = trackPluginChains[static_cast<size_t> (trackIdx)][static_cast<size_t> (pluginIndex)];
                 pluginWindowManager.closeEditorForPlugin (info.plugin);
 
                 audioEngine.getGraph().suspendProcessing (true);
                 disconnectTrackPluginChain (trackIdx);
                 audioEngine.removeProcessor (info.node->nodeID);
-                trackPluginChains.getReference (trackIdx).remove (pluginIndex);
+                auto& chainVec = trackPluginChains[static_cast<size_t> (trackIdx)];
+                chainVec.erase (chainVec.begin() + pluginIndex);
                 connectTrackPluginChain (trackIdx);
                 audioEngine.getGraph().suspendProcessing (false);
             }
@@ -255,7 +262,8 @@ MainComponent::MainComponent()
                 disconnectMasterPluginChain();
 
                 chain.moveChild (fromIndex, toIndex, &project.getUndoManager());
-                masterPluginChain.swap (fromIndex, toIndex);
+                std::swap (masterPluginChain[static_cast<size_t> (fromIndex)],
+                           masterPluginChain[static_cast<size_t> (toIndex)]);
 
                 connectMasterPluginChain();
                 audioEngine.getGraph().suspendProcessing (false);
@@ -272,7 +280,9 @@ MainComponent::MainComponent()
                 disconnectTrackPluginChain (trackIdx);
 
                 t.movePlugin (fromIndex, toIndex, &project.getUndoManager());
-                trackPluginChains.getReference (trackIdx).swap (fromIndex, toIndex);
+                auto& chainVec = trackPluginChains[static_cast<size_t> (trackIdx)];
+                std::swap (chainVec[static_cast<size_t> (fromIndex)],
+                           chainVec[static_cast<size_t> (toIndex)]);
 
                 connectTrackPluginChain (trackIdx);
                 audioEngine.getGraph().suspendProcessing (false);
@@ -313,7 +323,7 @@ MainComponent::MainComponent()
         resized();
     };
 
-    vimEngine->onPluginMenuFilter = [this] (const juce::String& query)
+    vimEngine->onPluginMenuFilter = [this] (const std::string& query)
     {
         if (auto* bp = dynamic_cast<BrowserPanel*> (browserPanel.get()))
             bp->setSearchFilter (query);
@@ -371,7 +381,7 @@ MainComponent::~MainComponent()
 
 void MainComponent::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff1e1e2e));
+    g.fillAll (toJuce (0xff1e1e2e));
 }
 
 void MainComponent::resized()
@@ -417,7 +427,7 @@ void MainComponent::showAudioSettings()
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (selector);
     options.dialogTitle = "Audio Settings";
-    options.dialogBackgroundColour = juce::Colour (0xff1e1e2e);
+    options.dialogBackgroundColour = toJuce (0xff1e1e2e);
     options.escapeKeyTriggersCloseButton = true;
     options.useNativeTitleBar = true;
     options.resizable = false;
@@ -427,7 +437,7 @@ void MainComponent::showAudioSettings()
 void MainComponent::openFile()
 {
     auto chooser = std::make_shared<juce::FileChooser> (
-        "Select an audio file...", juce::File{},
+        "Select an audio file...", juce::File{}, // JUCE API boundary
         "*.wav;*.aiff;*.mp3;*.flac;*.ogg");
 
     chooser->launchAsync (juce::FileBrowserComponent::openMode
@@ -436,13 +446,13 @@ void MainComponent::openFile()
         {
             auto file = fc.getResult();
             if (file.existsAsFile())
-                addTrackFromFile (file);
+                addTrackFromFile (std::filesystem::path (file.getFullPathName().toStdString()));
         });
 }
 
-void MainComponent::addTrackFromFile (const juce::File& file)
+void MainComponent::addTrackFromFile (const std::filesystem::path& file)
 {
-    auto trackName = file.getFileNameWithoutExtension();
+    auto trackName = file.stem().string();
     auto trackState = project.addTrack (trackName);
 
     // Create track processor to get file length
@@ -451,7 +461,7 @@ void MainComponent::addTrackFromFile (const juce::File& file)
     {
         auto length = tempProcessor->getFileLengthInSamples();
         Track track (trackState);
-        track.addAudioClip (file, 0, length);
+        track.addAudioClip (file.string(), 0, length);
     }
 
     rebuildAudioGraph();
@@ -524,9 +534,9 @@ void MainComponent::rebuildAudioGraph()
             processorPtr->setTempo (project.getTempo());
 
             auto node = audioEngine.addProcessor (std::move (processor));
-            trackProcessors.add (nullptr);           // no TrackProcessor for MIDI tracks
-            midiClipProcessors.add (processorPtr);
-            trackNodes.add (node);
+            trackProcessors.push_back (nullptr);           // no TrackProcessor for MIDI tracks
+            midiClipProcessors.push_back (processorPtr);
+            trackNodes.push_back (node);
         }
         else
         {
@@ -546,44 +556,43 @@ void MainComponent::rebuildAudioGraph()
             processorPtr->setMuted (track.isMuted());
 
             auto node = audioEngine.addProcessor (std::move (processor));
-            trackProcessors.add (processorPtr);
-            midiClipProcessors.add (nullptr);        // no MidiClipProcessor for audio tracks
-            trackNodes.add (node);
+            trackProcessors.push_back (processorPtr);
+            midiClipProcessors.push_back (nullptr);        // no MidiClipProcessor for audio tracks
+            trackNodes.push_back (node);
         }
 
         // Instantiate plugin chain from model
-        juce::Array<PluginNodeInfo> pluginChain;
+        std::vector<PluginNodeInfo> pluginChain;
 
         for (int p = 0; p < track.getNumPlugins(); ++p)
         {
             auto pluginState = track.getPlugin (p);
             auto desc = PluginHost::descriptionFromValueTree (pluginState);
 
-            juce::String error;
-            auto instance = pluginManager.getFormatManager().createPluginInstance (
-                desc, sampleRate, blockSize, error);
+            auto instance = PluginHost::createPluginSync (
+                pluginManager.getFormatManager(), desc, sampleRate, blockSize);
 
             if (instance != nullptr)
             {
                 // Restore plugin state
-                juce::String base64State = pluginState.getProperty (IDs::pluginState, juce::String());
+                auto base64State = pluginState.getProperty (IDs::pluginState, "").toString();
                 if (base64State.isNotEmpty())
-                    PluginHost::restorePluginState (*instance, base64State);
+                    PluginHost::restorePluginState (*instance, base64State.toStdString());
 
                 auto* pluginPtr = instance.get();
                 auto pluginNode = audioEngine.addProcessor (std::move (instance));
-                pluginChain.add ({ pluginNode, pluginPtr });
+                pluginChain.push_back ({ pluginNode, pluginPtr });
             }
         }
 
-        trackPluginChains.add (pluginChain);
+        trackPluginChains.push_back (pluginChain);
 
         // Create meter tap for this track (sits at end of chain, before MixBus)
         auto meterTap = std::make_unique<MeterTapProcessor>();
         auto* meterTapPtr = meterTap.get();
         auto meterTapNode = audioEngine.addProcessor (std::move (meterTap));
-        meterTapProcessors.add (meterTapPtr);
-        meterTapNodes.add (meterTapNode);
+        meterTapProcessors.push_back (meterTapPtr);
+        meterTapNodes.push_back (meterTapNode);
 
         // Wire chain: TrackNode → Plugin1 → Plugin2 → ... → MeterTap → MixBus
         connectTrackPluginChain (i);
@@ -641,17 +650,18 @@ void MainComponent::rebuildAudioGraph()
                     Track t (trackState);
 
                     // Close editor if open
-                    if (trackIndex < trackPluginChains.size()
-                        && pluginIndex < trackPluginChains[trackIndex].size())
+                    if (trackIndex < static_cast<int> (trackPluginChains.size())
+                        && pluginIndex < static_cast<int> (trackPluginChains[static_cast<size_t> (trackIndex)].size()))
                     {
-                        auto& info = trackPluginChains[trackIndex].getReference (pluginIndex);
+                        auto& info = trackPluginChains[static_cast<size_t> (trackIndex)][static_cast<size_t> (pluginIndex)];
                         pluginWindowManager.closeEditorForPlugin (info.plugin);
 
                         // Remove from graph
                         audioEngine.getGraph().suspendProcessing (true);
                         disconnectTrackPluginChain (trackIndex);
                         audioEngine.removeProcessor (info.node->nodeID);
-                        trackPluginChains.getReference (trackIndex).remove (pluginIndex);
+                        auto& chainVec = trackPluginChains[static_cast<size_t> (trackIndex)];
+                        chainVec.erase (chainVec.begin() + pluginIndex);
                         connectTrackPluginChain (trackIndex);
                         audioEngine.getGraph().suspendProcessing (false);
                     }
@@ -881,7 +891,7 @@ void MainComponent::saveSession()
 
     auto chooser = std::make_shared<juce::FileChooser> (
         "Save Session Directory...",
-        currentSessionDirectory.exists() ? currentSessionDirectory : juce::File::getSpecialLocation (juce::File::userHomeDirectory),
+        std::filesystem::exists (currentSessionDirectory) ? juce::File (currentSessionDirectory.string()) : juce::File::getSpecialLocation (juce::File::userHomeDirectory), // JUCE API boundary
         "");
 
     chooser->launchAsync (juce::FileBrowserComponent::saveMode
@@ -889,12 +899,12 @@ void MainComponent::saveSession()
         [this, chooser] (const juce::FileChooser& fc)
         {
             auto dir = fc.getResult();
-            if (dir == juce::File())
+            if (dir == juce::File()) // JUCE API boundary
                 return;
 
-            if (project.saveSessionToDirectory (dir))
+            if (project.saveSessionToDirectory (dir.getFullPathName().toStdString()))
             {
-                currentSessionDirectory = dir;
+                currentSessionDirectory = std::filesystem::path (dir.getFullPathName().toStdString());
             }
             else
             {
@@ -908,7 +918,7 @@ void MainComponent::loadSession()
 {
     auto chooser = std::make_shared<juce::FileChooser> (
         "Load Session Directory...",
-        currentSessionDirectory.exists() ? currentSessionDirectory : juce::File::getSpecialLocation (juce::File::userHomeDirectory),
+        std::filesystem::exists (currentSessionDirectory) ? juce::File (currentSessionDirectory.string()) : juce::File::getSpecialLocation (juce::File::userHomeDirectory), // JUCE API boundary
         "");
 
     chooser->launchAsync (juce::FileBrowserComponent::openMode
@@ -916,7 +926,7 @@ void MainComponent::loadSession()
         [this, chooser] (const juce::FileChooser& fc)
         {
             auto dir = fc.getResult();
-            if (dir == juce::File() || ! dir.isDirectory())
+            if (dir == juce::File() || ! dir.isDirectory()) // JUCE API boundary
                 return;
 
             // Save ref to old state so we can detach widget listeners after replacement
@@ -925,9 +935,9 @@ void MainComponent::loadSession()
             oldState.getChildWithName (IDs::TRACKS).removeListener (arrangementView.get());
             oldState.getChildWithName (IDs::TRACKS).removeListener (mixerPanel.get());
 
-            if (project.loadSessionFromDirectory (dir))
+            if (project.loadSessionFromDirectory (dir.getFullPathName().toStdString()))
             {
-                currentSessionDirectory = dir;
+                currentSessionDirectory = std::filesystem::path (dir.getFullPathName().toStdString());
 
                 // Re-add listeners on the new state tree
                 project.getState().addListener (this);
@@ -1138,17 +1148,17 @@ void MainComponent::connectTrackPluginChain (int trackIndex)
         || trackIndex >= trackPluginChains.size() || mixBusNode == nullptr)
         return;
 
-    auto trackNode = trackNodes[trackIndex];
-    auto& chain = trackPluginChains.getReference (trackIndex);
+    auto trackNode = trackNodes[static_cast<size_t> (trackIndex)];
+    auto& chain = trackPluginChains[static_cast<size_t> (trackIndex)];
     auto trackState = project.getTrack (trackIndex);
     Track track (trackState);
 
     // Build list of enabled plugin nodes
-    juce::Array<juce::AudioProcessorGraph::Node::Ptr> enabledNodes;
-    for (int p = 0; p < chain.size(); ++p)
+    std::vector<juce::AudioProcessorGraph::Node::Ptr> enabledNodes;
+    for (int p = 0; p < static_cast<int> (chain.size()); ++p)
     {
         if (track.isPluginEnabled (p))
-            enabledNodes.add (chain[p].node);
+            enabledNodes.push_back (chain[static_cast<size_t> (p)].node);
     }
 
     // Wire: TrackNode → Plugin1 → Plugin2 → ... → MixBus (audio)
@@ -1193,8 +1203,8 @@ void MainComponent::disconnectTrackPluginChain (int trackIndex)
         return;
 
     auto& graph = audioEngine.getGraph();
-    auto trackNode = trackNodes[trackIndex];
-    auto& chain = trackPluginChains.getReference (trackIndex);
+    auto trackNode = trackNodes[static_cast<size_t> (trackIndex)];
+    auto& chain = trackPluginChains[static_cast<size_t> (trackIndex)];
 
     // Remove all connections from the track node output
     for (auto& conn : graph.getConnections())
@@ -1227,11 +1237,11 @@ void MainComponent::disconnectTrackPluginChain (int trackIndex)
 
 void MainComponent::openPluginEditor (int trackIndex, int pluginIndex)
 {
-    if (trackIndex < 0 || trackIndex >= trackPluginChains.size())
+    if (trackIndex < 0 || trackIndex >= static_cast<int> (trackPluginChains.size()))
         return;
 
-    auto& chain = trackPluginChains.getReference (trackIndex);
-    if (pluginIndex < 0 || pluginIndex >= chain.size())
+    auto& chain = trackPluginChains[static_cast<size_t> (trackIndex)];
+    if (pluginIndex < 0 || pluginIndex >= static_cast<int> (chain.size()))
         return;
 
     auto* plugin = chain[pluginIndex].plugin;
@@ -1241,13 +1251,13 @@ void MainComponent::openPluginEditor (int trackIndex, int pluginIndex)
 
 void MainComponent::captureAllPluginStates()
 {
-    for (int i = 0; i < project.getNumTracks() && i < trackPluginChains.size(); ++i)
+    for (int i = 0; i < project.getNumTracks() && i < static_cast<int> (trackPluginChains.size()); ++i)
     {
         auto trackState = project.getTrack (i);
         Track track (trackState);
-        auto& chain = trackPluginChains.getReference (i);
+        auto& chain = trackPluginChains[static_cast<size_t> (i)];
 
-        for (int p = 0; p < chain.size() && p < track.getNumPlugins(); ++p)
+        for (int p = 0; p < static_cast<int> (chain.size()) && p < track.getNumPlugins(); ++p)
         {
             if (chain[p].plugin != nullptr)
             {
@@ -1260,11 +1270,11 @@ void MainComponent::captureAllPluginStates()
     // Capture master plugin states
     auto masterBus = project.getMasterBusState();
     auto masterChainTree = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
-    for (int p = 0; p < masterPluginChain.size() && p < masterChainTree.getNumChildren(); ++p)
+    for (int p = 0; p < static_cast<int> (masterPluginChain.size()) && p < masterChainTree.getNumChildren(); ++p)
     {
-        if (masterPluginChain[p].plugin != nullptr)
+        if (masterPluginChain[static_cast<size_t> (p)].plugin != nullptr)
         {
-            auto base64State = PluginHost::savePluginState (*masterPluginChain[p].plugin);
+            auto base64State = PluginHost::savePluginState (*masterPluginChain[static_cast<size_t> (p)].plugin);
             masterChainTree.getChild (p).setProperty (IDs::pluginState, base64State, nullptr);
         }
     }
@@ -1281,14 +1291,14 @@ void MainComponent::connectMasterPluginChain()
     auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
 
     // Build list of enabled plugin nodes
-    juce::Array<juce::AudioProcessorGraph::Node::Ptr> enabledNodes;
-    for (int p = 0; p < masterPluginChain.size(); ++p)
+    std::vector<juce::AudioProcessorGraph::Node::Ptr> enabledNodes;
+    for (int p = 0; p < static_cast<int> (masterPluginChain.size()); ++p)
     {
         if (chain.isValid() && p < chain.getNumChildren())
         {
             bool enabled = chain.getChild (p).getProperty (IDs::pluginEnabled, true);
             if (enabled)
-                enabledNodes.add (masterPluginChain[p].node);
+                enabledNodes.push_back (masterPluginChain[static_cast<size_t> (p)].node);
         }
     }
 
@@ -1348,10 +1358,10 @@ void MainComponent::disconnectMasterPluginChain()
 
 void MainComponent::openMasterPluginEditor (int pluginIndex)
 {
-    if (pluginIndex < 0 || pluginIndex >= masterPluginChain.size())
+    if (pluginIndex < 0 || pluginIndex >= static_cast<int> (masterPluginChain.size()))
         return;
 
-    auto* plugin = masterPluginChain[pluginIndex].plugin;
+    auto* plugin = masterPluginChain[static_cast<size_t> (pluginIndex)].plugin;
     if (plugin != nullptr)
         pluginWindowManager.showEditorForPlugin (*plugin);
 }
@@ -1385,7 +1395,7 @@ void MainComponent::insertPluginOnMaster (const juce::PluginDescription& desc)
                          : 512;
 
     pluginHost.createPluginAsync (desc, sampleRate, blockSize,
-        [this] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& errorMessage)
+        [this] (std::unique_ptr<juce::AudioPluginInstance> instance, const std::string& errorMessage)
         {
             juce::ignoreUnused (errorMessage);
             if (instance == nullptr)
@@ -1397,7 +1407,7 @@ void MainComponent::insertPluginOnMaster (const juce::PluginDescription& desc)
             disconnectMasterPluginChain();
 
             auto node = audioEngine.addProcessor (std::move (instance));
-            masterPluginChain.add ({ node, pluginPtr });
+            masterPluginChain.push_back ({ node, pluginPtr });
 
             connectMasterPluginChain();
             audioEngine.getGraph().suspendProcessing (false);
@@ -1413,8 +1423,10 @@ void MainComponent::insertPluginOnTrack (int trackIndex, const juce::PluginDescr
     Track track (trackState);
 
     // Add to model
-    track.addPlugin (desc.name, desc.pluginFormatName, desc.manufacturerName,
-                     desc.uniqueId, desc.fileOrIdentifier, &project.getUndoManager());
+    track.addPlugin (desc.name.toStdString(), desc.pluginFormatName.toStdString(),
+                     desc.manufacturerName.toStdString(),
+                     desc.uniqueId, desc.fileOrIdentifier.toStdString(),
+                     &project.getUndoManager());
 
     // Async instantiate and add to graph
     auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()
@@ -1425,7 +1437,7 @@ void MainComponent::insertPluginOnTrack (int trackIndex, const juce::PluginDescr
                          : 512;
 
     pluginHost.createPluginAsync (desc, sampleRate, blockSize,
-        [this, trackIndex] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& errorMessage)
+        [this, trackIndex] (std::unique_ptr<juce::AudioPluginInstance> instance, const std::string& errorMessage)
         {
             juce::ignoreUnused (errorMessage);
             if (instance == nullptr)
@@ -1438,8 +1450,8 @@ void MainComponent::insertPluginOnTrack (int trackIndex, const juce::PluginDescr
 
             auto pluginNode = audioEngine.addProcessor (std::move (instance));
 
-            if (trackIndex < trackPluginChains.size())
-                trackPluginChains.getReference (trackIndex).add ({ pluginNode, pluginPtr });
+            if (trackIndex < static_cast<int> (trackPluginChains.size()))
+                trackPluginChains[static_cast<size_t> (trackIndex)].push_back ({ pluginNode, pluginPtr });
 
             connectTrackPluginChain (trackIndex);
             audioEngine.getGraph().suspendProcessing (false);

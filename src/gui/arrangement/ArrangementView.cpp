@@ -1,4 +1,7 @@
 #include "ArrangementView.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -67,7 +70,7 @@ void ArrangementView::rebuildTrackLanes()
 void ArrangementView::paint (juce::Graphics& g)
 {
     // Background
-    g.setColour (juce::Colour (0xff1a1a2a));
+    g.setColour (toJuce (0xff1a1a2a));
     g.fillAll();
 }
 
@@ -88,7 +91,7 @@ void ArrangementView::paintOverChildren (juce::Graphics& g)
 
         if (cursorX >= 150.0f && cursorX <= static_cast<float> (getWidth()))
         {
-            g.setColour (juce::Colours::red);
+            g.setColour (toJuce (dc::Colours::red));
             g.drawVerticalLine (juce::roundToInt (cursorX),
                                 static_cast<float> (rulerHeight),
                                 static_cast<float> (getHeight()));
@@ -99,13 +102,13 @@ void ArrangementView::paintOverChildren (juce::Graphics& g)
     if (activeContext)
     {
         // Green top bar
-        g.setColour (juce::Colour (0xff50c878));
+        g.setColour (toJuce (0xff50c878));
         g.fillRect (0, 0, getWidth(), 2);
     }
     else
     {
         // Dark overlay for inactive panel
-        g.setColour (juce::Colour (0x28000000));
+        g.setColour (toJuce (0x28000000));
         g.fillRect (getLocalBounds());
     }
 }

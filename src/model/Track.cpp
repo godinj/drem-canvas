@@ -1,4 +1,5 @@
 #include "Track.h"
+#include "dc/foundation/assert.h"
 
 namespace dc
 {
@@ -6,17 +7,17 @@ namespace dc
 Track::Track (const juce::ValueTree& s)
     : state (s)
 {
-    jassert (state.hasType (IDs::TRACK));
+    dc_assert (state.hasType (IDs::TRACK));
 }
 
-juce::String Track::getName() const
+std::string Track::getName() const
 {
-    return state.getProperty (IDs::name, juce::String());
+    return state.getProperty (IDs::name, "").toString().toStdString();
 }
 
-void Track::setName (const juce::String& n, juce::UndoManager* um)
+void Track::setName (const std::string& n, juce::UndoManager* um)
 {
-    state.setProperty (IDs::name, n, um);
+    state.setProperty (IDs::name, n.c_str(), um);
 }
 
 float Track::getVolume() const
@@ -69,15 +70,15 @@ void Track::setArmed (bool a, juce::UndoManager* um)
     state.setProperty (IDs::armed, a, um);
 }
 
-juce::Colour Track::getColour() const
+dc::Colour Track::getColour() const
 {
-    return juce::Colour (static_cast<juce::uint32> (static_cast<int> (state.getProperty (IDs::colour, 0))));
+    return dc::Colour (static_cast<uint32_t> (static_cast<int> (state.getProperty (IDs::colour, 0))));
 }
 
-juce::ValueTree Track::addAudioClip (const juce::File& sourceFile, int64_t startPosition, int64_t length)
+juce::ValueTree Track::addAudioClip (const std::filesystem::path& sourceFile, int64_t startPosition, int64_t length)
 {
     juce::ValueTree clip (IDs::AUDIO_CLIP);
-    clip.setProperty (IDs::sourceFile, sourceFile.getFullPathName(), nullptr);
+    clip.setProperty (IDs::sourceFile, sourceFile.string().c_str(), nullptr);
     clip.setProperty (IDs::startPosition, static_cast<juce::int64> (startPosition), nullptr);
     clip.setProperty (IDs::length, static_cast<juce::int64> (length), nullptr);
     clip.setProperty (IDs::trimStart, static_cast<juce::int64> (0), nullptr);
@@ -158,18 +159,18 @@ juce::ValueTree Track::getPluginChain()
     return chain;
 }
 
-juce::ValueTree Track::addPlugin (const juce::String& name, const juce::String& format,
-                                   const juce::String& manufacturer, int uniqueId,
-                                   const juce::String& fileOrIdentifier,
+juce::ValueTree Track::addPlugin (const std::string& name, const std::string& format,
+                                   const std::string& manufacturer, int uniqueId,
+                                   const std::string& fileOrIdentifier,
                                    juce::UndoManager* um)
 {
     juce::ValueTree plugin (IDs::PLUGIN);
-    plugin.setProperty (IDs::pluginName, name, nullptr);
-    plugin.setProperty (IDs::pluginFormat, format, nullptr);
-    plugin.setProperty (IDs::pluginManufacturer, manufacturer, nullptr);
+    plugin.setProperty (IDs::pluginName, name.c_str(), nullptr);
+    plugin.setProperty (IDs::pluginFormat, format.c_str(), nullptr);
+    plugin.setProperty (IDs::pluginManufacturer, manufacturer.c_str(), nullptr);
     plugin.setProperty (IDs::pluginUniqueId, uniqueId, nullptr);
-    plugin.setProperty (IDs::pluginFileOrIdentifier, fileOrIdentifier, nullptr);
-    plugin.setProperty (IDs::pluginState, juce::String(), nullptr);
+    plugin.setProperty (IDs::pluginFileOrIdentifier, fileOrIdentifier.c_str(), nullptr);
+    plugin.setProperty (IDs::pluginState, "", nullptr);
     plugin.setProperty (IDs::pluginEnabled, true, nullptr);
 
     getPluginChain().appendChild (plugin, um);
@@ -219,11 +220,11 @@ bool Track::isPluginEnabled (int index) const
     return plugin.isValid() ? static_cast<bool> (plugin.getProperty (IDs::pluginEnabled, true)) : false;
 }
 
-void Track::setPluginState (int index, const juce::String& base64State, juce::UndoManager* um)
+void Track::setPluginState (int index, const std::string& base64State, juce::UndoManager* um)
 {
     auto plugin = getPlugin (index);
     if (plugin.isValid())
-        plugin.setProperty (IDs::pluginState, base64State, um);
+        plugin.setProperty (IDs::pluginState, base64State.c_str(), um);
 }
 
 } // namespace dc

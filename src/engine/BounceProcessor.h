@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <filesystem>
 
 namespace dc
 {
@@ -11,7 +12,7 @@ public:
 
     struct BounceSettings
     {
-        juce::File outputFile;
+        std::filesystem::path outputFile;
         double sampleRate = 44100.0;
         int bitsPerSample = 24;
         int64_t startSample = 0;
@@ -26,7 +27,8 @@ public:
 private:
     juce::AudioFormatManager formatManager;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BounceProcessor)
+    BounceProcessor (const BounceProcessor&) = delete;
+    BounceProcessor& operator= (const BounceProcessor&) = delete;
 };
 
 } // namespace dc

@@ -1,4 +1,5 @@
 #include "PluginViewWidget.h"
+#include "dc/foundation/string_utils.h"
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/Theme.h"
 #include "graphics/theme/FontManager.h"
@@ -30,7 +31,7 @@ void PluginViewWidget::setEditorBridge (std::unique_ptr<PluginEditorBridge> brid
     editorBridge = std::move (bridge);
 }
 
-void PluginViewWidget::setPlugin (juce::AudioPluginInstance* plugin, const juce::String& name)
+void PluginViewWidget::setPlugin (juce::AudioPluginInstance* plugin, const std::string& name)
 {
     pluginName = name;
     currentPlugin = plugin;
@@ -86,7 +87,7 @@ void PluginViewWidget::setHintMode (VimContext::HintMode mode)
     repaint();
 }
 
-void PluginViewWidget::setHintBuffer (const juce::String& buffer)
+void PluginViewWidget::setHintBuffer (const std::string& buffer)
 {
     spatialHintBuffer = buffer;
     paramGrid.setHintBuffer (buffer);
@@ -98,7 +99,7 @@ void PluginViewWidget::setNumberEntryActive (bool active)
     paramGrid.setNumberEntryActive (active);
 }
 
-void PluginViewWidget::setNumberBuffer (const juce::String& buffer)
+void PluginViewWidget::setNumberBuffer (const std::string& buffer)
 {
     paramGrid.setNumberBuffer (buffer);
 }
@@ -188,7 +189,7 @@ void PluginViewWidget::runSpatialScan()
                         if (juceIdx >= 0 && juceIdx < params.size())
                         {
                             info.juceParamIndex = juceIdx;
-                            info.name = params[juceIdx]->getName (64);
+                            info.name = params[juceIdx]->getName (64).toStdString();
                             probed++;
                         }
                     }
@@ -214,7 +215,7 @@ void PluginViewWidget::runSpatialScan()
     // Build juceParamIndex -> hintLabel map for the parameter grid
     if (spatialScanComplete)
     {
-        std::unordered_map<int, juce::String> hintMap;
+        std::unordered_map<int, std::string> hintMap;
         for (auto& info : spatialScanner.getResults())
             if (info.juceParamIndex >= 0)
                 hintMap[info.juceParamIndex] = info.hintLabel;
@@ -290,7 +291,7 @@ void PluginViewWidget::paint (gfx::Canvas& canvas)
     canvas.fillRect (Rect (0, 0, w, headerHeight), Color::fromARGB (0xff181825));
 
     // Plugin name
-    auto title = pluginName.isEmpty() ? "Plugin View" : pluginName.toStdString();
+    auto title = pluginName.empty() ? std::string ("Plugin View") : pluginName;
     Color titleColor = activeContext ? theme.selection : Color::fromARGB (0xffcdd6f4);
     canvas.drawText (title, 8.0f, headerHeight * 0.5f + 5.0f, font, titleColor);
 
@@ -352,15 +353,15 @@ void PluginViewWidget::paint (gfx::Canvas& canvas)
                         for (auto& info : spatialScanner.getResults())
                         {
                             // Filter by typed prefix
-                            if (spatialHintBuffer.isNotEmpty()
-                                && ! info.hintLabel.startsWith (spatialHintBuffer))
+                            if (! spatialHintBuffer.empty()
+                                && ! dc::startsWith (info.hintLabel, spatialHintBuffer))
                                 continue;
 
                             // Transform native coords to canvas coords
                             float sx = geo.drawX + static_cast<float> (info.centerX) * geo.scaleX;
                             float sy = geo.drawY + static_cast<float> (info.centerY) * geo.scaleY;
 
-                            auto label = info.hintLabel.toStdString();
+                            auto& label = info.hintLabel;
                             float labelW = static_cast<float> (label.size()) * 10.0f + 6.0f;
                             float labelH = 16.0f;
 

@@ -1,14 +1,17 @@
 #include "SessionWriter.h"
 #include "YAMLSerializer.h"
 #include "model/Project.h"
+#include "dc/foundation/file_utils.h"
 #include <yaml-cpp/yaml.h>
 
 namespace dc
 {
 
-bool SessionWriter::writeSession (const juce::ValueTree& projectState, const juce::File& sessionDir)
+bool SessionWriter::writeSession (const juce::ValueTree& projectState, const std::filesystem::path& sessionDir)
 {
-    if (! sessionDir.createDirectory())
+    std::error_code ec;
+    std::filesystem::create_directories (sessionDir, ec);
+    if (ec)
         return false;
 
     auto tracks = projectState.getChildWithName (IDs::TRACKS);
@@ -20,8 +23,8 @@ bool SessionWriter::writeSession (const juce::ValueTree& projectState, const juc
         YAML::Emitter emitter;
         emitter << metaNode;
 
-        if (! writeFileAtomically (sessionDir.getChildFile ("session.yaml"),
-                                    juce::String (emitter.c_str())))
+        if (! writeFileAtomically (sessionDir / "session.yaml",
+                                    std::string (emitter.c_str())))
             return false;
     }
 
@@ -32,9 +35,9 @@ bool SessionWriter::writeSession (const juce::ValueTree& projectState, const juc
         YAML::Emitter emitter;
         emitter << trackNode;
 
-        auto filename = juce::String ("track-") + juce::String (i) + ".yaml";
-        if (! writeFileAtomically (sessionDir.getChildFile (filename),
-                                    juce::String (emitter.c_str())))
+        auto filename = "track-" + std::to_string (i) + ".yaml";
+        if (! writeFileAtomically (sessionDir / filename,
+                                    std::string (emitter.c_str())))
             return false;
     }
 
@@ -48,38 +51,33 @@ bool SessionWriter::writeSession (const juce::ValueTree& projectState, const juc
         YAML::Emitter emitter;
         emitter << seqNode;
 
-        if (! writeFileAtomically (sessionDir.getChildFile ("sequencer.yaml"),
-                                    juce::String (emitter.c_str())))
+        if (! writeFileAtomically (sessionDir / "sequencer.yaml",
+                                    std::string (emitter.c_str())))
             return false;
     }
 
     // Write .gitignore if it doesn't already exist (preserve user customizations)
-    auto gitignore = sessionDir.getChildFile (".gitignore");
-    if (! gitignore.existsAsFile())
-        gitignore.replaceWithText ("peaks/\nexport/\n*.tmp\n");
+    auto gitignore = sessionDir / ".gitignore";
+    if (! std::filesystem::exists (gitignore))
+        dc::writeStringToFile (gitignore, "peaks/\nexport/\n*.tmp\n");
 
     return true;
 }
 
-bool SessionWriter::writeFileAtomically (const juce::File& targetFile, const juce::String& content)
+bool SessionWriter::writeFileAtomically (const std::filesystem::path& targetFile, const std::string& content)
 {
-    auto tmpFile = targetFile.getSiblingFile (targetFile.getFileName() + ".tmp");
-
-    if (! tmpFile.replaceWithText (content))
-        return false;
-
-    return tmpFile.moveFileTo (targetFile);
+    return dc::writeStringToFile (targetFile, content);
 }
 
-void SessionWriter::cleanupStaleTrackFiles (const juce::File& sessionDir, int trackCount)
+void SessionWriter::cleanupStaleTrackFiles (const std::filesystem::path& sessionDir, int trackCount)
 {
     // Remove any track-N.yaml files where N >= trackCount
     for (int i = trackCount; ; ++i)
     {
-        auto file = sessionDir.getChildFile (juce::String ("track-") + juce::String (i) + ".yaml");
-        if (! file.existsAsFile())
+        auto file = sessionDir / ("track-" + std::to_string (i) + ".yaml");
+        if (! std::filesystem::exists (file))
             break;
-        file.deleteFile();
+        std::filesystem::remove (file);
     }
 }
 

@@ -227,8 +227,8 @@ The JUCE Component/GUI code is removed when `gui/` is eventually deleted
 # After all foundation type replacements:
 grep -rn "juce::String\|juce::File\|juce::Array\|juce::Colour\|juce::Random" src/ \
     --include="*.h" --include="*.cpp" --include="*.mm" | \
-    grep -v "juce::AudioProcessor\|juce::MidiBuffer\|juce::ValueTree\|juce::UndoManager\|juce::AudioPlugin\|juce::KnownPlugin\|juce::Component\|juce::Timer\|juce::KeyListener\|juce::Slider\|juce::Label\|juce::Graphics\|juce::ChangeListener\|juce::Viewport\|juce::ListBox\|juce::LookAndFeel\|juce::MouseEvent\|juce::KeyPress\|juce::Font\|juce::Rectangle\|juce::AudioBuffer\|juce::MidiMessage\|juce::AudioDeviceManager\|juce::AudioFormatManager\|juce::AudioFormatReader\|juce::MidiInput"
-# Should return zero hits (all remaining juce:: are Phase 1-4 types)
+    grep -v "juce::AudioProcessor\|juce::MidiBuffer\|juce::ValueTree\|juce::UndoManager\|juce::AudioPlugin\|juce::KnownPlugin\|juce::Component\|juce::Timer\|juce::KeyListener\|juce::Slider\|juce::Label\|juce::Graphics\|juce::ChangeListener\|juce::Viewport\|juce::ListBox\|juce::LookAndFeel\|juce::MouseEvent\|juce::KeyPress\|juce::Font\|juce::Rectangle\|juce::AudioBuffer\|juce::MidiMessage\|juce::AudioDeviceManager\|juce::AudioFormatManager\|juce::AudioFormatReader\|juce::MidiInput\|juce::FileOutputStream\|juce::FileInputSource\|juce::FileChooser\|juce::FileBrowserComponent\|juce::ColourGradient\|juce::AlertWindow\|juce::DocumentWindow\|juce::OutputStream\|ColourBridge\|JUCE API boundary\|getProgramName\|changeProgramName\|getName.*override"
+# Should return zero hits (all remaining juce:: are Phase 2-5 boundary types)
 ```
 
 ---

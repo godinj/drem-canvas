@@ -498,7 +498,7 @@ void PianoRollWidget::deleteSelectedNotes (char reg)
 
     // Store deleted notes (Vim delete → unnamed + "1-"9 history)
     {
-        juce::Array<Clipboard::NoteEntry> entries;
+        std::vector<Clipboard::NoteEntry> entries;
         double minBeat = 1e12;
 
         for (int idx : selectedNoteIndices)
@@ -518,7 +518,7 @@ void PianoRollWidget::deleteSelectedNotes (char reg)
                 {
                     auto note = clipState.getChild (idx);
                     double sb = static_cast<double> (note.getProperty ("startBeat", 0.0));
-                    entries.add ({ note, sb - minBeat });
+                    entries.push_back ({ note, sb - minBeat });
                 }
             }
 
@@ -547,7 +547,7 @@ void PianoRollWidget::deleteSelectedNotes (char reg)
 
 void PianoRollWidget::copySelectedNotes (char reg)
 {
-    juce::Array<Clipboard::NoteEntry> entries;
+    std::vector<Clipboard::NoteEntry> entries;
     double minBeat = 1e12;
 
     // First pass: find minimum startBeat
@@ -570,7 +570,7 @@ void PianoRollWidget::copySelectedNotes (char reg)
         {
             auto note = clipState.getChild (idx);
             double sb = static_cast<double> (note.getProperty ("startBeat", 0.0));
-            entries.add ({ note, sb - minBeat });
+            entries.push_back ({ note, sb - minBeat });
         }
     }
 

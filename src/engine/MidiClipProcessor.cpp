@@ -94,11 +94,11 @@ void MidiClipProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         if (evt.onSample >= blockStart && evt.onSample < blockEnd)
         {
             int offset = static_cast<int> (evt.onSample - blockStart);
-            int vel = juce::jlimit (1, 127, evt.velocity);
+            int vel = std::clamp (evt.velocity, 1, 127);
 
             midiMessages.addEvent (
                 juce::MidiMessage::noteOn (evt.channel, evt.noteNumber,
-                                           static_cast<juce::uint8> (vel)),
+                                           static_cast<uint8_t> (vel)),
                 offset);
 
             // Schedule note-off

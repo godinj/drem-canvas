@@ -3,6 +3,7 @@
 #include "graphics/theme/Theme.h"
 #include "graphics/theme/FontManager.h"
 #include "model/Track.h"
+#include <string>
 
 namespace dc
 {
@@ -37,7 +38,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
     // ── Command mode — full-width command line
     if (engine.getMode() == VimEngine::Command)
     {
-        auto text = ":" + engine.getCommandBuffer().toStdString();
+        auto text = std::string (":") + engine.getCommandBuffer();
         canvas.drawText (text, 6.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffcdd6f4));
         return;
     }
@@ -45,7 +46,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
     // ── Plugin search — full-width search line
     if (engine.getMode() == VimEngine::PluginMenu && engine.isPluginSearchActive())
     {
-        auto text = "/" + engine.getPluginSearchBuffer().toStdString();
+        auto text = std::string ("/") + engine.getPluginSearchBuffer();
         canvas.drawText (text, 6.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffcdd6f4));
         return;
     }
@@ -85,7 +86,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
     else if (engine.hasPendingState())
     {
         float pendingWidth = 80.0f;
-        canvas.drawText (engine.getPendingDisplay().toStdString(),
+        canvas.drawText (engine.getPendingDisplay(),
                          x + 4.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffffcc00));
         x += pendingWidth;
     }
@@ -94,7 +95,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
     float panelWidth = 120.0f;
     auto& theme = Theme::getDefault();
     canvas.fillRect (Rect (x, 0, panelWidth, h), Color::fromARGB (0xff202030));
-    canvas.drawText (context.getPanelName().toStdString(),
+    canvas.drawText (context.getPanelName(),
                      x + 6.0f, h * 0.5f + 5.0f, font, theme.selection);
     x += panelWidth;
 
@@ -107,7 +108,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
     {
         Track track = arrangement.getTrack (trackIdx);
         std::string trackInfo = "T" + std::to_string (trackIdx + 1) + ":"
-                              + track.getName().toStdString();
+                              + track.getName();
 
         auto panel = context.getPanel();
         auto& visSel = context.getVisualSelection();
@@ -125,7 +126,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
                 // Show grid position range for visual selection
                 double sr = transport.getSampleRate();
                 std::string posStr = (sr > 0.0)
-                    ? gridSystem.formatGridPosition (context.getGridCursorPosition(), sr).toStdString()
+                    ? gridSystem.formatGridPosition (context.getGridCursorPosition(), sr)
                     : "0.0.0";
                 breadcrumb = "> T" + std::to_string (minT) + "-T" + std::to_string (maxT)
                            + " @ " + posStr;
@@ -135,7 +136,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
         {
             double sr = transport.getSampleRate();
             std::string posStr = (sr > 0.0)
-                ? gridSystem.formatGridPosition (context.getGridCursorPosition(), sr).toStdString()
+                ? gridSystem.formatGridPosition (context.getGridCursorPosition(), sr)
                 : "0.0.0";
 
             int clipIdx = context.getSelectedClipIndex();
@@ -146,7 +147,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
         }
         else if (panel == VimContext::Mixer && ! context.isMasterStripSelected())
         {
-            auto focusName = context.getMixerFocusName().toStdString();
+            auto focusName = context.getMixerFocusName();
             breadcrumb = "> " + trackInfo;
             if (! focusName.empty())
                 breadcrumb += " > " + focusName;
@@ -157,8 +158,8 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
                 if (slot < track.getNumPlugins())
                 {
                     auto pluginState = track.getPlugin (slot);
-                    juce::String name = pluginState.getProperty (IDs::pluginName, "Plugin");
-                    breadcrumb += " > " + name.toStdString();
+                    std::string name = pluginState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
+                    breadcrumb += " > " + name;
                 }
                 else
                 {
@@ -189,11 +190,11 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
 
             if (context.getHintMode() == VimContext::HintActive)
             {
-                breadcrumb += " [HINT: " + context.getHintBuffer().toStdString() + "]";
+                breadcrumb += " [HINT: " + context.getHintBuffer() + "]";
             }
             else if (context.isNumberEntryActive())
             {
-                breadcrumb += " [" + context.getNumberBuffer().toStdString() + "%]";
+                breadcrumb += " [" + context.getNumberBuffer() + "%]";
             }
             else
             {
@@ -208,7 +209,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
     }
     else if (context.getPanel() == VimContext::Mixer && context.isMasterStripSelected())
     {
-        auto focusName = context.getMixerFocusName().toStdString();
+        auto focusName = context.getMixerFocusName();
         breadcrumb = "> Master";
         if (! focusName.empty())
             breadcrumb += " > " + focusName;
@@ -223,8 +224,8 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
             if (slot < numPlugins)
             {
                 auto pluginState = chain.getChild (slot);
-                juce::String name = pluginState.getProperty (IDs::pluginName, "Plugin");
-                breadcrumb += " > " + name.toStdString();
+                std::string name = pluginState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
+                breadcrumb += " > " + name;
             }
             else
             {
@@ -241,13 +242,13 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
 
     // ── Grid division indicator (right-aligned, before playhead time)
     {
-        auto gridStr = "Grid: " + gridSystem.getGridDivisionName().toStdString();
+        auto gridStr = "Grid: " + gridSystem.getGridDivisionName();
         Rect gridArea (totalWidth - 400.0f, 0, 120.0f, h);
         canvas.drawTextRight (gridStr, gridArea, fm.getMonoFont(), Color::fromARGB (0xff7f849c));
     }
 
     // ── Playhead info (right-aligned)
-    auto timeStr = transport.getTimeString().toStdString();
+    auto timeStr = transport.getTimeString();
     Rect rightArea (totalWidth - 200.0f, 0, 200.0f, h);
     canvas.drawTextRight (timeStr, rightArea, fm.getMonoFont(), Color::fromARGB (0xffa6adc8));
 }

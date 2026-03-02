@@ -1,4 +1,9 @@
 #include "PianoKeyboard.h"
+#include "gui/common/ColourBridge.h"
+#include "dc/foundation/types.h"
+#include <string>
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -17,27 +22,27 @@ void PianoKeyboard::paint (juce::Graphics& g)
 
         // Background colour
         if (isBlackKey (note))
-            g.setColour (juce::Colour (0xFF3A3A3A)); // Dark grey for black keys
+            g.setColour (toJuce (0xFF3A3A3A)); // Dark grey for black keys
         else
-            g.setColour (juce::Colour (0xFF5A5A5A)); // Lighter grey for white keys
+            g.setColour (toJuce (0xFF5A5A5A)); // Lighter grey for white keys
 
         // Highlight pressed note
         if (note == pressedNote)
-            g.setColour (juce::Colour (0xFF6699CC));
+            g.setColour (toJuce (0xFF6699CC));
 
         g.fillRect (0, y, getWidth(), noteHeight);
 
         // Draw separator line
-        g.setColour (juce::Colour (0xFF2A2A2A));
+        g.setColour (toJuce (0xFF2A2A2A));
         g.drawHorizontalLine (y, 0.0f, static_cast<float> (getWidth()));
 
         // Draw note name for C notes
         if (note % 12 == 0)
         {
             int octave = (note / 12) - 1; // MIDI note 0 = C-1
-            juce::String noteName = "C" + juce::String (octave);
+            std::string noteName = "C" + std::to_string (octave);
 
-            g.setColour (juce::Colours::white);
+            g.setColour (toJuce (dc::Colours::white));
             g.setFont (juce::Font (static_cast<float> (juce::jmin (noteHeight - 1, 11))));
             g.drawText (noteName, 2, y, getWidth() - 4, noteHeight,
                         juce::Justification::centredLeft, true);

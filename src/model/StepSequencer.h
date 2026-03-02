@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <string>
 #include "Project.h"
 
 namespace dc
@@ -43,13 +44,13 @@ public:
 
     // Row properties
     static int getRowNoteNumber (const juce::ValueTree& row);
-    static juce::String getRowName (const juce::ValueTree& row);
+    static std::string getRowName (const juce::ValueTree& row);
     static bool isRowMuted (const juce::ValueTree& row);
     static bool isRowSoloed (const juce::ValueTree& row);
 
     // Factory
     static juce::ValueTree createDefaultState();
-    static juce::ValueTree createDefaultPattern (int bank, int slot, const juce::String& name, int numSteps);
+    static juce::ValueTree createDefaultPattern (int bank, int slot, const std::string& name, int numSteps);
 
 private:
     juce::ValueTree state;

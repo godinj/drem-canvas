@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "dc/foundation/types.h"
 
 namespace dc
 {
@@ -10,13 +11,13 @@ public:
     MidiClipView();
 
     void setMidiSequence (const juce::MidiMessageSequence& sequence);
-    void setClipColour (juce::Colour c) { clipColour = c; repaint(); }
+    void setClipColour (dc::Colour c) { clipColour = c; repaint(); }
 
     void paint (juce::Graphics& g) override;
 
 private:
     juce::MidiMessageSequence sequence;
-    juce::Colour clipColour { juce::Colours::mediumpurple };
+    dc::Colour clipColour { dc::Colours::mediumpurple };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MidiClipView)
 };

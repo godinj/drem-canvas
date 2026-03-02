@@ -9,6 +9,8 @@
 #include "graphics/core/Event.h"
 #include "vim/VirtualKeyboardState.h"
 #include "model/GridSystem.h"
+#include "dc/foundation/listener_list.h"
+#include <string>
 
 namespace dc
 {
@@ -55,19 +57,19 @@ public:
     // Operator-pending queries (used by status bar)
     bool isOperatorPending() const { return pendingOperator != OpNone; }
     bool hasPendingState() const;
-    juce::String getPendingDisplay() const;
+    std::string getPendingDisplay() const;
 
     // Command mode
-    const juce::String& getCommandBuffer() const { return commandBuffer; }
+    const std::string& getCommandBuffer() const { return commandBuffer; }
 
     // Plugin command callback (wired by MainComponent)
-    std::function<void (const juce::String&)> onPluginCommand;
+    std::function<void (const std::string&)> onPluginCommand;
 
     // Command palette callback
     std::function<void()> onCommandPalette;
 
     // MIDI track creation callback
-    std::function<void (const juce::String&)> onCreateMidiTrack;
+    std::function<void (const std::string&)> onCreateMidiTrack;
 
     // Piano roll open callback
     std::function<void (const juce::ValueTree&)> onOpenPianoRoll;
@@ -85,8 +87,8 @@ public:
     std::function<int()> onQueryPluginParamCount;
 
     // Hint label generation (totalCount determines uniform label length)
-    static juce::String generateHintLabel (int index, int totalCount);
-    static int resolveHintLabel (const juce::String& label, int totalCount);
+    static std::string generateHintLabel (int index, int totalCount);
+    static int resolveHintLabel (const std::string& label, int totalCount);
 
     // Mixer plugin callbacks (wired by MainComponent)
     std::function<void (int trackIndex, int pluginIndex)> onMixerPluginOpen;
@@ -102,12 +104,12 @@ public:
     std::function<void()> onPluginMenuCancel;
 
     // Plugin search callbacks (wired by AppController / MainComponent)
-    std::function<void (const juce::String&)> onPluginMenuFilter;
+    std::function<void (const std::string&)> onPluginMenuFilter;
     std::function<void()> onPluginMenuClearFilter;
 
     // Plugin search accessors (used by status bars)
     bool isPluginSearchActive() const { return pluginSearchActive; }
-    const juce::String& getPluginSearchBuffer() const { return pluginSearchBuffer; }
+    const std::string& getPluginSearchBuffer() const { return pluginSearchBuffer; }
 
     // Piano roll action callbacks (wired by AppController)
     std::function<void (int tool)> onSetPianoRollTool;     // 0=Select, 1=Draw, 2=Erase
@@ -259,7 +261,7 @@ private:
     void executeMotion (juce_wchar key, int count);
 
     // Clip collection helpers
-    juce::Array<Clipboard::ClipEntry> collectClipsForRange (const MotionRange& range) const;
+    std::vector<Clipboard::ClipEntry> collectClipsForRange (const MotionRange& range) const;
 
     // Visual mode helpers
     MotionRange getVisualRange() const;
@@ -279,10 +281,10 @@ private:
     GridSystem& gridSystem;
 
     Mode mode = Normal;
-    juce::String commandBuffer;
+    std::string commandBuffer;
     juce_wchar pendingKey = 0;
-    juce::int64 pendingTimestamp = 0;
-    static constexpr juce::int64 pendingTimeoutMs = 1000;
+    int64_t pendingTimestamp = 0;
+    static constexpr int64_t pendingTimeoutMs = 1000;
 
     // Operator-pending state
     Operator pendingOperator = OpNone;
@@ -298,16 +300,17 @@ private:
 
     // Plugin search sub-state
     bool pluginSearchActive = false;
-    juce::String pluginSearchBuffer;
+    std::string pluginSearchBuffer;
 
     // Visual mode anchor
     int visualAnchorTrack = 0;
     int visualAnchorClip  = 0;
     int64_t visualAnchorGridPos = 0;
 
-    juce::ListenerList<Listener> listeners;
+    dc::ListenerList<Listener> listeners;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VimEngine)
+    VimEngine (const VimEngine&) = delete;
+    VimEngine& operator= (const VimEngine&) = delete;
 };
 
 } // namespace dc

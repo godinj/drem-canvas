@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 namespace dc
 {
@@ -22,14 +23,14 @@ public:
     void load();
     void save();
 
-    void addProject (const juce::File& dir);
+    void addProject (const std::filesystem::path& dir);
     void removeProject (const std::string& path);
 
     const std::vector<RecentProjectEntry>& getEntries() const { return entries; }
 
 private:
     void pruneInvalid();
-    static juce::File getRecentProjectsFile();
+    static std::filesystem::path getRecentProjectsFile();
 
     std::vector<RecentProjectEntry> entries;
 };

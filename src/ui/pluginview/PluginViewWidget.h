@@ -5,6 +5,7 @@
 #include "vim/VimContext.h"
 #include "plugins/ParameterFinderScanner.h"
 #include <JuceHeader.h>
+#include <string>
 
 namespace dc
 {
@@ -24,7 +25,7 @@ public:
     void paint (gfx::Canvas& canvas) override;
     void resized() override;
 
-    void setPlugin (juce::AudioPluginInstance* plugin, const juce::String& pluginName);
+    void setPlugin (juce::AudioPluginInstance* plugin, const std::string& pluginName);
     void clearPlugin();
 
     void setActiveContext (bool active);
@@ -32,9 +33,9 @@ public:
     // Forward state from VimContext
     void setSelectedParamIndex (int index);
     void setHintMode (VimContext::HintMode mode);
-    void setHintBuffer (const juce::String& buffer);
+    void setHintBuffer (const std::string& buffer);
     void setNumberEntryActive (bool active);
-    void setNumberBuffer (const juce::String& buffer);
+    void setNumberBuffer (const std::string& buffer);
 
     int getNumParameters() const;
 
@@ -51,7 +52,7 @@ public:
 
 private:
     ParameterGridWidget paramGrid;
-    juce::String pluginName;
+    std::string pluginName;
     bool activeContext = false;
     juce::AudioPluginInstance* currentPlugin = nullptr;
 
@@ -62,7 +63,7 @@ private:
     ParameterFinderScanner spatialScanner;
     bool spatialScanComplete = false;
     bool spatialHintMode = false;
-    juce::String spatialHintBuffer;
+    std::string spatialHintBuffer;
 
     struct CompositeGeometry
     {
@@ -76,7 +77,8 @@ private:
     std::unique_ptr<PluginEditorBridge> editorBridge;
     std::unique_ptr<SyntheticInputProbe> inputProbe;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginViewWidget)
+    PluginViewWidget (const PluginViewWidget&) = delete;
+    PluginViewWidget& operator= (const PluginViewWidget&) = delete;
 };
 
 } // namespace ui

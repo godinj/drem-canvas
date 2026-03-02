@@ -1,6 +1,10 @@
 #pragma once
 #include <JuceHeader.h>
+#include "dc/foundation/message_queue.h"
 #include <atomic>
+#include <mutex>
+#include <string>
+#include <vector>
 
 namespace dc
 {
@@ -8,16 +12,16 @@ namespace dc
 class MidiEngine : private juce::MidiInputCallback
 {
 public:
-    MidiEngine();
+    explicit MidiEngine (dc::MessageQueue& mq);
     ~MidiEngine() override;
 
     void initialise();
     void shutdown();
 
     // Device management
-    juce::StringArray getAvailableMidiInputs() const;
-    void setMidiInput (const juce::String& deviceIdentifier);
-    void setMidiInputEnabled (const juce::String& deviceIdentifier, bool enabled);
+    std::vector<std::string> getAvailableMidiInputs() const;
+    void setMidiInput (const std::string& deviceIdentifier);
+    void setMidiInputEnabled (const std::string& deviceIdentifier, bool enabled);
 
     // Recording
     void startRecording();
@@ -35,14 +39,16 @@ private:
     void handleIncomingMidiMessage (juce::MidiInput* source,
                                     const juce::MidiMessage& message) override;
 
+    dc::MessageQueue& messageQueue;
     std::unique_ptr<juce::MidiInput> activeMidiInput;
     juce::MidiMessageSequence recordedSequence;
-    juce::CriticalSection sequenceLock;
+    mutable std::mutex sequenceLock;
 
     std::atomic<bool> recording { false };
     double recordStartTime = 0.0;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MidiEngine)
+    MidiEngine (const MidiEngine&) = delete;
+    MidiEngine& operator= (const MidiEngine&) = delete;
 };
 
 } // namespace dc

@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <string>
 
 namespace dc
 {
@@ -7,7 +8,7 @@ namespace dc
 class MainWindow : public juce::DocumentWindow
 {
 public:
-    explicit MainWindow (const juce::String& name);
+    explicit MainWindow (const std::string& name);
     void closeButtonPressed() override;
 
 private:

@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <string>
 #include "TempoMap.h"
 
 namespace dc
@@ -27,10 +28,10 @@ public:
     int64_t moveByGridUnits (int64_t pos, int count, double sampleRate) const;
 
     // Format position as "Bar.Beat.Sub"
-    juce::String formatGridPosition (int64_t pos, double sampleRate) const;
+    std::string formatGridPosition (int64_t pos, double sampleRate) const;
 
     // Grid division display name
-    juce::String getGridDivisionName() const;
+    std::string getGridDivisionName() const;
 
     const TempoMap& getTempoMap() const { return tempoMap; }
 

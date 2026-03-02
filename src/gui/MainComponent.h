@@ -1,5 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
+#include <filesystem>
+#include <vector>
 #include "engine/AudioEngine.h"
 #include "engine/TransportController.h"
 #include "engine/MixBusProcessor.h"
@@ -41,7 +43,7 @@ public:
 private:
     void showAudioSettings();
     void openFile();
-    void addTrackFromFile (const juce::File& file);
+    void addTrackFromFile (const std::filesystem::path& file);
     void rebuildAudioGraph();
     void syncTrackProcessorsFromModel();
     void syncSequencerFromModel();
@@ -92,19 +94,19 @@ private:
     AudioEngine audioEngine;
     TransportController transportController;
     juce::AudioProcessorGraph::Node::Ptr mixBusNode;
-    juce::Array<TrackProcessor*> trackProcessors;              // non-owning; graph owns the processors
-    juce::Array<MidiClipProcessor*> midiClipProcessors;      // non-owning; graph owns (nullptr for audio tracks)
-    juce::Array<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
+    std::vector<TrackProcessor*> trackProcessors;              // non-owning; graph owns the processors
+    std::vector<MidiClipProcessor*> midiClipProcessors;      // non-owning; graph owns (nullptr for audio tracks)
+    std::vector<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
     StepSequencerProcessor* sequencerProcessor = nullptr;      // non-owning; graph owns
     juce::AudioProcessorGraph::Node::Ptr sequencerNode;
     MetronomeProcessor* metronomeProcessor = nullptr;          // non-owning; graph owns
     juce::AudioProcessorGraph::Node::Ptr metronomeNode;
-    juce::Array<juce::Array<PluginNodeInfo>> trackPluginChains;
-    juce::Array<MeterTapProcessor*> meterTapProcessors;              // non-owning; graph owns
-    juce::Array<juce::AudioProcessorGraph::Node::Ptr> meterTapNodes;
+    std::vector<std::vector<PluginNodeInfo>> trackPluginChains;
+    std::vector<MeterTapProcessor*> meterTapProcessors;              // non-owning; graph owns
+    std::vector<juce::AudioProcessorGraph::Node::Ptr> meterTapNodes;
 
     // Master bus plugin chain
-    juce::Array<PluginNodeInfo> masterPluginChain;
+    std::vector<PluginNodeInfo> masterPluginChain;
     juce::AudioProcessorGraph::Node::Ptr masterMeterTapNode;
     MeterTapProcessor* masterMeterTapProcessor = nullptr;
 
@@ -125,7 +127,7 @@ private:
     juce::TextButton audioSettingsButton { "Audio Settings" };
     juce::TextButton addTrackButton { "Import Audio" };
 
-    juce::File currentSessionDirectory;
+    std::filesystem::path currentSessionDirectory;
 
     // Browser panel
     std::unique_ptr<juce::Component> browserPanel;

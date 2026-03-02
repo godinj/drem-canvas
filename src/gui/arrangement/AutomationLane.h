@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <string>
 
 namespace dc
 {
@@ -16,7 +17,7 @@ class AutomationLane : public juce::Component
 public:
     AutomationLane();
 
-    void setParameterName (const juce::String& name) { paramName = name; }
+    void setParameterName (const std::string& name) { paramName = name; }
     void setPixelsPerSecond (double pps) { pixelsPerSecond = pps; repaint(); }
     void setSampleRate (double sr) { sampleRate = sr; }
 
@@ -38,7 +39,7 @@ private:
     float valueToY (float value) const;
     float yToValue (float y) const;
 
-    juce::String paramName;
+    std::string paramName;
     std::vector<AutomationPoint> points;
     int draggedPointIndex = -1;
     double pixelsPerSecond = 100.0;

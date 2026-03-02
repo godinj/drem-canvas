@@ -1,4 +1,5 @@
 #include "PluginManager.h"
+#include "dc/foundation/file_utils.h"
 
 namespace dc
 {
@@ -27,10 +28,10 @@ void PluginManager::scanDefaultPaths()
             *format,
             defaultLocations,
             true,   // recursive
-            juce::File()  // dead-mans-pedal file (none)
+            juce::File()  // JUCE API boundary — dead-mans-pedal file (none)
         );
 
-        juce::String pluginName;
+        juce::String pluginName; // JUCE API boundary — scanner output param
 
         while (scanner.scanNextFile (true, pluginName))
         {
@@ -39,28 +40,26 @@ void PluginManager::scanDefaultPaths()
     }
 }
 
-void PluginManager::savePluginList (const juce::File& file) const
+void PluginManager::savePluginList (const std::filesystem::path& file) const
 {
     if (auto xml = knownPlugins.createXml())
     {
-        file.getParentDirectory().createDirectory();
-        xml->writeTo (file);
+        std::filesystem::create_directories (file.parent_path());
+        dc::writeStringToFile (file, xml->toString().toStdString());
     }
 }
 
-void PluginManager::loadPluginList (const juce::File& file)
+void PluginManager::loadPluginList (const std::filesystem::path& file)
 {
-    if (auto xml = juce::parseXML (file))
+    if (auto xml = juce::parseXML (dc::readFileToString (file)))
     {
         knownPlugins.recreateFromXml (*xml);
     }
 }
 
-juce::File PluginManager::getDefaultPluginListFile() const
+std::filesystem::path PluginManager::getDefaultPluginListFile() const
 {
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-               .getChildFile ("DremCanvas")
-               .getChildFile ("pluginList.xml");
+    return dc::getUserAppDataDirectory() / "pluginList.xml";
 }
 
 } // namespace dc

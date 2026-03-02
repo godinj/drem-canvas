@@ -108,7 +108,8 @@ private:
     void addNoteOff (int noteNumber, int channel, int64_t offSample);
     void processNoteOffs (juce::MidiBuffer& midiMessages, int64_t blockStart, int numSamples);
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MidiClipProcessor)
+    MidiClipProcessor (const MidiClipProcessor&) = delete;
+    MidiClipProcessor& operator= (const MidiClipProcessor&) = delete;
 };
 
 } // namespace dc

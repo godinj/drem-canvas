@@ -1,7 +1,9 @@
 #include "ParameterGridWidget.h"
+#include "dc/foundation/string_utils.h"
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/Theme.h"
 #include "graphics/theme/FontManager.h"
+#include <algorithm>
 
 namespace dc
 {
@@ -25,7 +27,7 @@ void ParameterGridWidget::setPlugin (juce::AudioPluginInstance* plugin)
     {
         auto& params = plugin->getParameters();
         for (auto* p : params)
-            parameters.add (p);
+            parameters.push_back (p);
     }
 
     selectedParam = 0;
@@ -42,7 +44,7 @@ void ParameterGridWidget::clearPlugin()
 
 void ParameterGridWidget::setSelectedParamIndex (int index)
 {
-    selectedParam = juce::jlimit (0, juce::jmax (0, parameters.size() - 1), index);
+    selectedParam = std::clamp (index, 0, std::max (0, static_cast<int> (parameters.size()) - 1));
     repaint();
 }
 
@@ -52,7 +54,7 @@ void ParameterGridWidget::setHintMode (VimContext::HintMode mode)
     repaint();
 }
 
-void ParameterGridWidget::setHintBuffer (const juce::String& buffer)
+void ParameterGridWidget::setHintBuffer (const std::string& buffer)
 {
     hintBuffer = buffer;
     repaint();
@@ -64,13 +66,13 @@ void ParameterGridWidget::setNumberEntryActive (bool active)
     repaint();
 }
 
-void ParameterGridWidget::setNumberBuffer (const juce::String& buffer)
+void ParameterGridWidget::setNumberBuffer (const std::string& buffer)
 {
     numberBuffer = buffer;
     repaint();
 }
 
-void ParameterGridWidget::setSpatialHintMap (std::unordered_map<int, juce::String> map)
+void ParameterGridWidget::setSpatialHintMap (std::unordered_map<int, std::string> map)
 {
     spatialHintMap = std::move (map);
     repaint();
@@ -78,7 +80,7 @@ void ParameterGridWidget::setSpatialHintMap (std::unordered_map<int, juce::Strin
 
 int ParameterGridWidget::getNumParameters() const
 {
-    return parameters.size();
+    return static_cast<int> (parameters.size());
 }
 
 void ParameterGridWidget::paint (gfx::Canvas& canvas)
@@ -93,7 +95,7 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
     // Background
     canvas.fillRect (Rect (0, 0, w, h), Color::fromARGB (0xff1e1e2e));
 
-    if (currentPlugin == nullptr || parameters.isEmpty())
+    if (currentPlugin == nullptr || parameters.empty())
     {
         canvas.drawText ("No parameters", 10.0f, h * 0.5f + 5.0f,
                          font, Color::fromARGB (0xff585b70));
@@ -107,7 +109,7 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
     if (selectedParam >= static_cast<int> (visibleRows) - 1)
         scrollOffset = (selectedParam - visibleRows + 2) * rowHeight;
 
-    for (int i = 0; i < parameters.size(); ++i)
+    for (int i = 0; i < static_cast<int> (parameters.size()); ++i)
     {
         float rowY = i * rowHeight - scrollOffset;
 
@@ -129,7 +131,7 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
         // When spatial data is available, show spatial hint labels (matching the overlay).
         // Otherwise fall back to generated hints for HintActive mode.
         {
-            juce::String hintLabel;
+            std::string hintLabel;
             bool hasSpatial = ! spatialHintMap.empty();
 
             if (hasSpatial)
@@ -140,21 +142,21 @@ void ParameterGridWidget::paint (gfx::Canvas& canvas)
             }
             else
             {
-                hintLabel = VimEngine::generateHintLabel (i, parameters.size());
+                hintLabel = VimEngine::generateHintLabel (i, static_cast<int> (parameters.size()));
             }
 
-            if (hintLabel.isNotEmpty())
+            if (! hintLabel.empty())
             {
                 bool isHinting = (hintMode == VimContext::HintActive
                                || hintMode == VimContext::HintSpatial);
-                bool matches = ! isHinting || hintBuffer.isEmpty()
-                             || hintLabel.startsWith (hintBuffer);
+                bool matches = ! isHinting || hintBuffer.empty()
+                             || dc::startsWith (hintLabel, hintBuffer);
 
                 Color hintColor = isHinting
                     ? (matches ? Color::fromARGB (0xffffcc00) : Color::fromARGB (0xff45475a))
                     : Color::fromARGB (0xff585b70);
 
-                canvas.drawText (hintLabel.toStdString(), x, rowY + rowHeight * 0.5f + 5.0f,
+                canvas.drawText (hintLabel, x, rowY + rowHeight * 0.5f + 5.0f,
                                  fm.getMonoFont(), hintColor);
             }
         }

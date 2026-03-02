@@ -19,7 +19,7 @@ Track Arrangement::getTrack (int index) const
     return Track (project.getTrack (index));
 }
 
-Track Arrangement::addTrack (const juce::String& name)
+Track Arrangement::addTrack (const std::string& name)
 {
     auto trackState = project.addTrack (name);
     return Track (trackState);

@@ -1,4 +1,7 @@
 #include "Cursor.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -14,7 +17,7 @@ void Cursor::paint (juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
 
     // Draw the vertical cursor line (2px wide, full height)
-    g.setColour (cursorColour);
+    g.setColour (toJuce (cursorColour));
     g.fillRect (bounds.withWidth (2.0f));
 
     // Draw a small triangle/arrow at the top
@@ -26,7 +29,7 @@ void Cursor::paint (juce::Graphics& g)
                        centreX + arrowSize, 0.0f,    // top-right
                        centreX, arrowSize * 1.2f);   // bottom-centre
 
-    g.setColour (cursorColour);
+    g.setColour (toJuce (cursorColour));
     g.fillPath (arrow);
 }
 

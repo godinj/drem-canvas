@@ -44,7 +44,8 @@ private:
     std::atomic<float> peakLeft { 0.0f };
     std::atomic<float> peakRight { 0.0f };
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MeterTapProcessor)
+    MeterTapProcessor (const MeterTapProcessor&) = delete;
+    MeterTapProcessor& operator= (const MeterTapProcessor&) = delete;
 };
 
 } // namespace dc

@@ -1,4 +1,5 @@
 #include <JuceHeader.h>
+#include <filesystem>
 
 #if defined(__APPLE__)
 #include "platform/NativeWindow.h"
@@ -21,8 +22,8 @@ class DremCanvasApplication : public juce::JUCEApplication
 #endif
 {
 public:
-    const juce::String getApplicationName() override    { return JUCE_APPLICATION_NAME_STRING; }
-    const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; }
+    const juce::String getApplicationName() override    { return JUCE_APPLICATION_NAME_STRING; }    // JUCE API boundary
+    const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; } // JUCE API boundary
 
     // JUCE's X11-based instance detection is unreliable on Wayland —
     // it falsely detects a running instance and silently exits.
@@ -36,7 +37,7 @@ public:
 #endif
     }
 
-    void initialise (const juce::String& /*commandLine*/) override
+    void initialise (const juce::String& /*commandLine*/) override // JUCE API boundary
     {
 #if defined(__APPLE__)
         // Create native Metal window (replaces JUCE MainWindow)
@@ -97,11 +98,10 @@ public:
         glfwWindow = std::make_unique<dc::platform::GlfwWindow> ("Drem Canvas", 1280, 800);
 
         // Set window icon for X11 (Wayland uses the .desktop file instead)
-        auto exeDir = juce::File::getSpecialLocation (
-            juce::File::currentExecutableFile).getParentDirectory();
-        auto iconFile = exeDir.getChildFile ("drem-canvas.png");
-        if (iconFile.existsAsFile())
-            glfwWindow->setWindowIcon (iconFile.getFullPathName().toStdString());
+        auto exeDir = std::filesystem::canonical ("/proc/self/exe").parent_path();
+        auto iconFile = exeDir / "drem-canvas.png";
+        if (std::filesystem::exists (iconFile))
+            glfwWindow->setWindowIcon (iconFile.string());
 
         // Create Skia Vulkan backend
         gpuBackend = std::make_unique<dc::platform::VulkanBackend> (

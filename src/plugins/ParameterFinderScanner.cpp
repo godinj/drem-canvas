@@ -63,7 +63,7 @@ void ParameterFinderScanner::scan (VST3ParameterFinderSupport& finder,
         if (juceIdx >= 0 && juceIdx < params.size())
         {
             info.juceParamIndex = juceIdx;
-            info.name = params[juceIdx]->getName (64);
+            info.name = params[juceIdx]->getName (64).toStdString();
             mapped++;
         }
         else
@@ -85,7 +85,7 @@ void ParameterFinderScanner::scan (VST3ParameterFinderSupport& finder,
         if (idx >= 0 && idx < params.size())
         {
             info.juceParamIndex = idx;
-            info.name = params[idx]->getName (64);
+            info.name = params[idx]->getName (64).toStdString();
             wiggled++;
         }
     }
@@ -117,7 +117,7 @@ void ParameterFinderScanner::scan (VST3ParameterFinderSupport& finder,
                     if (it != reverseMap.end() && it->second >= 0 && it->second < params.size())
                     {
                         info.juceParamIndex = it->second;
-                        info.name = params[it->second]->getName (64);
+                        info.name = params[it->second]->getName (64).toStdString();
                         reverseWiggled++;
                     }
                 }

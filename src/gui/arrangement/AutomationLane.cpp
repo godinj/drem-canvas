@@ -1,4 +1,7 @@
 #include "AutomationLane.h"
+#include "gui/common/ColourBridge.h"
+
+using dc::bridge::toJuce;
 
 namespace dc
 {
@@ -120,13 +123,13 @@ float AutomationLane::yToValue (float y) const
 void AutomationLane::paint (juce::Graphics& g)
 {
     // Translucent dark background
-    g.setColour (juce::Colour (0x30000000));
+    g.setColour (toJuce (0x30000000));
     g.fillRect (getLocalBounds());
 
     // Draw parameter name in top-left
-    if (paramName.isNotEmpty())
+    if (! paramName.empty())
     {
-        g.setColour (juce::Colours::white.withAlpha (0.7f));
+        g.setColour (toJuce (dc::Colours::white.withAlpha (0.7f)));
         g.setFont (juce::Font (12.0f));
         g.drawText (paramName, 4, 2, 200, 16, juce::Justification::centredLeft, true);
     }
@@ -144,7 +147,7 @@ void AutomationLane::paint (juce::Graphics& g)
     }
 
     // Draw the automation line
-    g.setColour (juce::Colours::cyan.withAlpha (0.9f));
+    g.setColour (toJuce (dc::Colours::cyan.withAlpha (0.9f)));
     g.strokePath (automationPath, juce::PathStrokeType (2.0f));
 
     // Draw points as circles
@@ -158,19 +161,19 @@ void AutomationLane::paint (juce::Graphics& g)
         if (i == draggedPointIndex)
         {
             // Highlighted / selected point
-            g.setColour (juce::Colours::yellow);
+            g.setColour (toJuce (dc::Colours::yellow));
             g.fillEllipse (px - pointRadius, py - pointRadius,
                            pointRadius * 2.0f, pointRadius * 2.0f);
         }
         else
         {
-            g.setColour (juce::Colours::cyan);
+            g.setColour (toJuce (dc::Colours::cyan));
             g.fillEllipse (px - pointRadius, py - pointRadius,
                            pointRadius * 2.0f, pointRadius * 2.0f);
         }
 
         // Outline
-        g.setColour (juce::Colours::white);
+        g.setColour (toJuce (dc::Colours::white));
         g.drawEllipse (px - pointRadius, py - pointRadius,
                        pointRadius * 2.0f, pointRadius * 2.0f, 1.0f);
     }

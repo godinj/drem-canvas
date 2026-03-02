@@ -2,6 +2,7 @@
 
 #include <set>
 #include <JuceHeader.h>
+#include "dc/foundation/listener_list.h"
 
 namespace dc
 {
@@ -88,11 +89,11 @@ public:
 
     void notifyListeners()
     {
-        listeners.call (&Listener::keyboardStateChanged);
+        listeners.call ([] (Listener& l) { l.keyboardStateChanged(); });
     }
 
 private:
-    juce::ListenerList<Listener> listeners;
+    dc::ListenerList<Listener> listeners;
 };
 
 } // namespace dc

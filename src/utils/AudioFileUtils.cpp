@@ -8,17 +8,17 @@ AudioFileUtils::AudioFileUtils()
     formatManager.registerBasicFormats();
 }
 
-std::unique_ptr<juce::AudioFormatReader> AudioFileUtils::createReaderFor (const juce::File& file)
+std::unique_ptr<juce::AudioFormatReader> AudioFileUtils::createReaderFor (const std::filesystem::path& file)
 {
-    return std::unique_ptr<juce::AudioFormatReader> (formatManager.createReaderFor (file));
+    return std::unique_ptr<juce::AudioFormatReader> (formatManager.createReaderFor (juce::File (file.string())));
 }
 
-juce::String AudioFileUtils::getSupportedFileExtensions() const
+std::string AudioFileUtils::getSupportedFileExtensions() const
 {
-    return formatManager.getWildcardForAllFormats();
+    return formatManager.getWildcardForAllFormats().toStdString();
 }
 
-double AudioFileUtils::getFileDuration (const juce::File& file)
+double AudioFileUtils::getFileDuration (const std::filesystem::path& file)
 {
     auto reader = createReaderFor (file);
 
@@ -28,7 +28,7 @@ double AudioFileUtils::getFileDuration (const juce::File& file)
     return 0.0;
 }
 
-double AudioFileUtils::getFileSampleRate (const juce::File& file)
+double AudioFileUtils::getFileSampleRate (const std::filesystem::path& file)
 {
     auto reader = createReaderFor (file);
 
@@ -38,7 +38,7 @@ double AudioFileUtils::getFileSampleRate (const juce::File& file)
     return 0.0;
 }
 
-int64_t AudioFileUtils::getFileLengthInSamples (const juce::File& file)
+int64_t AudioFileUtils::getFileLengthInSamples (const std::filesystem::path& file)
 {
     auto reader = createReaderFor (file);
 
