@@ -6,60 +6,66 @@ namespace dc
 
 PluginManager::PluginManager()
 {
-    juce::addDefaultFormatsToManager (formatManager);
+    // Initialize JUCE format manager for backward compat (TODO: Phase 4 Agent 06 — remove)
+    juce::addDefaultFormatsToManager (formatManager_);
 }
 
 void PluginManager::scanForPlugins()
 {
-    scanDefaultPaths();
+    vst3Host_.scanPlugins();
+    syncJucePluginList();
     savePluginList (getDefaultPluginListFile());
 }
 
-void PluginManager::scanDefaultPaths()
+const std::vector<dc::PluginDescription>& PluginManager::getKnownPluginsDc() const
 {
-    for (int i = 0; i < formatManager.getNumFormats(); ++i)
-    {
-        auto* format = formatManager.getFormat (i);
+    return vst3Host_.getKnownPlugins();
+}
 
-        auto defaultLocations = format->getDefaultLocationsToSearch();
-
-        juce::PluginDirectoryScanner scanner (
-            knownPlugins,
-            *format,
-            defaultLocations,
-            true,   // recursive
-            juce::File()  // JUCE API boundary — dead-mans-pedal file (none)
-        );
-
-        juce::String pluginName; // JUCE API boundary — scanner output param
-
-        while (scanner.scanNextFile (true, pluginName))
-        {
-            // Keep scanning until all files have been checked
-        }
-    }
+dc::VST3Host& PluginManager::getVST3Host()
+{
+    return vst3Host_;
 }
 
 void PluginManager::savePluginList (const std::filesystem::path& file) const
 {
-    if (auto xml = knownPlugins.createXml())
-    {
-        std::filesystem::create_directories (file.parent_path());
-        dc::writeStringToFile (file, xml->toString().toStdString());
-    }
+    vst3Host_.saveDatabase (file);
 }
 
 void PluginManager::loadPluginList (const std::filesystem::path& file)
 {
-    if (auto xml = juce::parseXML (dc::readFileToString (file)))
-    {
-        knownPlugins.recreateFromXml (*xml);
-    }
+    vst3Host_.loadDatabase (file);
+    syncJucePluginList();
 }
 
 std::filesystem::path PluginManager::getDefaultPluginListFile() const
 {
-    return dc::getUserAppDataDirectory() / "pluginList.xml";
+    return dc::getUserAppDataDirectory() / "pluginList.yaml";
+}
+
+void PluginManager::syncJucePluginList()
+{
+    // TODO: Phase 4 Agent 06 — remove this entire method once callers migrated.
+    // Populate JUCE KnownPluginList from the dc:: database for backward compat.
+    juceKnownPlugins_.clear();
+
+    for (const auto& dcDesc : vst3Host_.getKnownPlugins())
+    {
+        juce::PluginDescription juceDesc;
+        juceDesc.name              = dcDesc.name;
+        juceDesc.pluginFormatName  = "VST3";
+        juceDesc.manufacturerName  = dcDesc.manufacturer;
+        juceDesc.category          = dcDesc.category;
+        juceDesc.version           = dcDesc.version;
+        juceDesc.fileOrIdentifier  = dcDesc.path.string();
+        juceDesc.numInputChannels  = dcDesc.numInputChannels;
+        juceDesc.numOutputChannels = dcDesc.numOutputChannels;
+        juceDesc.hasSharedContainer = false;
+        juceDesc.isInstrument      = dcDesc.acceptsMidi;
+        juceDesc.uniqueId          = 0; // hex UID doesn't map to int directly
+
+        juceKnownPlugins_.addType (juceDesc);
+    }
 }
 
 } // namespace dc

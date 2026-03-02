@@ -169,6 +169,7 @@ target_sources(DremCanvas PRIVATE
     src/dc/plugins/ComponentHandler.cpp
     src/dc/plugins/PluginInstance.cpp
     src/dc/plugins/PluginEditor.cpp
+    src/dc/plugins/VST3Host.cpp
 
     # Application entry point
     src/Main.cpp
