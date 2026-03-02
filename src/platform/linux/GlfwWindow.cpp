@@ -74,6 +74,9 @@ GlfwWindow::~GlfwWindow()
 void GlfwWindow::show()
 {
     glfwShowWindow (window);
+    glfwMaximizeWindow (window);
+    glfwPollEvents();
+    glfwGetWindowSize (window, &width, &height);
 }
 
 void GlfwWindow::pollEvents()

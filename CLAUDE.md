@@ -43,7 +43,7 @@ open "build/DremCanvas_artefacts/Release/Drem Canvas.app"
 Run (Linux):
 
 ```bash
-./build/DremCanvas_artefacts/Release/DremCanvas
+./build/DremCanvas
 ```
 
 ### Linux Dependencies
@@ -239,7 +239,7 @@ Hook configuration lives in `.claude/settings.json`.
 3. `scripts/check_deps.sh` exits 0 with all `[OK]`
 4. In worktree context, `ls -la libs/skia` shows symlink to shared cache
 5. macOS: App launches without crash: `open "build/DremCanvas_artefacts/Release/Drem Canvas.app"`
-6. Linux: App launches without crash: `./build/DremCanvas_artefacts/Release/DremCanvas`
+6. Linux: App launches without crash: `./build/DremCanvas`
 
 ## Current State
 
