@@ -155,7 +155,7 @@ void PluginViewWidget::forceSpatialRescan()
     int nativeH = editorBridge->getNativeHeight();
 
     if (! pluginFileOrIdentifier.empty())
-        SpatialScanCache::invalidate (juce::String (pluginFileOrIdentifier), nativeW, nativeH);
+        SpatialScanCache::invalidate (pluginFileOrIdentifier, nativeW, nativeH);
 
     spatialScanner.clear();
     spatialScanComplete = false;
@@ -183,7 +183,7 @@ void PluginViewWidget::runSpatialScan()
     if (! pluginFileOrIdentifier.empty())
     {
         std::vector<SpatialParamInfo> cached;
-        if (SpatialScanCache::load (juce::String (pluginFileOrIdentifier), nativeW, nativeH, cached))
+        if (SpatialScanCache::load (pluginFileOrIdentifier, nativeW, nativeH, cached))
         {
             // Regenerate hint labels from position order
             int totalCount = static_cast<int> (cached.size());
@@ -274,7 +274,7 @@ void PluginViewWidget::runSpatialScan()
 
         // Save to disk cache for instant load next time
         if (! pluginFileOrIdentifier.empty())
-            SpatialScanCache::save (juce::String (pluginFileOrIdentifier), juce::String (pluginName),
+            SpatialScanCache::save (pluginFileOrIdentifier, pluginName,
                                     nativeW, nativeH, spatialScanner.getResults());
     }
 }

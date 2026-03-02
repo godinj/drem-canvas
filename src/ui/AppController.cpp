@@ -213,7 +213,7 @@ void AppController::initialise()
         {
             auto pluginState = t.getPlugin (pluginIdx);
             name = pluginState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
-            fileOrId = pluginState.getProperty (IDs::pluginFileOrIdentifier, juce::String()).toString().toStdString();
+            fileOrId = pluginState.getProperty (IDs::pluginFileOrIdentifier, "").toString().toStdString();
         }
 
         if (pluginViewWidget)

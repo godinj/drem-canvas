@@ -1,7 +1,8 @@
 #pragma once
 
 #include "ParameterFinderScanner.h"
-#include <JuceHeader.h>
+#include <filesystem>
+#include <string>
 #include <vector>
 
 namespace dc
@@ -18,28 +19,30 @@ class SpatialScanCache
 {
 public:
     /** Save scan results to disk. Writes atomically via .tmp + rename. */
-    static void save (const juce::String& pluginFileOrIdentifier,
-                      const juce::String& pluginName,
+    static void save (const std::string& pluginFileOrIdentifier,
+                      const std::string& pluginName,
                       int editorWidth, int editorHeight,
                       const std::vector<SpatialParamInfo>& results);
 
     /** Load cached scan results from disk.
         Returns true if a valid cache file was found and results were populated.
         The caller must regenerate hintLabels after loading. */
-    static bool load (const juce::String& pluginFileOrIdentifier,
+    static bool load (const std::string& pluginFileOrIdentifier,
                       int editorWidth, int editorHeight,
                       std::vector<SpatialParamInfo>& results);
 
     /** Delete the cache file for a given plugin + editor size. */
-    static void invalidate (const juce::String& pluginFileOrIdentifier,
+    static void invalidate (const std::string& pluginFileOrIdentifier,
                             int editorWidth, int editorHeight);
 
 private:
-    static juce::File getCacheDir();
-    static juce::File getCacheFile (const juce::String& pluginFileOrIdentifier,
-                                    int editorWidth, int editorHeight);
+    static std::filesystem::path getCacheDir();
+    static std::filesystem::path getCacheFile (const std::string& pluginFileOrIdentifier,
+                                               int editorWidth, int editorHeight);
 
-    JUCE_DECLARE_NON_COPYABLE (SpatialScanCache)
+    SpatialScanCache() = delete;
+    SpatialScanCache (const SpatialScanCache&) = delete;
+    SpatialScanCache& operator= (const SpatialScanCache&) = delete;
 };
 
 } // namespace dc

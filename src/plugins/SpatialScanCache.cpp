@@ -1,28 +1,31 @@
 #include "SpatialScanCache.h"
+#include "dc/foundation/file_utils.h"
+#include "dc/foundation/string_utils.h"
 #include <yaml-cpp/yaml.h>
+#include <functional>
 #include <iostream>
 #include <fstream>
 
 namespace dc
 {
 
-juce::File SpatialScanCache::getCacheDir()
+namespace fs = std::filesystem;
+
+fs::path SpatialScanCache::getCacheDir()
 {
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-               .getChildFile ("DremCanvas")
-               .getChildFile ("spatial-cache");
+    return getUserAppDataDirectory() / "spatial-cache";
 }
 
-juce::File SpatialScanCache::getCacheFile (const juce::String& pluginFileOrIdentifier,
-                                           int editorWidth, int editorHeight)
+fs::path SpatialScanCache::getCacheFile (const std::string& pluginFileOrIdentifier,
+                                         int editorWidth, int editorHeight)
 {
-    auto key = pluginFileOrIdentifier + ":" + juce::String (editorWidth) + "x" + juce::String (editorHeight);
-    auto hash = juce::String::toHexString (key.hashCode64());
-    return getCacheDir().getChildFile (hash + ".yaml");
+    auto key = pluginFileOrIdentifier + ":" + std::to_string (editorWidth) + "x" + std::to_string (editorHeight);
+    auto hash = dc::format ("%llx", static_cast<unsigned long long> (std::hash<std::string>{} (key)));
+    return getCacheDir() / (hash + ".yaml");
 }
 
-void SpatialScanCache::save (const juce::String& pluginFileOrIdentifier,
-                             const juce::String& pluginName,
+void SpatialScanCache::save (const std::string& pluginFileOrIdentifier,
+                             const std::string& pluginName,
                              int editorWidth, int editorHeight,
                              const std::vector<SpatialParamInfo>& results)
 {
@@ -30,14 +33,14 @@ void SpatialScanCache::save (const juce::String& pluginFileOrIdentifier,
         return;
 
     auto cacheDir = getCacheDir();
-    if (! cacheDir.isDirectory())
-        cacheDir.createDirectory();
+    std::error_code ec;
+    fs::create_directories (cacheDir, ec);
 
     YAML::Emitter out;
     out << YAML::BeginMap;
     out << YAML::Key << "spatial_scan_cache" << YAML::Value << YAML::BeginMap;
-    out << YAML::Key << "plugin_file_or_identifier" << YAML::Value << pluginFileOrIdentifier.toStdString();
-    out << YAML::Key << "plugin_name" << YAML::Value << pluginName.toStdString();
+    out << YAML::Key << "plugin_file_or_identifier" << YAML::Value << pluginFileOrIdentifier;
+    out << YAML::Key << "plugin_name" << YAML::Value << pluginName;
     out << YAML::Key << "editor_width" << YAML::Value << editorWidth;
     out << YAML::Key << "editor_height" << YAML::Value << editorHeight;
     out << YAML::Key << "params" << YAML::Value << YAML::BeginSeq;
@@ -58,45 +61,37 @@ void SpatialScanCache::save (const juce::String& pluginFileOrIdentifier,
     out << YAML::EndMap;
     out << YAML::EndMap;
 
-    // Atomic write: write to .tmp then rename
     auto cacheFile = getCacheFile (pluginFileOrIdentifier, editorWidth, editorHeight);
-    auto tmpFile = cacheFile.withFileExtension (".tmp");
 
+    if (! writeStringToFile (cacheFile, out.c_str()))
     {
-        std::ofstream fs (tmpFile.getFullPathName().toStdString());
-        if (! fs.is_open())
-        {
-            std::cerr << "[SpatialScanCache] Failed to open tmp file for writing: "
-                      << tmpFile.getFullPathName() << "\n";
-            return;
-        }
-        fs << out.c_str();
+        std::cerr << "[SpatialScanCache] Failed to write cache file: "
+                  << cacheFile.string() << "\n";
+        return;
     }
 
-    tmpFile.moveFileTo (cacheFile);
-
     std::cerr << "[SpatialScanCache] Saved " << results.size() << " params to "
-              << cacheFile.getFileName() << "\n";
+              << cacheFile.filename().string() << "\n";
 }
 
-bool SpatialScanCache::load (const juce::String& pluginFileOrIdentifier,
+bool SpatialScanCache::load (const std::string& pluginFileOrIdentifier,
                              int editorWidth, int editorHeight,
                              std::vector<SpatialParamInfo>& results)
 {
     auto cacheFile = getCacheFile (pluginFileOrIdentifier, editorWidth, editorHeight);
 
-    if (! cacheFile.existsAsFile())
+    if (! fs::exists (cacheFile))
         return false;
 
     try
     {
-        auto root = YAML::LoadFile (cacheFile.getFullPathName().toStdString());
+        auto root = YAML::LoadFile (cacheFile.string());
         auto cache = root["spatial_scan_cache"];
         if (! cache || ! cache.IsMap())
             return false;
 
         // Validate identifier and dimensions match
-        auto storedId = juce::String (cache["plugin_file_or_identifier"].as<std::string>());
+        auto storedId = cache["plugin_file_or_identifier"].as<std::string>();
         int storedW = cache["editor_width"].as<int>();
         int storedH = cache["editor_height"].as<int>();
 
@@ -134,14 +129,15 @@ bool SpatialScanCache::load (const juce::String& pluginFileOrIdentifier,
     }
 }
 
-void SpatialScanCache::invalidate (const juce::String& pluginFileOrIdentifier,
+void SpatialScanCache::invalidate (const std::string& pluginFileOrIdentifier,
                                    int editorWidth, int editorHeight)
 {
     auto cacheFile = getCacheFile (pluginFileOrIdentifier, editorWidth, editorHeight);
-    if (cacheFile.existsAsFile())
+    if (fs::exists (cacheFile))
     {
-        cacheFile.deleteFile();
-        std::cerr << "[SpatialScanCache] Invalidated " << cacheFile.getFileName() << "\n";
+        std::error_code ec;
+        fs::remove (cacheFile, ec);
+        std::cerr << "[SpatialScanCache] Invalidated " << cacheFile.filename().string() << "\n";
     }
 }
 
