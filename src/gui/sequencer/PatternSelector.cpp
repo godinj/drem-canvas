@@ -35,7 +35,7 @@ void PatternSelector::rebuild()
 {
     patternButtons.clear();
 
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
@@ -57,7 +57,7 @@ void PatternSelector::rebuild()
 
         btn->onClick = [this, bank, slot]
         {
-            auto seqSt = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+            auto seqSt = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
             if (! seqSt.isValid()) return;
 
             StepSequencer seqModel (seqSt);

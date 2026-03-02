@@ -180,7 +180,7 @@ MainComponent::MainComponent()
 
                 // Remove from model
                 auto masterBus = project.getMasterBusState();
-                auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+                auto chain = masterBus.getChildWithType (IDs::PLUGIN_CHAIN);
                 if (chain.isValid() && pluginIndex < chain.getNumChildren())
                     chain.removeChild (pluginIndex, &project.getUndoManager());
 
@@ -222,7 +222,7 @@ MainComponent::MainComponent()
         {
             // Master strip
             auto masterBus = project.getMasterBusState();
-            auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+            auto chain = masterBus.getChildWithType (IDs::PLUGIN_CHAIN);
             if (chain.isValid() && pluginIndex < chain.getNumChildren())
             {
                 auto plugin = chain.getChild (pluginIndex);
@@ -255,7 +255,7 @@ MainComponent::MainComponent()
         {
             // Master strip
             auto masterBus = project.getMasterBusState();
-            auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+            auto chain = masterBus.getChildWithType (IDs::PLUGIN_CHAIN);
             if (chain.isValid() && fromIndex < chain.getNumChildren() && toIndex < chain.getNumChildren())
             {
                 audioEngine.getGraph().suspendProcessing (true);
@@ -702,7 +702,7 @@ void MainComponent::syncTrackProcessorsFromModel()
 
 void MainComponent::syncSequencerFromModel()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid() || sequencerProcessor == nullptr)
         return;
 
@@ -1269,7 +1269,7 @@ void MainComponent::captureAllPluginStates()
 
     // Capture master plugin states
     auto masterBus = project.getMasterBusState();
-    auto masterChainTree = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+    auto masterChainTree = masterBus.getChildWithType (IDs::PLUGIN_CHAIN);
     for (int p = 0; p < static_cast<int> (masterPluginChain.size()) && p < masterChainTree.getNumChildren(); ++p)
     {
         if (masterPluginChain[static_cast<size_t> (p)].plugin != nullptr)
@@ -1288,7 +1288,7 @@ void MainComponent::connectMasterPluginChain()
         return;
 
     auto masterBus = project.getMasterBusState();
-    auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+    auto chain = masterBus.getChildWithType (IDs::PLUGIN_CHAIN);
 
     // Build list of enabled plugin nodes
     std::vector<juce::AudioProcessorGraph::Node::Ptr> enabledNodes;
@@ -1369,22 +1369,22 @@ void MainComponent::openMasterPluginEditor (int pluginIndex)
 void MainComponent::insertPluginOnMaster (const juce::PluginDescription& desc)
 {
     auto masterBus = project.getMasterBusState();
-    auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+    auto chain = masterBus.getChildWithType (IDs::PLUGIN_CHAIN);
     if (! chain.isValid())
     {
-        chain = juce::ValueTree (IDs::PLUGIN_CHAIN);
-        masterBus.appendChild (chain, nullptr);
+        chain = PropertyTree (IDs::PLUGIN_CHAIN);
+        masterBus.addChild (chain, -1, nullptr);
     }
 
     // Add to model
-    auto pluginNode = juce::ValueTree (IDs::PLUGIN);
-    pluginNode.setProperty (IDs::pluginName, desc.name, nullptr);
-    pluginNode.setProperty (IDs::pluginFormat, desc.pluginFormatName, nullptr);
-    pluginNode.setProperty (IDs::pluginManufacturer, desc.manufacturerName, nullptr);
+    auto pluginNode = PropertyTree (IDs::PLUGIN);
+    pluginNode.setProperty (IDs::pluginName, desc.name.toStdString(), nullptr);
+    pluginNode.setProperty (IDs::pluginFormat, desc.pluginFormatName.toStdString(), nullptr);
+    pluginNode.setProperty (IDs::pluginManufacturer, desc.manufacturerName.toStdString(), nullptr);
     pluginNode.setProperty (IDs::pluginUniqueId, desc.uniqueId, nullptr);
-    pluginNode.setProperty (IDs::pluginFileOrIdentifier, desc.fileOrIdentifier, nullptr);
+    pluginNode.setProperty (IDs::pluginFileOrIdentifier, desc.fileOrIdentifier.toStdString(), nullptr);
     pluginNode.setProperty (IDs::pluginEnabled, true, nullptr);
-    chain.appendChild (pluginNode, &project.getUndoManager());
+    chain.addChild (pluginNode, -1, &project.getUndoManager());
 
     // Async instantiate and add to graph
     auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()

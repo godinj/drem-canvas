@@ -157,8 +157,8 @@ void VimStatusBar::paint (juce::Graphics& g)
 
         if (context.getMixerFocus() == VimContext::FocusPlugins)
         {
-            auto masterBus = arrangement.getProject().getState().getChildWithName (IDs::MASTER_BUS);
-            auto chain = masterBus.isValid() ? masterBus.getChildWithName (IDs::PLUGIN_CHAIN) : juce::ValueTree();
+            auto masterBus = arrangement.getProject().getState().getChildWithType (IDs::MASTER_BUS);
+            auto chain = masterBus.isValid() ? masterBus.getChildWithType (IDs::PLUGIN_CHAIN) : PropertyTree();
             int numPlugins = chain.isValid() ? chain.getNumChildren() : 0;
             int slot = context.getSelectedPluginSlot();
 
