@@ -9,6 +9,7 @@
 #include "platform/NativeDialogs.h"
 #include "plugins/PluginEditorBridge.h"
 #include "utils/UndoSystem.h"
+#include "dc/foundation/assert.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>

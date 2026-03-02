@@ -179,8 +179,8 @@ std::vector<std::filesystem::path> PluginScanner::findBundles(
 
     if (ec)
     {
-        dc_log(("PluginScanner: error iterating directory: " + searchDir.string()
-                + " (" + ec.message() + ")").c_str());
+        dc_log("PluginScanner: error iterating directory: %s (%s)",
+               searchDir.string().c_str(), ec.message().c_str());
     }
 
     std::sort(bundles.begin(), bundles.end());
@@ -434,8 +434,8 @@ std::optional<PluginDescription> PluginScanner::scanOneForked(
     if (! childFinished)
     {
         // Timeout — kill the child
-        dc_log(("PluginScanner: child timed out scanning: "
-                + bundlePath.string()).c_str());
+        dc_log("PluginScanner: child timed out scanning: %s",
+               bundlePath.string().c_str());
         kill(pid, SIGKILL);
         waitpid(pid, &status, 0);  // reap zombie
         close(pipefd[0]);
@@ -448,14 +448,13 @@ std::optional<PluginDescription> PluginScanner::scanOneForked(
     {
         if (WIFSIGNALED(status))
         {
-            dc_log(("PluginScanner: child crashed (signal "
-                    + std::to_string(WTERMSIG(status))
-                    + ") scanning: " + bundlePath.string()).c_str());
+            dc_log("PluginScanner: child crashed (signal %d) scanning: %s",
+                   WTERMSIG(status), bundlePath.string().c_str());
         }
         else
         {
-            dc_log(("PluginScanner: child failed scanning: "
-                    + bundlePath.string()).c_str());
+            dc_log("PluginScanner: child failed scanning: %s",
+                   bundlePath.string().c_str());
         }
 
         close(pipefd[0]);
@@ -497,8 +496,8 @@ std::vector<PluginDescription> PluginScanner::scanAll()
         allBundles.insert(allBundles.end(), bundles.begin(), bundles.end());
     }
 
-    dc_log(("PluginScanner: found " + std::to_string(allBundles.size())
-            + " VST3 bundle(s) to scan").c_str());
+    dc_log("PluginScanner: found %d VST3 bundle(s) to scan",
+           static_cast<int>(allBundles.size()));
 
     // 2. Scan each bundle via forked subprocess
     std::vector<PluginDescription> results;
@@ -518,16 +517,16 @@ std::vector<PluginDescription> PluginScanner::scanAll()
         if (desc.has_value())
         {
             results.push_back(std::move(desc.value()));
-            dc_log(("PluginScanner: scanned OK: " + pluginName).c_str());
+            dc_log("PluginScanner: scanned OK: %s", pluginName.c_str());
         }
         else
         {
-            dc_log(("PluginScanner: failed to scan: " + pluginName).c_str());
+            dc_log("PluginScanner: failed to scan: %s", pluginName.c_str());
         }
     }
 
-    dc_log(("PluginScanner: scan complete — " + std::to_string(results.size())
-            + " plugin(s) found").c_str());
+    dc_log("PluginScanner: scan complete — %d plugin(s) found",
+           static_cast<int>(results.size()));
 
     return results;
 }

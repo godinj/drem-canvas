@@ -56,7 +56,7 @@ void VST3Host::loadDatabase (const std::filesystem::path& path)
     }
     catch (const YAML::Exception& e)
     {
-        dc_log (e.what());
+        dc_log ("%s", e.what());
     }
 }
 

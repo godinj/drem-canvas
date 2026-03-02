@@ -28,7 +28,7 @@ std::unique_ptr<VST3Module> VST3Module::load(const std::filesystem::path& bundle
 {
     if (! std::filesystem::exists(bundlePath))
     {
-        dc_log(("VST3Module: bundle not found: " + bundlePath.string()).c_str());
+        dc_log("VST3Module: bundle not found: %s", bundlePath.string().c_str());
         return nullptr;
     }
 
@@ -36,7 +36,7 @@ std::unique_ptr<VST3Module> VST3Module::load(const std::filesystem::path& bundle
 
     if (! std::filesystem::exists(libPath))
     {
-        dc_log(("VST3Module: library not found: " + libPath.string()).c_str());
+        dc_log("VST3Module: library not found: %s", libPath.string().c_str());
         return nullptr;
     }
 
@@ -45,8 +45,7 @@ std::unique_ptr<VST3Module> VST3Module::load(const std::filesystem::path& bundle
 
     if (handle == nullptr)
     {
-        auto err = std::string("VST3Module: dlopen failed: ") + (dlerror() ? dlerror() : "unknown error");
-        dc_log(err.c_str());
+        dc_log("VST3Module: dlopen failed: %s", dlerror() ? dlerror() : "unknown error");
         return nullptr;
     }
 
