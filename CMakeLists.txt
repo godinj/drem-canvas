@@ -90,6 +90,8 @@ target_sources(DremCanvas PRIVATE
     # dc::model library
     src/dc/model/PropertyId.cpp
     src/dc/model/Variant.cpp
+    src/dc/model/UndoManager.cpp
+    src/dc/model/PropertyTree.cpp
 
     # Application entry point
     src/Main.cpp

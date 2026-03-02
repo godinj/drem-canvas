@@ -4,16 +4,13 @@
 namespace dc
 {
 
-UndoSystem::UndoSystem (juce::UndoManager& um)
-    : undoManager (um)
-{
-}
+UndoSystem::UndoSystem() = default;
 
 void UndoSystem::beginTransaction (const std::string& name)
 {
-    undoManager.beginNewTransaction (name.c_str());
-    currentCoalescingName.clear();
-    lastCoalescingTime = 0;
+    undoManager_.beginTransaction (name);
+    currentCoalescingName_.clear();
+    lastCoalescingTime_ = 0;
 }
 
 void UndoSystem::endTransaction()
@@ -26,48 +23,48 @@ void UndoSystem::beginCoalescedTransaction (const std::string& name, int windowM
 {
     auto now = dc::currentTimeMillis();
 
-    bool shouldCoalesce = (name == currentCoalescingName)
-                          && (lastCoalescingTime != 0)
-                          && ((now - lastCoalescingTime) < windowMs);
+    bool shouldCoalesce = (name == currentCoalescingName_)
+                          && (lastCoalescingTime_ != 0)
+                          && ((now - lastCoalescingTime_) < windowMs);
 
     if (! shouldCoalesce)
     {
-        undoManager.beginNewTransaction (name.c_str());
-        currentCoalescingName = name;
-        coalescingWindowMs = windowMs;
+        undoManager_.beginTransaction (name);
+        currentCoalescingName_ = name;
+        coalescingWindowMs_ = windowMs;
     }
 
-    lastCoalescingTime = now;
+    lastCoalescingTime_ = now;
 }
 
 void UndoSystem::undo()
 {
-    undoManager.undo();
+    undoManager_.undo();
 }
 
 void UndoSystem::redo()
 {
-    undoManager.redo();
+    undoManager_.redo();
 }
 
 bool UndoSystem::canUndo() const
 {
-    return undoManager.canUndo();
+    return undoManager_.canUndo();
 }
 
 bool UndoSystem::canRedo() const
 {
-    return undoManager.canRedo();
+    return undoManager_.canRedo();
 }
 
 std::string UndoSystem::getUndoDescription() const
 {
-    return undoManager.getUndoDescription().toStdString();
+    return undoManager_.getUndoDescription();
 }
 
 std::string UndoSystem::getRedoDescription() const
 {
-    return undoManager.getRedoDescription().toStdString();
+    return undoManager_.getRedoDescription();
 }
 
 } // namespace dc

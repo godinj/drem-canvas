@@ -1,5 +1,7 @@
 #pragma once
-#include <JuceHeader.h>
+
+#include "dc/model/UndoManager.h"
+
 #include <string>
 
 namespace dc
@@ -8,7 +10,7 @@ namespace dc
 class UndoSystem
 {
 public:
-    explicit UndoSystem (juce::UndoManager& undoManager);
+    UndoSystem();
 
     // Transaction grouping
     void beginTransaction (const std::string& name = {});
@@ -26,13 +28,13 @@ public:
     std::string getUndoDescription() const;
     std::string getRedoDescription() const;
 
-    juce::UndoManager& getUndoManager() { return undoManager; }
+    UndoManager& getUndoManager() { return undoManager_; }
 
 private:
-    juce::UndoManager& undoManager;
-    std::string currentCoalescingName;
-    int64_t lastCoalescingTime = 0;
-    int coalescingWindowMs = 500;
+    UndoManager undoManager_;
+    std::string currentCoalescingName_;
+    int64_t lastCoalescingTime_ = 0;
+    int coalescingWindowMs_ = 500;
 
     UndoSystem (const UndoSystem&) = delete;
     UndoSystem& operator= (const UndoSystem&) = delete;

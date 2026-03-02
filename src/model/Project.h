@@ -113,7 +113,7 @@ public:
 private:
     juce::ValueTree state;
     juce::UndoManager undoManager;
-    UndoSystem undoSystem { undoManager };
+    UndoSystem undoSystem;
     Clipboard clipboard;
 
     void createDefaultState();
