@@ -1,0 +1,24 @@
+Checks: >
+  -*,
+  bugprone-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  concurrency-mt-unsafe,
+  -modernize-use-trailing-return-type,
+  -readability-magic-numbers,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-identifier-length,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic
+
+WarningsAsErrors: >
+  bugprone-use-after-move,
+  cppcoreguidelines-no-malloc,
+  concurrency-mt-unsafe
+
+HeaderFilterRegex: 'src/dc/.*'
+
+CheckOptions:
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 25

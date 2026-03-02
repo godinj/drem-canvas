@@ -187,6 +187,68 @@ double timeInSeconds = (double(mouseX - headerWidth) + scrollOffset) / pixelsPer
 - All new `.cpp` files must be added to `target_sources` in `CMakeLists.txt`
 - Always verify with `cmake --build --preset release` after changes
 
+## Testing
+
+### Running Tests
+
+```bash
+cmake --preset test             # configure with testing enabled
+cmake --build --preset test     # build app + test executables
+ctest --test-dir build-debug --output-on-failure -j$(nproc)
+```
+
+Run a specific test executable directly:
+
+```bash
+./build-debug/dc_unit_tests                     # all unit tests
+./build-debug/dc_unit_tests "[regression]"      # regression tests only
+./build-debug/dc_unit_tests "[integration]"     # integration tests only
+```
+
+### Verification
+
+IMPORTANT: Run `scripts/verify.sh` before declaring any task complete. If the script
+fails, fix the issue and re-run until it passes. The verification script checks:
+
+1. Full build (`cmake --build --preset test`)
+2. Architecture boundaries (`scripts/check_architecture.sh`)
+3. Static analysis on changed dc:: files (clang-tidy, if available)
+4. All unit tests (`ctest`)
+5. Golden file comparisons
+
+Never commit code that fails `scripts/check_architecture.sh`.
+
+### Test Conventions
+
+- All new dc:: code must have corresponding unit tests in `tests/unit/`
+- Test files follow `test_<class_name>.cpp` naming convention
+- Use Catch2 `TEST_CASE` with descriptive string names
+- Use `SECTION` blocks for shared setup within a test case
+- Tag integration tests with `[integration]`, fuzz tests with `[fuzz]`
+- Regression tests go in `tests/regression/` with the `[regression]` tag
+- Bug-fix tests are permanent -- regression tests are never deleted
+
+### Regression Test Workflow
+
+1. Bug is discovered (during agent session, testing, or user report)
+2. Write a test in `tests/regression/issue_NNN_short_description.cpp` that reproduces the bug
+3. Fix the bug
+4. Verify test passes
+5. Commit test alongside fix
+
+See `tests/regression/README.md` for the full template.
+
+### Agent Guardrails (Hooks)
+
+Two verification tiers run automatically via Claude Code hooks:
+
+- **Tier 1** (`scripts/quick-check.sh`): Runs after every Edit/Write. Checks
+  architecture boundaries and real-time safety on changed files. Budget: 2 seconds.
+- **Tier 2** (`scripts/verify.sh`): Runs when the agent session ends. Full build,
+  architecture check, tests, golden file comparisons. Budget: 30 seconds.
+
+Hook configuration lives in `.claude/settings.json`.
+
 ## Verification
 
 1. `scripts/bootstrap.sh` succeeds when run twice (idempotent)

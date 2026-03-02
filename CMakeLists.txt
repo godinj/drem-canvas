@@ -9,6 +9,8 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(BUILD_TESTING "Build test targets" OFF)
+
 add_subdirectory(libs/JUCE)
 
 # yaml-cpp for YAML session serialization
@@ -49,6 +51,9 @@ endif()
 # ─── libpng (required by Skia) ────────────────────────────────
 find_package(PNG REQUIRED)
 
+# ─── Thread support (needed by dc:: libraries) ───────────────
+find_package(Threads REQUIRED)
+
 # ─── Platform-specific dependencies ──────────────────────────
 if(APPLE)
     find_library(METAL_FRAMEWORK Metal)
@@ -58,6 +63,9 @@ if(APPLE)
     find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
     find_library(CORETEXT_FRAMEWORK CoreText)
     find_library(COREGRAPHICS_FRAMEWORK CoreGraphics)
+
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SNDFILE REQUIRED sndfile)
 elseif(UNIX AND NOT APPLE)
     find_package(Vulkan REQUIRED)
     find_package(PkgConfig REQUIRED)
@@ -98,7 +106,6 @@ elseif(UNIX AND NOT APPLE)
         FetchContent_MakeAvailable(rtmidi)
         set(DC_RTMIDI_LINK rtmidi)
     endif()
-    find_package(Threads REQUIRED)
     find_package(X11 REQUIRED)
     if(NOT X11_Xcomposite_FOUND)
         message(FATAL_ERROR "X11 Xcomposite extension not found (libxcomposite-dev)")
@@ -114,6 +121,67 @@ elseif(UNIX AND NOT APPLE)
     endif()
 endif()
 
+# ─── dc::foundation config header ────────────────────────────
+configure_file(
+    "${CMAKE_SOURCE_DIR}/src/dc/foundation/config.h.in"
+    "${CMAKE_BINARY_DIR}/generated/dc/foundation/config.h"
+)
+
+# ═══════════════════════════════════════════════════════════════
+# dc:: Library Targets (NO JUCE, NO Skia, NO GUI dependencies)
+# ═══════════════════════════════════════════════════════════════
+
+# ─── dc_foundation ────────────────────────────────────────────
+add_library(dc_foundation STATIC
+    src/dc/foundation/base64.cpp
+    src/dc/foundation/message_queue.cpp
+    src/dc/foundation/worker_thread.cpp
+)
+target_include_directories(dc_foundation PUBLIC
+    src/
+    ${CMAKE_BINARY_DIR}/generated/
+)
+target_compile_features(dc_foundation PUBLIC cxx_std_17)
+target_compile_definitions(dc_foundation PRIVATE DC_LIBRARY_BUILD)
+target_link_libraries(dc_foundation PUBLIC Threads::Threads)
+
+# ─── dc_model ─────────────────────────────────────────────────
+add_library(dc_model STATIC
+    src/dc/model/Variant.cpp
+    src/dc/model/PropertyId.cpp
+    src/dc/model/PropertyTree.cpp
+    src/dc/model/UndoManager.cpp
+)
+target_compile_definitions(dc_model PRIVATE DC_LIBRARY_BUILD)
+target_link_libraries(dc_model PUBLIC dc_foundation)
+
+# ─── dc_midi ──────────────────────────────────────────────────
+add_library(dc_midi STATIC
+    src/dc/midi/MidiMessage.cpp
+    src/dc/midi/MidiBuffer.cpp
+    src/dc/midi/MidiSequence.cpp
+)
+target_compile_definitions(dc_midi PRIVATE DC_LIBRARY_BUILD)
+target_link_libraries(dc_midi PUBLIC dc_foundation)
+
+# ─── dc_audio ─────────────────────────────────────────────────
+add_library(dc_audio STATIC
+    src/dc/audio/AudioFileReader.cpp
+    src/dc/audio/AudioFileWriter.cpp
+    src/dc/audio/DiskStreamer.cpp
+    src/dc/audio/ThreadedRecorder.cpp
+)
+target_compile_definitions(dc_audio PRIVATE DC_LIBRARY_BUILD)
+target_link_libraries(dc_audio PUBLIC dc_foundation Threads::Threads)
+
+# libsndfile (required for audio file I/O)
+target_include_directories(dc_audio PRIVATE ${SNDFILE_INCLUDE_DIRS})
+target_link_libraries(dc_audio PRIVATE ${SNDFILE_LIBRARIES})
+
+# ═══════════════════════════════════════════════════════════════
+# Main Application Target
+# ═══════════════════════════════════════════════════════════════
+
 juce_add_gui_app(DremCanvas
     PRODUCT_NAME "Drem Canvas"
     COMPANY_NAME "Drem"
@@ -124,36 +192,10 @@ juce_add_gui_app(DremCanvas
 
 juce_generate_juce_header(DremCanvas)
 
-# ─── dc::foundation config header ────────────────────────────
-configure_file(
-    "${CMAKE_SOURCE_DIR}/src/dc/foundation/config.h.in"
-    "${CMAKE_BINARY_DIR}/generated/dc/foundation/config.h"
-)
-
-# ─── Common sources ──────────────────────────────────────────
+# ─── Application sources (dc:: files now come from library targets) ──
 target_sources(DremCanvas PRIVATE
-    # dc::foundation library
-    src/dc/foundation/base64.cpp
-    src/dc/foundation/message_queue.cpp
-    src/dc/foundation/worker_thread.cpp
-
-    # dc::model library
-    src/dc/model/PropertyId.cpp
-    src/dc/model/Variant.cpp
-    src/dc/model/UndoManager.cpp
-    src/dc/model/PropertyTree.cpp
-
-    # dc::midi library
-    src/dc/midi/MidiMessage.cpp
-    src/dc/midi/MidiBuffer.cpp
-    src/dc/midi/MidiSequence.cpp
+    # dc:: device managers (depend on PortAudio/RtMidi, stay in main target)
     src/dc/midi/MidiDeviceManager.cpp
-
-    # dc::audio library
-    src/dc/audio/AudioFileReader.cpp
-    src/dc/audio/AudioFileWriter.cpp
-    src/dc/audio/DiskStreamer.cpp
-    src/dc/audio/ThreadedRecorder.cpp
     src/dc/audio/PortAudioDeviceManager.cpp
 
     # dc::engine library
@@ -418,6 +460,10 @@ endif()
 
 # ─── Link libraries ──────────────────────────────────────────
 target_link_libraries(DremCanvas PRIVATE
+    dc_foundation
+    dc_model
+    dc_midi
+    dc_audio
     juce::juce_audio_basics
     juce::juce_audio_devices
     juce::juce_audio_formats
@@ -460,4 +506,33 @@ elseif(UNIX AND NOT APPLE)
         ${X11_Xfixes_LIB}
         ${X11_Xtst_LIB}
     )
+endif()
+
+# ═══════════════════════════════════════════════════════════════
+# Test Infrastructure (only when BUILD_TESTING=ON)
+# ═══════════════════════════════════════════════════════════════
+
+if(BUILD_TESTING)
+    enable_testing()
+
+    FetchContent_Declare(
+        Catch2
+        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+        GIT_TAG        v3.8.1
+    )
+    FetchContent_MakeAvailable(Catch2)
+
+    # CRITICAL: Catch2's catch_discover_tests() macro lives in extras/
+    list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
+    include(CTest)
+    include(Catch)
+
+    FetchContent_Declare(
+        trompeloeil
+        GIT_REPOSITORY https://github.com/rollbear/trompeloeil.git
+        GIT_TAG        v49
+    )
+    FetchContent_MakeAvailable(trompeloeil)
+
+    add_subdirectory(tests)
 endif()

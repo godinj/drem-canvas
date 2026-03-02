@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <atomic>
+#include <cstdint>
 #include <string>
 
 namespace dc
@@ -8,6 +9,9 @@ namespace dc
 
 class TransportController
 {
+    static_assert (std::atomic<int64_t>::is_always_lock_free,
+        "Transport position must be lock-free on this platform");
+
 public:
     TransportController();
 

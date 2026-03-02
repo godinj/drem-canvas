@@ -16,6 +16,28 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
+    },
+    {
+      "name": "test",
+      "displayName": "Test (Debug + Testing)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "coverage",
+      "displayName": "Coverage (Debug + Instrumentation)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-coverage",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON",
+        "CMAKE_CXX_FLAGS": "-fprofile-instr-generate -fcoverage-mapping",
+        "CMAKE_C_FLAGS": "-fprofile-instr-generate -fcoverage-mapping"
+      }
     }
   ],
   "buildPresets": [
@@ -26,6 +48,14 @@
     {
       "name": "debug",
       "configurePreset": "debug"
+    },
+    {
+      "name": "test",
+      "configurePreset": "test"
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage"
     }
   ]
 }
