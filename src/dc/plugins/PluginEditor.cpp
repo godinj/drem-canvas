@@ -3,6 +3,7 @@
 #include "dc/foundation/assert.h"
 
 #include <pluginterfaces/gui/iplugview.h>
+#include <pluginterfaces/vst/ivstplugview.h>
 #include <pluginterfaces/base/funknown.h>
 #include <atomic>
 
@@ -103,6 +104,16 @@ std::unique_ptr<PluginEditor> PluginEditor::create (PluginInstance& instance)
     editor->frame_ = std::make_unique<PlugFrame>();
     view->setFrame (editor->frame_.get());
 
+    // Query IParameterFinder from the view (standard location per VST3 spec)
+    Steinberg::Vst::IParameterFinder* viewFinder = nullptr;
+    view->queryInterface (Steinberg::Vst::IParameterFinder::iid,
+                          reinterpret_cast<void**> (&viewFinder));
+    if (viewFinder != nullptr)
+    {
+        editor->viewFinder_ = viewFinder;
+        instance.setViewParameterFinder (viewFinder);
+    }
+
     return editor;
 }
 
@@ -118,6 +129,14 @@ PluginEditor::~PluginEditor()
 {
     if (attached_)
         detach();
+
+    // Unregister the view-based parameter finder before releasing the view
+    if (viewFinder_ != nullptr)
+    {
+        instance_.setViewParameterFinder (nullptr);
+        viewFinder_->release();
+        viewFinder_ = nullptr;
+    }
 
     if (view_ != nullptr)
     {

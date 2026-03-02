@@ -88,6 +88,16 @@ public:
     // Browser toggle (used by E2E --browser-scan flag)
     void toggleBrowser();
 
+    // Plugin chain info (used by E2E --capture-plugin-state flag)
+    struct PluginNodeInfo
+    {
+        NodeId node = 0;
+        dc::PluginInstance* plugin = nullptr;
+    };
+
+    /// Returns plugin chain info for the specified track (e2e test support).
+    const std::vector<PluginNodeInfo>& getTrackPluginChain (int trackIndex) const;
+
 private:
     // PropertyTree::Listener
     void propertyChanged (PropertyTree&, PropertyId) override;
@@ -103,13 +113,6 @@ private:
     void syncTrackProcessorsFromModel();
     void syncSequencerFromModel();
     void syncMidiClipFromModel (int trackIndex);
-
-    // Plugin chain helpers
-    struct PluginNodeInfo
-    {
-        NodeId node = 0;
-        dc::PluginInstance* plugin = nullptr;
-    };
 
     void connectTrackPluginChain (int trackIndex);
     void disconnectTrackPluginChain (int trackIndex);

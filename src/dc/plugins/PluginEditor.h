@@ -1,6 +1,7 @@
 #pragma once
 
 #include <pluginterfaces/gui/iplugview.h>
+#include <pluginterfaces/vst/ivstplugview.h>
 #include <pluginterfaces/base/funknown.h>
 #include <functional>
 #include <memory>
@@ -67,6 +68,7 @@ private:
     Steinberg::IPlugView* view_ = nullptr;
     PluginInstance& instance_;
     std::unique_ptr<PlugFrame> frame_;
+    Steinberg::Vst::IParameterFinder* viewFinder_ = nullptr;  // queried from view
     bool attached_ = false;
 };
 

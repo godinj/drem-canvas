@@ -14,7 +14,15 @@ public:
     ~AudioEngine();
 
     void initialise (int numInputChannels, int numOutputChannels);
+    void stopStream();
     void shutdown();
+
+    /** Suspend audio processing (callback outputs silence).
+        Blocks until any in-flight callback has completed. */
+    void suspendProcessing();
+
+    /** Resume audio processing after a suspension. */
+    void resumeProcessing();
 
     dc::AudioGraph& getGraph() { return graph_; }
 

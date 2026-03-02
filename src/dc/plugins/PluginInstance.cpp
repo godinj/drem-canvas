@@ -15,6 +15,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <csignal>
+#include <csetjmp>
 #include <cstring>
 
 namespace dc {
@@ -341,6 +343,18 @@ std::string string128ToString (const Steinberg::Vst::String128& s128)
     return result;
 }
 
+// ─── Signal-safe crash protection for audio-thread plugin calls ──────────
+
+thread_local sigjmp_buf g_processJmpBuf;
+thread_local std::atomic<bool>* g_bypassFlag = nullptr;
+
+void processSignalHandler (int /*sig*/)
+{
+    if (g_bypassFlag != nullptr)
+        g_bypassFlag->store (true, std::memory_order_relaxed);
+    siglongjmp (g_processJmpBuf, 1);
+}
+
 } // anonymous namespace
 
 // ─── PluginInstance static factory ───────────────────────────────────────
@@ -593,9 +607,7 @@ void PluginInstance::release()
 
 void PluginInstance::process (AudioBlock& audio, MidiBlock& midi, int numSamples)
 {
-    dc_assert (prepared_);
-
-    if (processor_ == nullptr)
+    if (! prepared_ || processor_ == nullptr || bypassed_.load (std::memory_order_relaxed))
         return;
 
     // --- Build channel pointer array on stack ---
@@ -696,8 +708,29 @@ void PluginInstance::process (AudioBlock& audio, MidiBlock& midi, int numSamples
     outputEvents.reserve (128);
     processData_.outputEvents = &outputEvents;
 
-    // --- Call the processor ---
-    processor_->process (processData_);
+    // --- Call the processor (with signal-safe crash protection) ---
+    g_bypassFlag = &bypassed_;
+    struct sigaction newAction {}, oldSegv {}, oldBus {};
+    newAction.sa_handler = processSignalHandler;
+    newAction.sa_flags = 0;
+    sigemptyset (&newAction.sa_mask);
+
+    sigaction (SIGSEGV, &newAction, &oldSegv);
+    sigaction (SIGBUS, &newAction, &oldBus);
+
+    if (sigsetjmp (g_processJmpBuf, 1) == 0)
+    {
+        processor_->process (processData_);
+    }
+    else
+    {
+        dc_log ("PluginInstance::process: plugin '%s' crashed — bypassing",
+                description_.name.c_str());
+    }
+
+    sigaction (SIGSEGV, &oldSegv, nullptr);
+    sigaction (SIGBUS, &oldBus, nullptr);
+    g_bypassFlag = nullptr;
 
     // --- Copy output events back to MidiBlock ---
     if (producesMidi())
@@ -762,6 +795,18 @@ bool PluginInstance::producesMidi() const
 std::string PluginInstance::getName() const
 {
     return description_.name;
+}
+
+// ─── Bypass ──────────────────────────────────────────────────────────────
+
+bool PluginInstance::isBypassed() const
+{
+    return bypassed_.load (std::memory_order_relaxed);
+}
+
+void PluginInstance::resetBypass()
+{
+    bypassed_.store (false, std::memory_order_relaxed);
 }
 
 // ─── Parameters ──────────────────────────────────────────────────────────
@@ -911,10 +956,8 @@ void PluginInstance::setState (const std::vector<uint8_t>& data)
             dc_log ("PluginInstance::setState: raw pass-through also failed — "
                     "state will not be restored (likely legacy format)");
 
-        // Reactivate regardless of success or failure
-        component_->setActive (true);
-        if (processor_ != nullptr)
-            processor_->setProcessing (true);
+        // Reactivate with full VST3 lifecycle (setupProcessing required before setActive)
+        setupProcessing (currentSampleRate_, currentBlockSize_);
         return;
     }
 
@@ -947,10 +990,8 @@ void PluginInstance::setState (const std::vector<uint8_t>& data)
         controllerStream->release();
     }
 
-    // Reactivate after state restoration
-    component_->setActive (true);
-    if (processor_ != nullptr)
-        processor_->setProcessing (true);
+    // Reactivate with full VST3 lifecycle (setupProcessing required before setActive)
+    setupProcessing (currentSampleRate_, currentBlockSize_);
 }
 
 // ─── Editor ──────────────────────────────────────────────────────────────
@@ -969,17 +1010,18 @@ std::unique_ptr<PluginEditor> PluginInstance::createEditor()
 
 bool PluginInstance::supportsParameterFinder() const
 {
-    return parameterFinder_ != nullptr;
+    return parameterFinder_ != nullptr || viewParameterFinder_ != nullptr;
 }
 
 int PluginInstance::findParameterAtPoint (int x, int y) const
 {
-    if (parameterFinder_ == nullptr)
+    auto* finder = parameterFinder_ ? parameterFinder_ : viewParameterFinder_;
+    if (finder == nullptr)
         return -1;
 
     Steinberg::Vst::ParamID resultId = Steinberg::Vst::kNoParamId;
 
-    auto result = parameterFinder_->findParameter (
+    auto result = finder->findParameter (
         static_cast<Steinberg::int32> (x),
         static_cast<Steinberg::int32> (y),
         resultId);
@@ -988,6 +1030,11 @@ int PluginInstance::findParameterAtPoint (int x, int y) const
         return -1;
 
     return getParameterIndex (resultId);
+}
+
+void PluginInstance::setViewParameterFinder (Steinberg::Vst::IParameterFinder* finder)
+{
+    viewParameterFinder_ = finder;
 }
 
 // ─── performEdit snoop ───────────────────────────────────────────────────

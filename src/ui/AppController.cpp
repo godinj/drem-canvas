@@ -28,6 +28,8 @@ AppController::AppController()
 
 AppController::~AppController()
 {
+    audioEngine.stopStream();   // Stop audio thread before any cleanup
+
     if (vimEngine)
     {
         vimEngine->removeListener (this);
@@ -38,6 +40,12 @@ AppController::~AppController()
     project.getState().removeListener (this);
 
     midiEngine.shutdown();
+
+    // Clear plugin references from the view widget before destroying
+    // plugin instances — prevents dangling pointer access during teardown.
+    if (pluginViewWidget)
+        pluginViewWidget->clearPlugin();
+
     pluginWindowManager.closeAll();
     trackPluginChains.clear();
     meterTapProcessors.clear();
@@ -1335,7 +1343,9 @@ void AppController::registerAllActions()
 
 void AppController::rebuildAudioGraph()
 {
-    // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
+    // Suspend the audio callback so the graph is not processed while we
+    // modify its topology.  Blocks until any in-flight callback completes.
+    audioEngine.suspendProcessing();
 
     // Close plugin editor windows before removing nodes
     pluginWindowManager.closeAll();
@@ -1500,6 +1510,12 @@ void AppController::rebuildAudioGraph()
             }
         }
     }
+
+    // Re-prepare the graph so the buffer pool is sized for the new topology.
+    audioEngine.getGraph().prepare (sampleRate, blockSize);
+
+    // Resume audio processing now that the graph topology is stable.
+    audioEngine.resumeProcessing();
 
     // Rebuild UI views
     if (arrangementWidget != nullptr)
@@ -1789,6 +1805,12 @@ void AppController::disconnectTrackPluginChain (int trackIndex)
     }
 }
 
+const std::vector<AppController::PluginNodeInfo>&
+AppController::getTrackPluginChain (int trackIndex) const
+{
+    return trackPluginChains.at (static_cast<size_t> (trackIndex));
+}
+
 void AppController::openPluginEditor (int trackIndex, int pluginIndex)
 {
     if (trackIndex < 0 || trackIndex >= static_cast<int> (trackPluginChains.size()))
@@ -1798,9 +1820,26 @@ void AppController::openPluginEditor (int trackIndex, int pluginIndex)
     if (pluginIndex < 0 || pluginIndex >= static_cast<int> (chain.size()))
         return;
 
-    auto* plugin = chain[pluginIndex].plugin;
-    if (plugin != nullptr)
+    auto* plugin = chain[static_cast<size_t> (pluginIndex)].plugin;
+    if (plugin == nullptr)
+        return;
+
+    // Use the embedded pluginViewWidget path if available — this also
+    // supports spatial scanning.  Only fall back to the standalone
+    // window manager if no embedded view widget exists.
+    if (pluginViewWidget)
+    {
+        auto trackState = project.getTrack (trackIndex);
+        Track track (trackState);
+        auto pluginState = track.getPlugin (pluginIndex);
+        std::string name = pluginState.getProperty (IDs::pluginName).getStringOr ("");
+        std::string fileOrId = pluginState.getProperty (IDs::pluginFileOrIdentifier).getStringOr ("");
+        pluginViewWidget->setPlugin (plugin, name, fileOrId);
+    }
+    else
+    {
         pluginWindowManager.showEditorForPlugin (*plugin);
+    }
 }
 
 void AppController::captureAllPluginStates()
@@ -1906,7 +1945,9 @@ void AppController::loadSessionFromDirectory (const std::filesystem::path& dir)
 
     // Save ref to old state so we can detach listeners after replacement
     auto oldState = project.getState();
-    oldState.getChildWithType (IDs::STEP_SEQUENCER).removeListener (this);
+    auto oldSeq = oldState.getChildWithType (IDs::STEP_SEQUENCER);
+    if (oldSeq.isValid())
+        oldSeq.removeListener (this);
     oldState.getChildWithType (IDs::TRACKS).removeListener (this);
     oldState.removeListener (arrangementWidget.get());
     oldState.removeListener (mixerWidget.get());
@@ -1916,7 +1957,9 @@ void AppController::loadSessionFromDirectory (const std::filesystem::path& dir)
     {
         currentSessionDirectory = dir;
         project.getState().getChildWithType (IDs::TRACKS).addListener (this);
-        project.getState().getChildWithType (IDs::STEP_SEQUENCER).addListener (this);
+        auto newSeq = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
+        if (newSeq.isValid())
+            newSeq.addListener (this);
         project.getState().addListener (arrangementWidget.get());
         project.getState().addListener (mixerWidget.get());
         project.getState().addListener (sequencerWidget.get());
@@ -1929,7 +1972,8 @@ void AppController::loadSessionFromDirectory (const std::filesystem::path& dir)
     else
     {
         oldState.getChildWithType (IDs::TRACKS).addListener (this);
-        oldState.getChildWithType (IDs::STEP_SEQUENCER).addListener (this);
+        if (oldSeq.isValid())
+            oldSeq.addListener (this);
         oldState.addListener (arrangementWidget.get());
         oldState.addListener (mixerWidget.get());
         oldState.addListener (sequencerWidget.get());

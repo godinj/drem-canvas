@@ -7,6 +7,7 @@
 #include <pluginterfaces/vst/ivsteditcontroller.h>
 #include <pluginterfaces/vst/ivstplugview.h>
 #include <pluginterfaces/vst/ivstevents.h>
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
@@ -65,8 +66,15 @@ public:
     bool supportsParameterFinder() const;
     int findParameterAtPoint (int x, int y) const;
 
+    /** Called by PluginEditor to register/unregister a view-based finder. */
+    void setViewParameterFinder (Steinberg::Vst::IParameterFinder* finder);
+
     // --- performEdit snoop ---
     std::optional<EditEvent> popLastEdit();
+
+    // --- Bypass ---
+    bool isBypassed() const;
+    void resetBypass();
 
     // --- Description ---
     const PluginDescription& getDescription() const;
@@ -81,7 +89,8 @@ private:
     Steinberg::Vst::IComponent* component_ = nullptr;
     Steinberg::Vst::IAudioProcessor* processor_ = nullptr;
     Steinberg::Vst::IEditController* controller_ = nullptr;
-    Steinberg::Vst::IParameterFinder* parameterFinder_ = nullptr;
+    Steinberg::Vst::IParameterFinder* parameterFinder_ = nullptr;      // from controller (owned)
+    Steinberg::Vst::IParameterFinder* viewParameterFinder_ = nullptr;  // from view (non-owning)
     std::unique_ptr<ComponentHandler> handler_;
     PluginDescription description_;
     bool controllerIsSameObject_ = false;
@@ -110,6 +119,7 @@ private:
     double currentSampleRate_ = 44100.0;
     int currentBlockSize_ = 512;
     bool prepared_ = false;
+    std::atomic<bool> bypassed_ {false};
 
     // Internal helpers
     void buildParameterList();

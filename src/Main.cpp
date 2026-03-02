@@ -49,6 +49,8 @@ int main (int argc, char* argv[])
     int expectSpatialParamsGt = -1;
     bool browserScan = false;
     int expectKnownPluginsGt = -1;
+    bool capturePluginState = false;
+    int processFrames = 0;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -74,6 +76,10 @@ int main (int argc, char* argv[])
             browserScan = true;
         else if (arg == "--expect-known-plugins-gt" && i + 1 < argc)
             expectKnownPluginsGt = std::atoi (argv[++i]);
+        else if (arg == "--capture-plugin-state")
+            capturePluginState = true;
+        else if (arg == "--process-frames" && i + 1 < argc)
+            processFrames = std::atoi (argv[++i]);
     }
 
     // Pointers kept alive across the NSApplication run loop.
@@ -191,6 +197,37 @@ int main (int argc, char* argv[])
                         std::cerr << "FAIL: expected " << expectPlugins
                                   << " plugins, got " << totalPlugins << "\n";
                         exitCode = 1;
+                    }
+                }
+
+                // Capture and print plugin state for test fixture generation
+                if (capturePluginState)
+                {
+                    auto& project = appController->getProject();
+                    for (int t = 0; t < project.getNumTracks(); ++t)
+                    {
+                        auto& pluginChain = appController->getTrackPluginChain (t);
+                        for (int p = 0; p < static_cast<int> (pluginChain.size()); ++p)
+                        {
+                            if (pluginChain[static_cast<size_t> (p)].plugin != nullptr)
+                            {
+                                auto stateStr = dc::PluginHost::savePluginState (
+                                    *pluginChain[static_cast<size_t> (p)].plugin);
+                                std::cout << "PLUGIN_STATE track=" << t
+                                          << " slot=" << p
+                                          << " state=" << stateStr << "\n";
+                            }
+                        }
+                    }
+                }
+
+                // Run audio frames to exercise the process() path
+                if (processFrames > 0)
+                {
+                    for (int f = 0; f < processFrames; ++f)
+                    {
+                        appController->tick();
+                        std::this_thread::sleep_for (std::chrono::milliseconds (10));
                     }
                 }
 
@@ -348,6 +385,8 @@ int main (int argc, char* argv[])
     int expectSpatialParamsGt = -1;
     bool browserScan = false;
     int expectKnownPluginsGt = -1;
+    bool capturePluginState = false;
+    int processFrames = 0;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -373,6 +412,10 @@ int main (int argc, char* argv[])
             browserScan = true;
         else if (arg == "--expect-known-plugins-gt" && i + 1 < argc)
             expectKnownPluginsGt = std::atoi (argv[++i]);
+        else if (arg == "--capture-plugin-state")
+            capturePluginState = true;
+        else if (arg == "--process-frames" && i + 1 < argc)
+            processFrames = std::atoi (argv[++i]);
     }
 
     // Create GLFW window
@@ -488,6 +531,37 @@ int main (int argc, char* argv[])
                 std::cerr << "FAIL: expected " << expectPlugins
                           << " plugins, got " << totalPlugins << "\n";
                 exitCode = 1;
+            }
+        }
+
+        // Capture and print plugin state for test fixture generation
+        if (capturePluginState)
+        {
+            auto& project = appController->getProject();
+            for (int t = 0; t < project.getNumTracks(); ++t)
+            {
+                auto& pluginChain = appController->getTrackPluginChain (t);
+                for (int p = 0; p < static_cast<int> (pluginChain.size()); ++p)
+                {
+                    if (pluginChain[static_cast<size_t> (p)].plugin != nullptr)
+                    {
+                        auto stateStr = dc::PluginHost::savePluginState (
+                            *pluginChain[static_cast<size_t> (p)].plugin);
+                        std::cout << "PLUGIN_STATE track=" << t
+                                  << " slot=" << p
+                                  << " state=" << stateStr << "\n";
+                    }
+                }
+            }
+        }
+
+        // Run audio frames to exercise the process() path
+        if (processFrames > 0)
+        {
+            for (int f = 0; f < processFrames; ++f)
+            {
+                appController->tick();
+                std::this_thread::sleep_for (std::chrono::milliseconds (10));
             }
         }
 

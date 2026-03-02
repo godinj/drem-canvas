@@ -1,0 +1,9 @@
+drem_canvas_version: "0.1.0"
+project:
+  tempo: 120.0
+  time_signature:
+    numerator: 4
+    denominator: 4
+  sample_rate: 44100.0
+  master_volume: 1.0
+track_count: 2

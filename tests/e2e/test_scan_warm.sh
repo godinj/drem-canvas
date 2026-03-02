@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/e2e_display.sh"
 
 BINARY="${1:-./build/DremCanvas}"
 FIXTURE="${2:-tests/fixtures/e2e-scan-project}"
@@ -15,13 +16,13 @@ export XDG_CONFIG_HOME="$(mktemp -d)"
 trap "rm -rf $XDG_CONFIG_HOME" EXIT
 
 # First run populates the cache
-timeout 60 xvfb-run -a "$BINARY" \
+run_with_display 60 "$BINARY" \
     --smoke \
     --load "$FIXTURE" \
     --scan-plugin 0 0
 
 # Second run should hit cache and still produce results
-timeout 15 xvfb-run -a "$BINARY" \
+run_with_display 15 "$BINARY" \
     --smoke \
     --load "$FIXTURE" \
     --scan-plugin 0 0 \

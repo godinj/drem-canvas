@@ -33,6 +33,7 @@ add_executable(dc_unit_tests
     # Plugin tests
     unit/plugins/test_probe_cache.cpp
     unit/plugins/test_plugin_description.cpp
+    unit/plugins/test_plugin_instance_bypass.cpp
     unit/plugins/test_vst3_module.cpp
 
     # Regression tests
@@ -40,6 +41,8 @@ add_executable(dc_unit_tests
     regression/issue_001_multi_yabridge_load.cpp
     regression/issue_002_juce_state_format.cpp
     regression/issue_003_set_state_deactivation.cpp
+    regression/issue_004_teardown_sigsegv.cpp
+    regression/issue_005_set_state_setup_processing.cpp
 
     # Phase 8: higher-level model tests
     unit/model_layer/test_tempo_map.cpp
@@ -189,4 +192,11 @@ if(BUILD_TESTING)
                 $<TARGET_FILE:DremCanvas>)
     set_tests_properties(e2e.browser_scan PROPERTIES
         LABELS "e2e" TIMEOUT 150)
+
+    add_test(NAME e2e.state_restore
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_state_restore.sh
+                $<TARGET_FILE:DremCanvas>
+                ${CMAKE_SOURCE_DIR}/tests/fixtures/e2e-state-restore)
+    set_tests_properties(e2e.state_restore PROPERTIES
+        LABELS "e2e" TIMEOUT 30)
 endif()

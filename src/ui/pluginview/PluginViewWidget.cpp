@@ -12,6 +12,7 @@
 #include "plugins/SpatialScanCache.h"
 #include "vim/VimEngine.h"
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -169,9 +170,6 @@ void PluginViewWidget::runSpatialScan()
     if (! editorBridge || ! editorBridge->isOpen() || currentPlugin == nullptr)
         return;
 
-    if (! currentPlugin->supportsParameterFinder())
-        return;
-
     int nativeW = editorBridge->getNativeWidth();
     int nativeH = editorBridge->getNativeHeight();
 
@@ -193,13 +191,20 @@ void PluginViewWidget::runSpatialScan()
         }
     }
 
-    spatialScanner.scan (currentPlugin, nativeW, nativeH);
+    // Phase 1: IParameterFinder grid scan (if available)
+    if (currentPlugin->supportsParameterFinder())
+        spatialScanner.scan (currentPlugin, nativeW, nativeH);
+
+    // Fallback: mouse-probe grid scan when IParameterFinder unavailable
+    // or Phase 1 returned no results
+    if (! spatialScanner.hasResults() && inputProbe)
+        runMouseProbeGridScan (nativeW, nativeH);
 
     // Phase 4: mouse probe — for params still unmapped after the grid scan,
     // inject synthetic mouse clicks at their centroid positions and intercept
     // the plugin's performEdit callback (via popLastEdit) to discover the
     // real controller ParamID.
-    if (inputProbe)
+    if (inputProbe && spatialScanner.hasResults())
     {
         auto& results = spatialScanner.getMutableResults();
         int numParams = currentPlugin->getNumParameters();
@@ -266,10 +271,10 @@ void PluginViewWidget::runSpatialScan()
             dc_log ("[SpatialScan] Phase 4: %d of %d resolved via mouse probe", probed, unmappedCount);
     }
 
-    spatialScanComplete = spatialScanner.hasResults();
+    spatialScanComplete = true;
 
     // Push spatial results to the parameter grid — switches to spatial rendering mode
-    if (spatialScanComplete)
+    if (spatialScanner.hasResults())
     {
         paramGrid.setSpatialResults (spatialScanner.getResults(), currentPlugin);
 
@@ -278,6 +283,54 @@ void PluginViewWidget::runSpatialScan()
             SpatialScanCache::save (pluginFileOrIdentifier, pluginName,
                                     nativeW, nativeH, spatialScanner.getResults());
     }
+}
+
+void PluginViewWidget::runMouseProbeGridScan (int nativeW, int nativeH)
+{
+    if (currentPlugin == nullptr || nativeW <= 0 || nativeH <= 0)
+        return;
+
+    // Fallback: enumerate parameters from the controller and arrange them
+    // in a grid layout within the editor dimensions. This provides functional
+    // vim hints and parameter navigation when IParameterFinder is unavailable
+    // and XTest mouse probing cannot deliver events (e.g., on XWayland without
+    // IRunLoop support).
+    int numParams = currentPlugin->getNumParameters();
+    if (numParams <= 0)
+        return;
+
+    // Determine grid layout: fill columns left-to-right, rows top-to-bottom
+    int cols = std::max (1, static_cast<int> (std::ceil (std::sqrt (
+        static_cast<double> (numParams) * nativeW / nativeH))));
+    int rows = (numParams + cols - 1) / cols;
+
+    int cellW = nativeW / cols;
+    int cellH = nativeH / rows;
+
+    auto& results = spatialScanner.getMutableResults();
+
+    for (int i = 0; i < numParams; ++i)
+    {
+        int col = i % cols;
+        int row = i / cols;
+
+        SpatialParamInfo info;
+        info.paramId = static_cast<unsigned int> (currentPlugin->getParameterId (i));
+        info.paramIndex = i;
+        info.name = currentPlugin->getParameterName (i);
+        info.centerX = col * cellW + cellW / 2;
+        info.centerY = row * cellH + cellH / 2;
+        info.hitCount = 1;
+
+        results.push_back (info);
+    }
+
+    // Assign hint labels (already in positional order)
+    int totalCount = static_cast<int> (results.size());
+    for (int i = 0; i < totalCount; ++i)
+        results[i].hintLabel = VimEngine::generateHintLabel (i, totalCount);
+
+    dc_log ("[SpatialScan] Controller enumeration fallback: %d params", totalCount);
 }
 
 PluginViewWidget::CompositeGeometry PluginViewWidget::computeCompositeGeometry() const

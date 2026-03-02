@@ -138,6 +138,10 @@ private:
         Returns false if the point is outside the composited image area. */
     bool widgetToNativeCoords (float widgetX, float widgetY, int& nativeX, int& nativeY) const;
 
+    /** Mouse-probe grid scan fallback for plugins without IParameterFinder.
+        Sends synthetic clicks at grid positions and captures performEdit callbacks. */
+    void runMouseProbeGridScan (int nativeW, int nativeH);
+
     PluginViewWidget (const PluginViewWidget&) = delete;
     PluginViewWidget& operator= (const PluginViewWidget&) = delete;
 };

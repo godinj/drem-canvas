@@ -1,7 +1,9 @@
 #include "AudioEngine.h"
 #include "dc/audio/AudioBlock.h"
 #include "dc/engine/MidiBlock.h"
+#include <chrono>
 #include <string>
+#include <thread>
 
 namespace dc
 {
@@ -73,18 +75,44 @@ void AudioEngine::initialise (int numInputChannels, int numOutputChannels)
     graph_.prepare (sampleRate, blockSize);
 }
 
-void AudioEngine::shutdown()
+void AudioEngine::stopStream()
 {
     if (deviceManager_)
     {
-        deviceManager_->closeDevice();
-        deviceManager_->setCallback (nullptr);
+        deviceManager_->setCallback (nullptr);   // Null callback FIRST
+        deviceManager_->closeDevice();            // Then stop stream
     }
+}
 
+void AudioEngine::shutdown()
+{
+    stopStream();              // Idempotent if already stopped
     graphCallback_.reset();
     graph_.release();
     graph_.clear();
     deviceManager_.reset();
+}
+
+void AudioEngine::suspendProcessing()
+{
+    if (deviceManager_)
+    {
+        deviceManager_->setCallback (nullptr);
+
+        // Wait for two buffer periods to guarantee any in-flight
+        // PortAudio callback has completed before the caller mutates
+        // the graph topology.
+        double sr = deviceManager_->isOpen() ? deviceManager_->getSampleRate() : 44100.0;
+        int bs = deviceManager_->isOpen() ? deviceManager_->getBufferSize() : 512;
+        auto waitUs = static_cast<long long> (2.0 * 1e6 * bs / sr);
+        std::this_thread::sleep_for (std::chrono::microseconds (waitUs));
+    }
+}
+
+void AudioEngine::resumeProcessing()
+{
+    if (deviceManager_ && graphCallback_)
+        deviceManager_->setCallback (graphCallback_.get());
 }
 
 double AudioEngine::getSampleRate() const

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/e2e_display.sh"
 
 BINARY="${1:-./build/DremCanvas}"
 FIXTURE="${2:-tests/fixtures/e2e-plugin-project}"
@@ -18,7 +19,7 @@ check_plugin() {
 check_plugin "/usr/lib/vst3/Vital.vst3"
 check_plugin "~/.vst3/yabridge/Kilohearts/kHs Gain.vst3"
 
-timeout 30 xvfb-run -a "$BINARY" \
+run_with_display 30 "$BINARY" \
     --smoke \
     --load "$FIXTURE" \
     --expect-tracks 2 \
