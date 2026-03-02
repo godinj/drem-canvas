@@ -7,7 +7,6 @@
 #include "MeterWidget.h"
 #include "PluginSlotListWidget.h"
 #include "vim/VimContext.h"
-#include <JuceHeader.h>
 #include <functional>
 
 namespace dc
@@ -18,7 +17,7 @@ namespace ui
 class ChannelStripWidget : public gfx::Widget
 {
 public:
-    explicit ChannelStripWidget (const juce::ValueTree& trackState);
+    explicit ChannelStripWidget (const PropertyTree& trackState);
 
     void paint (gfx::Canvas& canvas) override;
     void paintOverChildren (gfx::Canvas& canvas) override;
@@ -38,7 +37,7 @@ public:
     std::function<void (double)> onPanChange;
 
 private:
-    juce::ValueTree trackState;
+    PropertyTree trackState;
     bool selected = false;
     VimContext::MixerFocus currentFocus = VimContext::FocusNone;
 

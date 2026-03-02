@@ -72,7 +72,7 @@ public:
     std::function<void (const std::string&)> onCreateMidiTrack;
 
     // Piano roll open callback
-    std::function<void (const juce::ValueTree&)> onOpenPianoRoll;
+    std::function<void (const PropertyTree&)> onOpenPianoRoll;
 
     // Browser toggle callback (gp keybinding)
     std::function<void()> onToggleBrowser;

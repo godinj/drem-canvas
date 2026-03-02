@@ -1,7 +1,7 @@
 #pragma once
 
 #include "graphics/core/Widget.h"
-#include <JuceHeader.h>
+#include "dc/model/PropertyTree.h"
 
 namespace dc
 {
@@ -11,7 +11,7 @@ namespace ui
 class MidiClipWidget : public gfx::Widget
 {
 public:
-    explicit MidiClipWidget (const juce::ValueTree& clipState);
+    explicit MidiClipWidget (const PropertyTree& clipState);
     ~MidiClipWidget() override;
 
     void paint (gfx::Canvas& canvas) override;
@@ -19,13 +19,13 @@ public:
     void setClipLengthInBeats (double beats) { clipLengthBeats = beats; repaint(); }
     void setTrimOffsetBeats (double beats) { trimOffsetBeats = beats; repaint(); }
 
-    // ValueTree::Listener — repaint when notes or midiData change
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override { repaint(); }
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override { repaint(); }
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override { repaint(); }
+    // PropertyTree::Listener — repaint when notes or midiData change
+    void childAdded (PropertyTree&, PropertyTree&) override { repaint(); }
+    void childRemoved (PropertyTree&, PropertyTree&, int) override { repaint(); }
+    void propertyChanged (PropertyTree&, PropertyId) override { repaint(); }
 
 private:
-    juce::ValueTree clipState;
+    PropertyTree clipState;
     double clipLengthBeats = 4.0;
     double trimOffsetBeats = 0.0;
 };

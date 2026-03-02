@@ -8,7 +8,7 @@ namespace dc
 namespace ui
 {
 
-MidiClipWidget::MidiClipWidget (const juce::ValueTree& state)
+MidiClipWidget::MidiClipWidget (const PropertyTree& state)
     : clipState (state)
 {
     clipState.addListener (this);
@@ -33,7 +33,7 @@ void MidiClipWidget::paint (gfx::Canvas& canvas)
     bool hasNoteChildren = false;
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
-        if (clipState.getChild (i).hasType (juce::Identifier ("NOTE")))
+        if (clipState.getChild (i).getType() == IDs::NOTE)
         {
             hasNoteChildren = true;
             break;
@@ -45,12 +45,12 @@ void MidiClipWidget::paint (gfx::Canvas& canvas)
         for (int i = 0; i < clipState.getNumChildren(); ++i)
         {
             auto note = clipState.getChild (i);
-            if (! note.hasType (juce::Identifier ("NOTE")))
+            if (note.getType() != IDs::NOTE)
                 continue;
 
-            int noteNum = static_cast<int> (note.getProperty ("noteNumber", 60));
-            auto startBeat = static_cast<double> (note.getProperty ("startBeat", 0.0)) - trimOffsetBeats;
-            auto lengthBeats = static_cast<double> (note.getProperty ("lengthBeats", 0.25));
+            int noteNum = static_cast<int> (note.getProperty (IDs::noteNumber).getIntOr (60));
+            auto startBeat = note.getProperty (IDs::startBeat).getDoubleOr (0.0) - trimOffsetBeats;
+            auto lengthBeats = note.getProperty (IDs::lengthBeats).getDoubleOr (0.25);
 
             // Skip notes entirely before or after visible range
             if (startBeat + lengthBeats <= 0.0 || startBeat >= clipLengthBeats)

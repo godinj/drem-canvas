@@ -11,7 +11,7 @@ namespace dc
 namespace ui
 {
 
-TrackLaneWidget::TrackLaneWidget (const juce::ValueTree& state)
+TrackLaneWidget::TrackLaneWidget (const PropertyTree& state)
     : trackState (state)
 {
     formatManager.registerBasicFormats();
@@ -39,7 +39,7 @@ void TrackLaneWidget::paint (gfx::Canvas& canvas)
     }
 
     // Track name
-    std::string trackName = trackState.getProperty ("name", "Untitled").toString().toStdString();
+    std::string trackName = trackState.getProperty (IDs::name).getStringOr ("Untitled");
     canvas.drawText (trackName, 8.0f, h * 0.5f + 4.0f, font, theme.defaultText);
 
     // Track lane background (right of header)
@@ -304,27 +304,27 @@ void TrackLaneWidget::rebuildClipViews()
     for (int i = 0; i < trackState.getNumChildren(); ++i)
     {
         auto child = trackState.getChild (i);
-        bool isAudio = child.hasType (IDs::AUDIO_CLIP);
-        bool isMidi  = child.hasType (IDs::MIDI_CLIP);
+        bool isAudio = child.getType() == IDs::AUDIO_CLIP;
+        bool isMidi  = child.getType() == IDs::MIDI_CLIP;
 
         if (! isAudio && ! isMidi)
             continue;
 
-        auto startPos = static_cast<int64_t> (static_cast<juce::int64> (child.getProperty (IDs::startPosition, 0)));
-        auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (child.getProperty (IDs::length, 0)));
+        int64_t startPos = child.getProperty (IDs::startPosition).getIntOr (0);
+        int64_t clipLength = child.getProperty (IDs::length).getIntOr (0);
 
         float x = static_cast<float> ((static_cast<double> (startPos) / sampleRate) * pixelsPerSecond) + headerWidth;
         float w = static_cast<float> ((static_cast<double> (clipLength) / sampleRate) * pixelsPerSecond);
 
         std::unique_ptr<gfx::Widget> widget;
 
-        auto trimStart = static_cast<int64_t> (static_cast<juce::int64> (child.getProperty (IDs::trimStart, 0)));
+        int64_t trimStart = child.getProperty (IDs::trimStart).getIntOr (0);
 
         if (isAudio)
         {
             // Create waveform cache and load audio data
             auto cache = std::make_unique<gfx::WaveformCache>();
-            std::string sourceFilePath = child.getProperty ("sourceFile", "").toString().toStdString();
+            std::string sourceFilePath = child.getProperty (IDs::sourceFile).getStringOr ("");
             if (! sourceFilePath.empty())
             {
                 std::filesystem::path sourceFile (sourceFilePath);

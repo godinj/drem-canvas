@@ -18,7 +18,7 @@ namespace ui
 class TrackLaneWidget : public gfx::Widget
 {
 public:
-    explicit TrackLaneWidget (const juce::ValueTree& trackState);
+    explicit TrackLaneWidget (const PropertyTree& trackState);
 
     void paint (gfx::Canvas& canvas) override;
     void paintOverChildren (gfx::Canvas& canvas) override;
@@ -35,12 +35,12 @@ public:
     void setGridVisualSelection (int64_t startPos, int64_t endPos, bool active);
 
     bool isSelected() const { return selected; }
-    const juce::ValueTree& getTrackState() const { return trackState; }
+    const PropertyTree& getTrackState() const { return trackState; }
 
 private:
     void rebuildClipViews();
 
-    juce::ValueTree trackState;
+    PropertyTree trackState;
     double pixelsPerSecond = 100.0;
     double sampleRate = 44100.0;
     double tempo = 120.0;

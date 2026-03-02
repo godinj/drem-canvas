@@ -1,5 +1,6 @@
 #include "MeterWidget.h"
 #include "graphics/rendering/Canvas.h"
+#include "dc/foundation/time.h"
 #include <cmath>
 #include <algorithm>
 
@@ -135,7 +136,7 @@ void MeterWidget::setLevel (float leftDb, float rightDb)
     displayRight = std::max (targetRight, displayRight * decay);
 
     // Peak hold (use simple monotonic clock)
-    double now = juce::Time::getMillisecondCounterHiRes();
+    double now = dc::hiResTimeMs();
     if (targetLeft > peakHoldLeft)
     {
         peakHoldLeft = targetLeft;

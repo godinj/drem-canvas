@@ -500,8 +500,8 @@ void VimEngine::updateClipIndexFromGridCursor()
     for (int i = 0; i < track.getNumClips(); ++i)
     {
         auto clipState = track.getClip (i);
-        auto start = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
-        auto length = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+        auto start = clipState.getProperty (IDs::startPosition).getIntOr (0);
+        auto length = clipState.getProperty (IDs::length).getIntOr (0);
 
         if (cursorPos >= start && cursorPos < start + length)
         {
@@ -555,8 +555,8 @@ void VimEngine::jumpToSessionEnd()
         for (int c = 0; c < track.getNumClips(); ++c)
         {
             auto clipState = track.getClip (c);
-            auto start = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
-            auto length = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+            auto start = clipState.getProperty (IDs::startPosition).getIntOr (0);
+            auto length = clipState.getProperty (IDs::length).getIntOr (0);
             maxEnd = std::max (maxEnd, start + length);
         }
     }
@@ -619,15 +619,15 @@ void VimEngine::yankSelectedRegions()
 
 // Carve a gap [gapStart, gapEnd) in existing clips on the given track,
 // splitting any clip that overlaps those boundaries.
-static void carveGap (Track& track, int64_t gapStart, int64_t gapEnd, juce::UndoManager& um)
+static void carveGap (Track& track, int64_t gapStart, int64_t gapEnd, dc::UndoManager& um)
 {
-    std::vector<juce::ValueTree> newClips;
+    std::vector<PropertyTree> newClips;
 
     for (int c = track.getNumClips() - 1; c >= 0; --c)
     {
         auto clip = track.getClip (c);
-        auto clipStart  = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-        auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+        auto clipStart  = clip.getProperty (IDs::startPosition).getIntOr (0);
+        auto clipLength = clip.getProperty (IDs::length).getIntOr (0);
         auto clipEnd    = clipStart + clipLength;
 
         // Skip non-overlapping clips
@@ -643,34 +643,34 @@ static void carveGap (Track& track, int64_t gapStart, int64_t gapEnd, juce::Undo
         }
         else if (keepLeft && keepRight)
         {
-            auto origTrimStart = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::trimStart, 0)));
+            auto origTrimStart = clip.getProperty (IDs::trimStart).getIntOr (0);
             int64_t leftLength = gapStart - clipStart;
-            clip.setProperty (IDs::length, static_cast<juce::int64> (leftLength), &um);
+            clip.setProperty (IDs::length, Variant (leftLength), &um);
 
-            auto rightClip = clip.createCopy();
+            auto rightClip = clip.createDeepCopy();
             int64_t rightOffset = gapEnd - clipStart;
-            rightClip.setProperty (IDs::startPosition, static_cast<juce::int64> (gapEnd), nullptr);
-            rightClip.setProperty (IDs::length, static_cast<juce::int64> (clipEnd - gapEnd), nullptr);
-            rightClip.setProperty (IDs::trimStart, static_cast<juce::int64> (origTrimStart + rightOffset), nullptr);
+            rightClip.setProperty (IDs::startPosition, Variant (gapEnd), nullptr);
+            rightClip.setProperty (IDs::length, Variant (clipEnd - gapEnd), nullptr);
+            rightClip.setProperty (IDs::trimStart, Variant (origTrimStart + rightOffset), nullptr);
             newClips.push_back (rightClip);
         }
         else if (keepLeft)
         {
             int64_t leftLength = gapStart - clipStart;
-            clip.setProperty (IDs::length, static_cast<juce::int64> (leftLength), &um);
+            clip.setProperty (IDs::length, Variant (leftLength), &um);
         }
         else // keepRight
         {
-            auto origTrimStart = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::trimStart, 0)));
+            auto origTrimStart = clip.getProperty (IDs::trimStart).getIntOr (0);
             int64_t rightOffset = gapEnd - clipStart;
-            clip.setProperty (IDs::startPosition, static_cast<juce::int64> (gapEnd), &um);
-            clip.setProperty (IDs::length, static_cast<juce::int64> (clipEnd - gapEnd), &um);
-            clip.setProperty (IDs::trimStart, static_cast<juce::int64> (origTrimStart + rightOffset), &um);
+            clip.setProperty (IDs::startPosition, Variant (gapEnd), &um);
+            clip.setProperty (IDs::length, Variant (clipEnd - gapEnd), &um);
+            clip.setProperty (IDs::trimStart, Variant (origTrimStart + rightOffset), &um);
         }
     }
 
     for (auto& nc : newClips)
-        track.getState().appendChild (nc, &um);
+        track.getState().addChild (nc, -1, &um);
 }
 
 void VimEngine::pasteAfterPlayhead()
@@ -695,16 +695,15 @@ void VimEngine::pasteAfterPlayhead()
             continue;
 
         Track track = arrangement.getTrack (targetTrack);
-        auto clipData = clip.clipData.createCopy();
+        auto clipData = clip.clipData.createDeepCopy();
         int64_t finalPos = pastePos + clip.timeOffset;
-        auto pasteLen = static_cast<int64_t> (static_cast<juce::int64> (
-            clipData.getProperty (IDs::length, 0)));
+        auto pasteLen = clipData.getProperty (IDs::length).getIntOr (0);
 
         carveGap (track, finalPos, finalPos + pasteLen, um);
 
         clipData.setProperty (IDs::startPosition,
-                              static_cast<juce::int64> (finalPos), &um);
-        track.getState().appendChild (clipData, &um);
+                              Variant (finalPos), &um);
+        track.getState().addChild (clipData, -1, &um);
     }
 
     updateClipIndexFromGridCursor();
@@ -729,8 +728,7 @@ void VimEngine::pasteBeforePlayhead()
     int64_t maxEnd = 0;
     for (auto& clip : regEntry.clipEntries)
     {
-        auto len = static_cast<int64_t> (static_cast<juce::int64> (
-            clip.clipData.getProperty (IDs::length, 0)));
+        auto len = clip.clipData.getProperty (IDs::length).getIntOr (0);
         maxEnd = std::max (maxEnd, clip.timeOffset + len);
     }
 
@@ -744,16 +742,15 @@ void VimEngine::pasteBeforePlayhead()
             continue;
 
         Track track = arrangement.getTrack (targetTrack);
-        auto clipData = clip.clipData.createCopy();
+        auto clipData = clip.clipData.createDeepCopy();
         int64_t finalPos = pasteBase + clip.timeOffset;
-        auto pasteLen = static_cast<int64_t> (static_cast<juce::int64> (
-            clipData.getProperty (IDs::length, 0)));
+        auto pasteLen = clipData.getProperty (IDs::length).getIntOr (0);
 
         carveGap (track, finalPos, finalPos + pasteLen, um);
 
         clipData.setProperty (IDs::startPosition,
-                              static_cast<juce::int64> (finalPos), &um);
-        track.getState().appendChild (clipData, &um);
+                              Variant (finalPos), &um);
+        track.getState().addChild (clipData, -1, &um);
     }
 
     updateClipIndexFromGridCursor();
@@ -773,8 +770,8 @@ void VimEngine::splitRegionAtPlayhead()
         return;
 
     auto clipState = track.getClip (clipIdx);
-    auto clipStart  = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
-    auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+    auto clipStart  = clipState.getProperty (IDs::startPosition).getIntOr (0);
+    auto clipLength = clipState.getProperty (IDs::length).getIntOr (0);
     auto playhead   = transport.getPositionInSamples();
 
     if (playhead <= clipStart || playhead >= clipStart + clipLength)
@@ -784,19 +781,19 @@ void VimEngine::splitRegionAtPlayhead()
     ScopedTransaction txn (project.getUndoSystem(), "Split Clip");
     auto& um = project.getUndoManager();
 
-    clipState.setProperty (IDs::length, static_cast<juce::int64> (splitOffset), &um);
+    clipState.setProperty (IDs::length, Variant (splitOffset), &um);
     clipState.setProperty (IDs::trimEnd,
-        static_cast<juce::int64> (static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0)))
+        Variant (clipState.getProperty (IDs::trimStart).getIntOr (0)
             + splitOffset), &um);
 
-    auto newClip = clipState.createCopy();
-    newClip.setProperty (IDs::startPosition, static_cast<juce::int64> (playhead), &um);
-    newClip.setProperty (IDs::length, static_cast<juce::int64> (clipLength - splitOffset), &um);
+    auto newClip = clipState.createDeepCopy();
+    newClip.setProperty (IDs::startPosition, Variant (playhead), &um);
+    newClip.setProperty (IDs::length, Variant (clipLength - splitOffset), &um);
     newClip.setProperty (IDs::trimStart,
-        static_cast<juce::int64> (static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0)))
+        Variant (clipState.getProperty (IDs::trimStart).getIntOr (0)
             + splitOffset), &um);
 
-    track.getState().appendChild (newClip, &um);
+    track.getState().addChild (newClip, -1, &um);
     listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
@@ -813,16 +810,16 @@ void VimEngine::duplicateSelectedClip()
         return;
 
     auto clipState = track.getClip (clipIdx);
-    auto startPos = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
-    auto length   = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+    auto startPos = clipState.getProperty (IDs::startPosition).getIntOr (0);
+    auto length   = clipState.getProperty (IDs::length).getIntOr (0);
 
     ScopedTransaction txn (project.getUndoSystem(), "Duplicate Clip");
     auto& um = project.getUndoManager();
 
-    auto newClip = clipState.createCopy();
-    newClip.setProperty (IDs::startPosition, static_cast<juce::int64> (startPos + length), &um);
+    auto newClip = clipState.createDeepCopy();
+    newClip.setProperty (IDs::startPosition, Variant (startPos + length), &um);
 
-    track.getState().appendChild (newClip, &um);
+    track.getState().addChild (newClip, -1, &um);
 
     context.setSelectedClipIndex (track.getNumClips() - 1);
     listeners.call ([](Listener& l) { l.vimContextChanged(); });
@@ -1103,7 +1100,7 @@ void VimEngine::openFocusedItem()
 
     auto clipState = track.getClip (clipIdx);
 
-    if (clipState.hasType (IDs::MIDI_CLIP))
+    if (clipState.getType() == IDs::MIDI_CLIP)
     {
         MidiClip clip (clipState);
         clip.expandNotesToChildren();
@@ -1123,13 +1120,13 @@ void VimEngine::closePianoRoll()
     if (context.getPanel() == VimContext::PianoRoll)
     {
         // Collapse NOTE children back to base64 for storage
-        if (context.openClipState.isValid() && context.openClipState.hasType (IDs::MIDI_CLIP))
+        if (context.openClipState.isValid() && context.openClipState.getType() == IDs::MIDI_CLIP)
         {
             MidiClip clip (context.openClipState);
             clip.collapseChildrenToMidiData (&project.getUndoManager());
         }
 
-        context.openClipState = juce::ValueTree();
+        context.openClipState = PropertyTree();
         context.setPanel (VimContext::Editor);
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
     }
@@ -1463,8 +1460,8 @@ static std::vector<int64_t> collectClipEdges (const Arrangement& arr, int trackI
     for (int i = 0; i < track.getNumClips(); ++i)
     {
         auto clip = track.getClip (i);
-        auto start = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-        auto length = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+        auto start = clip.getProperty (IDs::startPosition).getIntOr (0);
+        auto length = clip.getProperty (IDs::length).getIntOr (0);
         edges.push_back (start);
         edges.push_back (start + length);
     }
@@ -1635,7 +1632,7 @@ std::vector<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionR
     int baseTrack = range.startTrack;
     int64_t minStart = std::numeric_limits<int64_t>::max();
 
-    struct RawClip { juce::ValueTree data; int trackIdx; int64_t startPos; };
+    struct RawClip { PropertyTree data; int trackIdx; int64_t startPos; };
     std::vector<RawClip> rawClips;
 
     if (range.linewise)
@@ -1650,8 +1647,7 @@ std::vector<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionR
             for (int c = 0; c < track.getNumClips(); ++c)
             {
                 auto clip = track.getClip (c);
-                auto startPos = static_cast<int64_t> (static_cast<juce::int64> (
-                    clip.getProperty (IDs::startPosition, 0)));
+                auto startPos = clip.getProperty (IDs::startPosition).getIntOr (0);
                 RawClip rc { clip, t, startPos };
                 rawClips.push_back (rc);
                 minStart = std::min (minStart, startPos);
@@ -1672,8 +1668,7 @@ std::vector<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionR
             if (c >= 0 && c < track.getNumClips())
             {
                 auto clip = track.getClip (c);
-                auto startPos = static_cast<int64_t> (static_cast<juce::int64> (
-                    clip.getProperty (IDs::startPosition, 0)));
+                auto startPos = clip.getProperty (IDs::startPosition).getIntOr (0);
                 RawClip rc { clip, t, startPos };
                 rawClips.push_back (rc);
                 minStart = std::min (minStart, startPos);
@@ -1699,8 +1694,7 @@ std::vector<Clipboard::ClipEntry> VimEngine::collectClipsForRange (const MotionR
                 if (c >= 0 && c < track.getNumClips())
                 {
                     auto clip = track.getClip (c);
-                    auto startPos = static_cast<int64_t> (static_cast<juce::int64> (
-                        clip.getProperty (IDs::startPosition, 0)));
+                    auto startPos = clip.getProperty (IDs::startPosition).getIntOr (0);
                     RawClip rc { clip, t, startPos };
                     rawClips.push_back (rc);
                     minStart = std::min (minStart, startPos);
@@ -1886,8 +1880,8 @@ void VimEngine::executeMotion (juce_wchar key, int count)
                 for (int ci = 0; ci < track.getNumClips(); ++ci)
                 {
                     auto clipState = track.getClip (ci);
-                    auto start = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
-                    auto length = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+                    auto start = clipState.getProperty (IDs::startPosition).getIntOr (0);
+                    auto length = clipState.getProperty (IDs::length).getIntOr (0);
                     maxEnd = std::max (maxEnd, start + length);
                 }
             }
@@ -2003,8 +1997,8 @@ void VimEngine::executeMotion (juce_wchar key, int count)
                 for (int ci = 0; ci < track.getNumClips(); ++ci)
                 {
                     auto clip = track.getClip (ci);
-                    auto start = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-                    auto length = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+                    auto start = clip.getProperty (IDs::startPosition).getIntOr (0);
+                    auto length = clip.getProperty (IDs::length).getIntOr (0);
                     endEdges.push_back (start + length);
                 }
                 std::sort (endEdges.begin(), endEdges.end());
@@ -2140,8 +2134,8 @@ VimEngine::MotionRange VimEngine::getVisualRange() const
             for (int i = 0; i < track.getNumClips(); ++i)
             {
                 auto clip = track.getClip (i);
-                auto start = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-                auto length = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+                auto start = clip.getProperty (IDs::startPosition).getIntOr (0);
+                auto length = clip.getProperty (IDs::length).getIntOr (0);
 
                 // Clip overlaps if clip range [start, start+length) intersects [minPos, maxPos)
                 if (start < maxPos && start + length > minPos)
@@ -2245,14 +2239,14 @@ void VimEngine::executeGridVisualDelete()
         Track track = arrangement.getTrack (t);
 
         // Collect new clips to add (from splits) after iterating
-        std::vector<juce::ValueTree> newClips;
+        std::vector<PropertyTree> newClips;
 
         // Process clips overlapping [minPos, maxPos) — iterate backwards for safe removal
         for (int c = track.getNumClips() - 1; c >= 0; --c)
         {
             auto clip = track.getClip (c);
-            auto clipStart  = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-            auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+            auto clipStart  = clip.getProperty (IDs::startPosition).getIntOr (0);
+            auto clipLength = clip.getProperty (IDs::length).getIntOr (0);
             auto clipEnd    = clipStart + clipLength;
 
             // Skip non-overlapping clips
@@ -2270,43 +2264,43 @@ void VimEngine::executeGridVisualDelete()
             else if (keepLeft && keepRight)
             {
                 // Selection is in the middle — split into left and right parts
-                auto origTrimStart = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::trimStart, 0)));
+                auto origTrimStart = clip.getProperty (IDs::trimStart).getIntOr (0);
 
                 // Truncate original clip to be the left part [clipStart, minPos)
                 int64_t leftLength = minPos - clipStart;
-                clip.setProperty (IDs::length, static_cast<juce::int64> (leftLength), &um);
+                clip.setProperty (IDs::length, Variant (leftLength), &um);
 
                 // Create right part [maxPos, clipEnd)
-                // Use nullptr for properties on detached tree — appendChild with &um
+                // Use nullptr for properties on detached tree — addChild with &um
                 // handles undo of the whole subtree addition in one transaction
-                auto rightClip = clip.createCopy();
+                auto rightClip = clip.createDeepCopy();
                 int64_t rightOffset = maxPos - clipStart;
-                rightClip.setProperty (IDs::startPosition, static_cast<juce::int64> (maxPos), nullptr);
-                rightClip.setProperty (IDs::length, static_cast<juce::int64> (clipEnd - maxPos), nullptr);
-                rightClip.setProperty (IDs::trimStart, static_cast<juce::int64> (origTrimStart + rightOffset), nullptr);
+                rightClip.setProperty (IDs::startPosition, Variant (maxPos), nullptr);
+                rightClip.setProperty (IDs::length, Variant (clipEnd - maxPos), nullptr);
+                rightClip.setProperty (IDs::trimStart, Variant (origTrimStart + rightOffset), nullptr);
                 newClips.push_back (rightClip);
             }
             else if (keepLeft)
             {
                 // Selection covers the right side — truncate to [clipStart, minPos)
                 int64_t leftLength = minPos - clipStart;
-                clip.setProperty (IDs::length, static_cast<juce::int64> (leftLength), &um);
+                clip.setProperty (IDs::length, Variant (leftLength), &um);
             }
             else // keepRight
             {
                 // Selection covers the left side — shrink to [maxPos, clipEnd)
-                auto origTrimStart = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::trimStart, 0)));
+                auto origTrimStart = clip.getProperty (IDs::trimStart).getIntOr (0);
                 int64_t rightOffset = maxPos - clipStart;
 
-                clip.setProperty (IDs::startPosition, static_cast<juce::int64> (maxPos), &um);
-                clip.setProperty (IDs::length, static_cast<juce::int64> (clipEnd - maxPos), &um);
-                clip.setProperty (IDs::trimStart, static_cast<juce::int64> (origTrimStart + rightOffset), &um);
+                clip.setProperty (IDs::startPosition, Variant (maxPos), &um);
+                clip.setProperty (IDs::length, Variant (clipEnd - maxPos), &um);
+                clip.setProperty (IDs::trimStart, Variant (origTrimStart + rightOffset), &um);
             }
         }
 
         // Append any new clips created from splits
         for (auto& nc : newClips)
-            track.getState().appendChild (nc, &um);
+            track.getState().addChild (nc, -1, &um);
     }
 
     // Move cursor to start of deleted range (like vim's d motion)
@@ -2335,7 +2329,7 @@ void VimEngine::executeGridVisualYank (bool isYank)
     int64_t globalMinStart = std::numeric_limits<int64_t>::max();
 
     // First pass: collect trimmed clips with raw positions
-    struct RawClip { juce::ValueTree data; int trackIdx; int64_t startPos; };
+    struct RawClip { PropertyTree data; int trackIdx; int64_t startPos; };
     std::vector<RawClip> rawClips;
 
     for (int t = minTrack; t <= maxTrack; ++t)
@@ -2348,28 +2342,27 @@ void VimEngine::executeGridVisualYank (bool isYank)
         for (int c = 0; c < track.getNumClips(); ++c)
         {
             auto clip = track.getClip (c);
-            auto clipStart  = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::startPosition, 0)));
-            auto clipLength = static_cast<int64_t> (static_cast<juce::int64> (clip.getProperty (IDs::length, 0)));
+            auto clipStart  = clip.getProperty (IDs::startPosition).getIntOr (0);
+            auto clipLength = clip.getProperty (IDs::length).getIntOr (0);
             auto clipEnd    = clipStart + clipLength;
 
             if (clipStart >= maxPos || clipEnd <= minPos)
                 continue;
 
             // Trim the yanked copy to only the portion within [minPos, maxPos)
-            auto trimmedCopy = clip.createCopy();
-            auto origTrimStart = static_cast<int64_t> (static_cast<juce::int64> (
-                trimmedCopy.getProperty (IDs::trimStart, 0)));
+            auto trimmedCopy = clip.createDeepCopy();
+            auto origTrimStart = trimmedCopy.getProperty (IDs::trimStart).getIntOr (0);
 
             int64_t newStart  = std::max (clipStart, minPos);
             int64_t newEnd    = std::min (clipEnd, maxPos);
             int64_t trimDelta = newStart - clipStart;
 
             trimmedCopy.setProperty (IDs::startPosition,
-                                     static_cast<juce::int64> (newStart), nullptr);
+                                     Variant (newStart), nullptr);
             trimmedCopy.setProperty (IDs::length,
-                                     static_cast<juce::int64> (newEnd - newStart), nullptr);
+                                     Variant (newEnd - newStart), nullptr);
             trimmedCopy.setProperty (IDs::trimStart,
-                                     static_cast<juce::int64> (origTrimStart + trimDelta), nullptr);
+                                     Variant (origTrimStart + trimDelta), nullptr);
 
             RawClip rc { trimmedCopy, t, newStart };
             rawClips.push_back (rc);
@@ -2851,14 +2844,14 @@ void VimEngine::seqMoveLeft()
 
 void VimEngine::seqMoveRight()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
     int maxStep = 0;
     auto pattern = seq.getActivePattern();
     if (pattern.isValid())
-        maxStep = static_cast<int> (pattern.getProperty (IDs::numSteps, 16)) - 1;
+        maxStep = static_cast<int> (pattern.getProperty (IDs::numSteps).getIntOr (16)) - 1;
 
     int step = context.getSeqStep();
     if (step < maxStep)
@@ -2880,7 +2873,7 @@ void VimEngine::seqMoveUp()
 
 void VimEngine::seqMoveDown()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
@@ -2902,14 +2895,14 @@ void VimEngine::seqJumpFirstStep()
 
 void VimEngine::seqJumpLastStep()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
     auto pattern = seq.getActivePattern();
     if (! pattern.isValid()) return;
 
-    int lastStep = static_cast<int> (pattern.getProperty (IDs::numSteps, 16)) - 1;
+    int lastStep = static_cast<int> (pattern.getProperty (IDs::numSteps).getIntOr (16)) - 1;
     context.setSeqStep (std::max (0, lastStep));
     listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
@@ -2922,7 +2915,7 @@ void VimEngine::seqJumpFirstRow()
 
 void VimEngine::seqJumpLastRow()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
@@ -2933,7 +2926,7 @@ void VimEngine::seqJumpLastRow()
 
 void VimEngine::seqToggleStep()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
@@ -2952,7 +2945,7 @@ void VimEngine::seqToggleStep()
 
 void VimEngine::seqAdjustVelocity (int delta)
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
@@ -2973,7 +2966,7 @@ void VimEngine::seqAdjustVelocity (int delta)
 
 void VimEngine::seqCycleVelocity()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
@@ -3008,7 +3001,7 @@ void VimEngine::seqCycleVelocity()
 
 void VimEngine::seqToggleRowMute()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
@@ -3024,7 +3017,7 @@ void VimEngine::seqToggleRowMute()
 
 void VimEngine::seqToggleRowSolo()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
@@ -3155,10 +3148,10 @@ int VimEngine::getMixerPluginCount() const
 {
     if (context.isMasterStripSelected())
     {
-        auto masterBus = project.getState().getChildWithName (IDs::MASTER_BUS);
+        auto masterBus = project.getState().getChildWithType (IDs::MASTER_BUS);
         if (masterBus.isValid())
         {
-            auto chain = masterBus.getChildWithName (IDs::PLUGIN_CHAIN);
+            auto chain = masterBus.getChildWithType (IDs::PLUGIN_CHAIN);
             return chain.isValid() ? chain.getNumChildren() : 0;
         }
         return 0;

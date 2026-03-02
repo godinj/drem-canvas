@@ -1,4 +1,5 @@
 #pragma once
+#include "dc/model/PropertyTree.h"
 #include <JuceHeader.h>
 #include <string>
 
@@ -21,7 +22,7 @@ public:
     std::string getPanelName() const;
 
     // State for the currently-open clip in the piano roll
-    juce::ValueTree openClipState;
+    PropertyTree openClipState;
 
     // Mixer parameter focus
     MixerFocus getMixerFocus() const { return mixerFocus; }

@@ -5,7 +5,6 @@
 #include "ChannelStripWidget.h"
 #include "model/Project.h"
 #include "vim/VimContext.h"
-#include <JuceHeader.h>
 #include <vector>
 #include <memory>
 
@@ -37,10 +36,10 @@ public:
     // Callback: (trackIndex, pluginIndex) when a plugin slot is clicked
     std::function<void (int, int)> onPluginClicked;
 
-    // ValueTree::Listener
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override {}
+    // PropertyTree::Listener
+    void childAdded (PropertyTree&, PropertyTree&) override;
+    void childRemoved (PropertyTree&, PropertyTree&, int) override;
+    void propertyChanged (PropertyTree&, PropertyId) override {}
 
 private:
     Project& project;

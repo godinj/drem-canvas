@@ -53,14 +53,14 @@ void PluginHost::restorePluginState (juce::AudioPluginInstance& plugin,
     }
 }
 
-juce::PluginDescription PluginHost::descriptionFromValueTree (const juce::ValueTree& pluginNode)
+juce::PluginDescription PluginHost::descriptionFromPropertyTree (const PropertyTree& pluginNode)
 {
     juce::PluginDescription desc;
-    desc.name                = pluginNode.getProperty (IDs::pluginName, "").toString();
-    desc.pluginFormatName    = pluginNode.getProperty (IDs::pluginFormat, "").toString();
-    desc.manufacturerName    = pluginNode.getProperty (IDs::pluginManufacturer, "").toString();
-    desc.uniqueId            = pluginNode.getProperty (IDs::pluginUniqueId, 0);
-    desc.fileOrIdentifier    = pluginNode.getProperty (IDs::pluginFileOrIdentifier, "").toString();
+    desc.name                = pluginNode.getProperty (IDs::pluginName).getStringOr ("");
+    desc.pluginFormatName    = pluginNode.getProperty (IDs::pluginFormat).getStringOr ("");
+    desc.manufacturerName    = pluginNode.getProperty (IDs::pluginManufacturer).getStringOr ("");
+    desc.uniqueId            = static_cast<int> (pluginNode.getProperty (IDs::pluginUniqueId).getIntOr (0));
+    desc.fileOrIdentifier    = pluginNode.getProperty (IDs::pluginFileOrIdentifier).getStringOr ("");
     return desc;
 }
 

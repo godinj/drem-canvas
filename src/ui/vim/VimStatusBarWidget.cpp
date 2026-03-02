@@ -158,7 +158,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
                 if (slot < track.getNumPlugins())
                 {
                     auto pluginState = track.getPlugin (slot);
-                    std::string name = pluginState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
+                    std::string name = pluginState.getProperty (IDs::pluginName).getStringOr ("Plugin");
                     breadcrumb += " > " + name;
                 }
                 else
@@ -179,7 +179,7 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
                 if (pvPlugin < pvt.getNumPlugins())
                 {
                     auto plugState = pvt.getPlugin (pvPlugin);
-                    plugName = plugState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
+                    plugName = plugState.getProperty (IDs::pluginName).getStringOr ("Plugin");
                 }
             }
 
@@ -222,15 +222,15 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
 
         if (context.getMixerFocus() == VimContext::FocusPlugins)
         {
-            auto masterBus = arrangement.getProject().getState().getChildWithName (IDs::MASTER_BUS);
-            auto chain = masterBus.isValid() ? masterBus.getChildWithName (IDs::PLUGIN_CHAIN) : juce::ValueTree();
+            auto masterBus = arrangement.getProject().getState().getChildWithType (IDs::MASTER_BUS);
+            auto chain = masterBus.isValid() ? masterBus.getChildWithType (IDs::PLUGIN_CHAIN) : PropertyTree();
             int numPlugins = chain.isValid() ? chain.getNumChildren() : 0;
             int slot = context.getSelectedPluginSlot();
 
             if (slot < numPlugins)
             {
                 auto pluginState = chain.getChild (slot);
-                std::string name = pluginState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
+                std::string name = pluginState.getProperty (IDs::pluginName).getStringOr ("Plugin");
                 breadcrumb += " > " + name;
             }
             else

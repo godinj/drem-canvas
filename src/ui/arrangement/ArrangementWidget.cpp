@@ -99,7 +99,7 @@ void ArrangementWidget::resized()
 
 void ArrangementWidget::animationTick (double /*timestampMs*/)
 {
-    // Deferred rebuild — coalesces multiple ValueTree changes into a single rebuild
+    // Deferred rebuild — coalesces multiple PropertyTree changes into a single rebuild
     if (needsRebuild)
     {
         needsRebuild = false;
@@ -218,19 +218,19 @@ void ArrangementWidget::vimContextChanged()
     repaint();
 }
 
-// ─── ValueTree::Listener ─────────────────────────────────────
+// ─── PropertyTree::Listener ──────────────────────────────────
 
-void ArrangementWidget::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&)
+void ArrangementWidget::childAdded (PropertyTree&, PropertyTree&)
 {
     needsRebuild = true;
 }
 
-void ArrangementWidget::valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int)
+void ArrangementWidget::childRemoved (PropertyTree&, PropertyTree&, int)
 {
     needsRebuild = true;
 }
 
-void ArrangementWidget::valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&)
+void ArrangementWidget::propertyChanged (PropertyTree&, PropertyId)
 {
     needsRebuild = true;
 }

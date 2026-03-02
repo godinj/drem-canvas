@@ -50,7 +50,7 @@ void StepSequencerWidget::animationTick (double /*timestampMs*/)
 
 void StepSequencerWidget::rebuildFromModel()
 {
-    auto seqState = project.getState().getChildWithName (juce::Identifier ("STEP_SEQUENCER"));
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (!seqState.isValid())
         return;
 
@@ -62,7 +62,7 @@ void StepSequencerWidget::rebuildFromModel()
     if (!pattern.isValid())
         return;
 
-    int numSteps = static_cast<int> (pattern.getProperty ("numSteps", 16));
+    int numSteps = static_cast<int> (pattern.getProperty (IDs::numSteps).getIntOr (16));
     int numRows = seq.getNumRows();
 
     stepGrid.setGrid (numRows, numSteps);
@@ -73,7 +73,7 @@ void StepSequencerWidget::rebuildFromModel()
     {
         auto row = seq.getRow (r);
         auto defaultLabel = "Row " + std::to_string (r + 1);
-        std::string label = row.getProperty ("label", defaultLabel.c_str()).toString().toStdString();
+        std::string label = row.getProperty (IDs::label).getStringOr (defaultLabel);
         labels.push_back (label);
 
         for (int s = 0; s < numSteps; ++s)
@@ -91,7 +91,7 @@ void StepSequencerWidget::rebuildFromModel()
     resized();
 }
 
-void StepSequencerWidget::valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&)
+void StepSequencerWidget::propertyChanged (PropertyTree&, PropertyId)
 {
     rebuildFromModel();
 }

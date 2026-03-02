@@ -73,7 +73,7 @@ void MixerWidget::rebuildStrips()
         for (int p = 0; p < track.getNumPlugins(); ++p)
         {
             auto pluginState = track.getPlugin (p);
-            std::string name = pluginState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
+            std::string name = pluginState.getProperty (IDs::pluginName).getStringOr ("Plugin");
             bool enabled = track.isPluginEnabled (p);
             slots.push_back ({ name, ! enabled });
         }
@@ -94,8 +94,8 @@ void MixerWidget::rebuildStrips()
     // Master strip
     if (!masterStrip)
     {
-        juce::ValueTree masterState ("TRACK");
-        masterState.setProperty ("name", "Master", nullptr);
+        PropertyTree masterState (IDs::TRACK);
+        masterState.setProperty (IDs::name, Variant (std::string ("Master")));
         masterStrip = std::make_unique<ChannelStripWidget> (masterState);
         addChild (masterStrip.get());
     }
@@ -159,12 +159,12 @@ void MixerWidget::setSelectedPluginSlot (int slotIndex)
         masterStrip->setSelectedPluginSlot (selectedStripIndex == static_cast<int> (strips.size()) ? slotIndex : -1);
 }
 
-void MixerWidget::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&)
+void MixerWidget::childAdded (PropertyTree&, PropertyTree&)
 {
     rebuildStrips();
 }
 
-void MixerWidget::valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int)
+void MixerWidget::childRemoved (PropertyTree&, PropertyTree&, int)
 {
     rebuildStrips();
 }

@@ -212,8 +212,8 @@ void AppController::initialise()
         if (pluginIdx < t.getNumPlugins())
         {
             auto pluginState = t.getPlugin (pluginIdx);
-            name = pluginState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
-            fileOrId = pluginState.getProperty (IDs::pluginFileOrIdentifier, "").toString().toStdString();
+            name = pluginState.getProperty (IDs::pluginName).getStringOr ("Plugin");
+            fileOrId = pluginState.getProperty (IDs::pluginFileOrIdentifier).getStringOr ("");
         }
 
         if (pluginViewWidget)
@@ -289,7 +289,7 @@ void AppController::initialise()
                 {
                     auto* param = params[info.juceParamIndex];
                     float current = param->getValue();
-                    float newVal = juce::jlimit (0.0f, 1.0f, current + delta);
+                    float newVal = std::clamp (current + delta, 0.0f, 1.0f);
                     param->setValueNotifyingHost (newVal);
                 }
             }
@@ -311,7 +311,7 @@ void AppController::initialise()
 
             auto* param = params[paramIndex];
             float current = param->getValue();
-            float newVal = juce::jlimit (0.0f, 1.0f, current + delta);
+            float newVal = std::clamp (current + delta, 0.0f, 1.0f);
             param->setValueNotifyingHost (newVal);
         }
     };
@@ -370,13 +370,13 @@ void AppController::initialise()
                 auto& params = plugin->getParameters();
                 if (info.juceParamIndex < params.size())
                     params[info.juceParamIndex]->setValueNotifyingHost (
-                        juce::jlimit (0.0f, 1.0f, newValue));
+                        std::clamp (newValue, 0.0f, 1.0f));
             }
             else
             {
                 // Unmapped: sweep-and-position drag
                 pluginViewWidget->applyAbsoluteDrag (paramIndex,
-                    juce::jlimit (0.0f, 1.0f, newValue));
+                    std::clamp (newValue, 0.0f, 1.0f));
             }
         }
         else
@@ -386,7 +386,7 @@ void AppController::initialise()
             if (paramIndex < 0 || paramIndex >= params.size())
                 return;
 
-            params[paramIndex]->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, newValue));
+            params[paramIndex]->setValueNotifyingHost (std::clamp (newValue, 0.0f, 1.0f));
         }
     };
 
@@ -438,7 +438,7 @@ void AppController::initialise()
     };
 
     // Wire piano roll open
-    vimEngine->onOpenPianoRoll = [this] (const juce::ValueTree& clipState)
+    vimEngine->onOpenPianoRoll = [this] (const PropertyTree& clipState)
     {
         if (pianoRollWidget)
             pianoRollWidget->loadClip (clipState);
@@ -524,7 +524,7 @@ void AppController::initialise()
         int newCol = pianoRollWidget->getPrBeatCol() + dBeatCol;
         int newRow = pianoRollWidget->getPrNoteRow() + dNoteRow;
         newCol = std::max (0, newCol);
-        newRow = juce::jlimit (0, 127, newRow);
+        newRow = std::clamp (newRow, 0, 127);
         pianoRollWidget->setPrBeatCol (newCol);
         pianoRollWidget->setPrNoteRow (newRow);
     };
@@ -546,9 +546,9 @@ void AppController::initialise()
         for (int i = 0; i < clipState.getNumChildren(); ++i)
         {
             auto child = clipState.getChild (i);
-            if (child.hasType ("NOTE")
-                && (int) child.getProperty ("noteNumber") == noteNumber
-                && std::abs ((double) child.getProperty ("startBeat") - beat) < 0.001)
+            if (child.getType() == IDs::NOTE
+                && static_cast<int> (child.getProperty (IDs::noteNumber).getIntOr (60)) == noteNumber
+                && std::abs (child.getProperty (IDs::startBeat).getDoubleOr (0.0) - beat) < 0.001)
             {
                 ScopedTransaction txn (project.getUndoSystem(), "Remove Note");
                 clip.removeNote (i, &project.getUndoManager());
@@ -571,7 +571,7 @@ void AppController::initialise()
             pianoRollWidget->setPrBeatCol (std::min (beatCol, maxCol));
         }
         if (noteRow >= 0)
-            pianoRollWidget->setPrNoteRow (juce::jlimit (0, 127, noteRow));
+            pianoRollWidget->setPrNoteRow (std::clamp (noteRow, 0, 127));
     };
 
     // Initialise MIDI engine
@@ -597,8 +597,7 @@ void AppController::initialise()
             auto posSamples = transportController.getPositionInSamples();
             double sr = project.getSampleRate();
             double tempo = project.getTempo();
-            int64_t clipStart = static_cast<int64_t> (
-                static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+            int64_t clipStart = clipState.getProperty (IDs::startPosition).getIntOr (0);
 
             double relativeSamples = static_cast<double> (posSamples - clipStart);
             double relativeSeconds = relativeSamples / sr;
@@ -1390,7 +1389,7 @@ void AppController::rebuildAudioGraph()
         bool isMidiTrack = false;
         for (int c = 0; c < track.getNumClips(); ++c)
         {
-            if (track.getClip (c).hasType (IDs::MIDI_CLIP))
+            if (track.getClip (c).getType() == IDs::MIDI_CLIP)
             {
                 isMidiTrack = true;
                 break;
@@ -1421,7 +1420,7 @@ void AppController::rebuildAudioGraph()
             for (int c = 0; c < track.getNumClips(); ++c)
             {
                 auto clipState = track.getClip (c);
-                if (clipState.hasType (IDs::AUDIO_CLIP))
+                if (clipState.getType() == IDs::AUDIO_CLIP)
                 {
                     AudioClip clip (clipState);
                     processorPtr->loadFile (clip.getSourceFile());
@@ -1446,14 +1445,14 @@ void AppController::rebuildAudioGraph()
         for (int p = 0; p < track.getNumPlugins(); ++p)
         {
             auto pluginState = track.getPlugin (p);
-            auto desc = PluginHost::descriptionFromValueTree (pluginState);
+            auto desc = PluginHost::descriptionFromPropertyTree (pluginState);
 
             auto instance = PluginHost::createPluginSync (
                 pluginManager.getFormatManager(), desc, sampleRate, blockSize);
 
             if (instance != nullptr)
             {
-                std::string base64State = pluginState.getProperty (IDs::pluginState, "").toString().toStdString();
+                std::string base64State = pluginState.getProperty (IDs::pluginState).getStringOr ("");
                 if (! base64State.empty())
                     PluginHost::restorePluginState (*instance, base64State);
 
@@ -1546,7 +1545,7 @@ void AppController::syncTrackProcessorsFromModel()
 
 void AppController::syncSequencerFromModel()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid() || sequencerProcessor == nullptr)
         return;
 
@@ -1557,8 +1556,8 @@ void AppController::syncSequencerFromModel()
 
     StepSequencerProcessor::PatternSnapshot snapshot;
     snapshot.numRows      = seq.getNumRows();
-    snapshot.numSteps     = static_cast<int> (pattern.getProperty (IDs::numSteps, 16));
-    snapshot.stepDivision = static_cast<int> (pattern.getProperty (IDs::stepDivision, 4));
+    snapshot.numSteps     = static_cast<int> (pattern.getProperty (IDs::numSteps).getIntOr (16));
+    snapshot.stepDivision = static_cast<int> (pattern.getProperty (IDs::stepDivision).getIntOr (4));
     snapshot.swing        = seq.getSwing();
 
     snapshot.hasSoloedRow = false;
@@ -1618,7 +1617,7 @@ void AppController::syncMidiClipFromModel (int trackIndex)
     for (int c = 0; c < track.getNumClips(); ++c)
     {
         auto clipState = track.getClip (c);
-        if (! clipState.hasType (IDs::MIDI_CLIP))
+        if (clipState.getType() != IDs::MIDI_CLIP)
             continue;
 
         MidiClip clip (clipState);
@@ -1944,8 +1943,8 @@ void AppController::loadSessionFromDirectory (const std::filesystem::path& dir)
 
     // Save ref to old state so we can detach listeners after replacement
     auto oldState = project.getState();
-    oldState.getChildWithName (IDs::STEP_SEQUENCER).removeListener (this);
-    oldState.getChildWithName (IDs::TRACKS).removeListener (this);
+    oldState.getChildWithType (IDs::STEP_SEQUENCER).removeListener (this);
+    oldState.getChildWithType (IDs::TRACKS).removeListener (this);
     oldState.removeListener (arrangementWidget.get());
     oldState.removeListener (mixerWidget.get());
     oldState.removeListener (sequencerWidget.get());
@@ -1953,8 +1952,8 @@ void AppController::loadSessionFromDirectory (const std::filesystem::path& dir)
     if (project.loadSessionFromDirectory (dir.string()))
     {
         currentSessionDirectory = dir;
-        project.getState().getChildWithName (IDs::TRACKS).addListener (this);
-        project.getState().getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+        project.getState().getChildWithType (IDs::TRACKS).addListener (this);
+        project.getState().getChildWithType (IDs::STEP_SEQUENCER).addListener (this);
         project.getState().addListener (arrangementWidget.get());
         project.getState().addListener (mixerWidget.get());
         project.getState().addListener (sequencerWidget.get());
@@ -1966,8 +1965,8 @@ void AppController::loadSessionFromDirectory (const std::filesystem::path& dir)
     }
     else
     {
-        oldState.getChildWithName (IDs::TRACKS).addListener (this);
-        oldState.getChildWithName (IDs::STEP_SEQUENCER).addListener (this);
+        oldState.getChildWithType (IDs::TRACKS).addListener (this);
+        oldState.getChildWithType (IDs::STEP_SEQUENCER).addListener (this);
         oldState.addListener (arrangementWidget.get());
         oldState.addListener (mixerWidget.get());
         oldState.addListener (sequencerWidget.get());
@@ -2079,18 +2078,18 @@ void AppController::toggleBrowser()
     }
 }
 
-// ─── ValueTree::Listener ─────────────────────────────────────
+/// ─── PropertyTree::Listener ──────────────────────────────────
 
-void AppController::valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier& property)
+void AppController::propertyChanged (PropertyTree& tree, PropertyId property)
 {
-    if (tree.hasType (IDs::TRACK))
+    if (tree.getType() == IDs::TRACK)
     {
         if (property == IDs::volume || property == IDs::pan || property == IDs::mute)
             syncTrackProcessorsFromModel();
     }
 
     // Tempo change — sync to sequencer and MIDI clip processors
-    if (tree.hasType (IDs::PROJECT) && property == IDs::tempo)
+    if (tree.getType() == IDs::PROJECT && property == IDs::tempo)
     {
         if (sequencerProcessor != nullptr)
             sequencerProcessor->setTempo (project.getTempo());
@@ -2107,20 +2106,20 @@ void AppController::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
     }
 
     // MIDI clip property changed (e.g. midiData, startPosition, length)
-    if (tree.hasType (IDs::MIDI_CLIP))
+    if (tree.getType() == IDs::MIDI_CLIP)
     {
         auto trackState = tree.getParent();
-        if (trackState.hasType (IDs::TRACK))
+        if (trackState.getType() == IDs::TRACK)
         {
-            auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+            auto tracksNode = project.getState().getChildWithType (IDs::TRACKS);
             int trackIndex = tracksNode.indexOf (trackState);
             if (trackIndex >= 0)
                 syncMidiClipFromModel (trackIndex);
         }
     }
 
-    if (tree.hasType (IDs::STEP_SEQUENCER) || tree.hasType (IDs::STEP_PATTERN)
-        || tree.hasType (IDs::STEP_ROW) || tree.hasType (IDs::STEP))
+    if (tree.getType() == IDs::STEP_SEQUENCER || tree.getType() == IDs::STEP_PATTERN
+        || tree.getType() == IDs::STEP_ROW || tree.getType() == IDs::STEP)
     {
         syncSequencerFromModel();
     }
@@ -2128,41 +2127,41 @@ void AppController::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
     repaint();
 }
 
-void AppController::valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree& child)
+void AppController::childAdded (PropertyTree& parent, PropertyTree& child)
 {
-    if (parent.hasType (IDs::TRACKS))
+    if (parent.getType() == IDs::TRACKS)
         rebuildAudioGraph();
 
     // MIDI clip added to a track
-    if (parent.hasType (IDs::TRACK) && child.hasType (IDs::MIDI_CLIP))
+    if (parent.getType() == IDs::TRACK && child.getType() == IDs::MIDI_CLIP)
     {
-        auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+        auto tracksNode = project.getState().getChildWithType (IDs::TRACKS);
         int trackIndex = tracksNode.indexOf (parent);
         if (trackIndex >= 0)
             syncMidiClipFromModel (trackIndex);
     }
 
-    if (parent.hasType (IDs::STEP_SEQUENCER) || parent.hasType (IDs::STEP_PATTERN)
-        || parent.hasType (IDs::STEP_ROW))
+    if (parent.getType() == IDs::STEP_SEQUENCER || parent.getType() == IDs::STEP_PATTERN
+        || parent.getType() == IDs::STEP_ROW)
         syncSequencerFromModel();
 }
 
-void AppController::valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree& child, int)
+void AppController::childRemoved (PropertyTree& parent, PropertyTree& child, int)
 {
-    if (parent.hasType (IDs::TRACKS))
+    if (parent.getType() == IDs::TRACKS)
         rebuildAudioGraph();
 
     // MIDI clip removed from a track
-    if (parent.hasType (IDs::TRACK) && child.hasType (IDs::MIDI_CLIP))
+    if (parent.getType() == IDs::TRACK && child.getType() == IDs::MIDI_CLIP)
     {
-        auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+        auto tracksNode = project.getState().getChildWithType (IDs::TRACKS);
         int trackIndex = tracksNode.indexOf (parent);
         if (trackIndex >= 0)
             syncMidiClipFromModel (trackIndex);
     }
 
-    if (parent.hasType (IDs::STEP_SEQUENCER) || parent.hasType (IDs::STEP_PATTERN)
-        || parent.hasType (IDs::STEP_ROW))
+    if (parent.getType() == IDs::STEP_SEQUENCER || parent.getType() == IDs::STEP_PATTERN
+        || parent.getType() == IDs::STEP_ROW)
         syncSequencerFromModel();
 }
 
@@ -2228,7 +2227,7 @@ void AppController::vimContextChanged()
     // When piano roll is closed, clear its clip data
     if (panel != VimContext::PianoRoll && pianoRollWidget && pianoRollWidget->isVisible())
     {
-        pianoRollWidget->loadClip (juce::ValueTree());
+        pianoRollWidget->loadClip (PropertyTree());
     }
 
     // When plugin view is closed, clear its plugin data

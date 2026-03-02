@@ -11,7 +11,6 @@
 #include "model/Project.h"
 #include "model/MidiClip.h"
 #include "engine/TransportController.h"
-#include <JuceHeader.h>
 #include <vector>
 #include <set>
 #include <memory>
@@ -31,12 +30,12 @@ public:
     void resized() override;
     bool mouseWheel (const gfx::WheelEvent& e) override;
 
-    void loadClip (const juce::ValueTree& midiClipState);
+    void loadClip (const PropertyTree& midiClipState);
 
-    // ValueTree::Listener
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
+    // PropertyTree::Listener
+    void propertyChanged (PropertyTree&, PropertyId) override;
+    void childAdded (PropertyTree&, PropertyTree&) override;
+    void childRemoved (PropertyTree&, PropertyTree&, int) override;
 
     // Tool modes
     enum Tool { Select, Draw, Erase };
@@ -104,7 +103,7 @@ private:
     Project& project;
     TransportController& transportController;
 
-    juce::ValueTree clipState;
+    PropertyTree clipState;
     PianoKeyboardWidget keyboard;
     PianoRollRulerWidget ruler;
     gfx::ScrollViewWidget scrollView;

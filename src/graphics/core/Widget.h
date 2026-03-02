@@ -2,14 +2,14 @@
 
 #include "Node.h"
 #include "Event.h"
-#include <JuceHeader.h>
+#include "dc/model/PropertyTree.h"
 
 namespace dc
 {
 namespace gfx
 {
 
-class Widget : public Node, public juce::ValueTree::Listener
+class Widget : public Node, public PropertyTree::Listener
 {
 public:
     Widget() = default;
@@ -73,13 +73,13 @@ public:
     void setId (const std::string& newId) { widgetId = newId; }
     const std::string& getId() const { return widgetId; }
 
-    // ─── ValueTree::Listener overrides (empty defaults) ──
+    // ─── PropertyTree::Listener overrides (empty defaults) ──
 
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override {}
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override {}
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override {}
-    void valueTreeChildOrderChanged (juce::ValueTree&, int, int) override {}
-    void valueTreeParentChanged (juce::ValueTree&) override {}
+    void propertyChanged (PropertyTree&, PropertyId) override {}
+    void childAdded (PropertyTree&, PropertyTree&) override {}
+    void childRemoved (PropertyTree&, PropertyTree&, int) override {}
+    void childOrderChanged (PropertyTree&, int, int) override {}
+    void parentChanged (PropertyTree&) override {}
 
     // ─── Global focus management (set by EventDispatch) ──
 

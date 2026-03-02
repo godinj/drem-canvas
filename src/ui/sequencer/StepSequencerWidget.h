@@ -6,7 +6,6 @@
 #include "PatternSelectorWidget.h"
 #include "model/Project.h"
 #include "model/StepSequencer.h"
-#include <JuceHeader.h>
 
 namespace dc
 {
@@ -25,10 +24,10 @@ public:
 
     void rebuildFromModel();
 
-    // ValueTree::Listener
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override {}
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override {}
+    // PropertyTree::Listener
+    void propertyChanged (PropertyTree&, PropertyId) override;
+    void childAdded (PropertyTree&, PropertyTree&) override {}
+    void childRemoved (PropertyTree&, PropertyTree&, int) override {}
 
 private:
     Project& project;

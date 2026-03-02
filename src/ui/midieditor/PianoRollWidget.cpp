@@ -31,8 +31,7 @@ PianoRollWidget::PianoRollWidget (Project& p, TransportController& t)
 
         double sr = project.getSampleRate();
         double tempo = project.getTempo();
-        int64_t clipStart = static_cast<int64_t> (
-            static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+        int64_t clipStart = clipState.getProperty (IDs::startPosition).getIntOr (0);
 
         int64_t samplePos = clipStart + static_cast<int64_t> (beat * 60.0 / tempo * sr);
         if (samplePos < 0) samplePos = 0;
@@ -65,12 +64,12 @@ PianoRollWidget::PianoRollWidget (Project& p, TransportController& t)
         for (int i = 0; i < clipState.getNumChildren(); ++i)
         {
             auto child = clipState.getChild (i);
-            if (! child.hasType (juce::Identifier ("NOTE")))
+            if (child.getType() != IDs::NOTE)
                 continue;
 
-            int nn = static_cast<int> (child.getProperty ("noteNumber", 60));
-            double sb = static_cast<double> (child.getProperty ("startBeat", 0.0));
-            double lb = static_cast<double> (child.getProperty ("lengthBeats", 0.25));
+            int nn = static_cast<int> (child.getProperty (IDs::noteNumber).getIntOr (60));
+            double sb = child.getProperty (IDs::startBeat).getDoubleOr (0.0);
+            double lb = child.getProperty (IDs::lengthBeats).getDoubleOr (0.25);
 
             if (nn == noteNumber && storedBeat >= sb && storedBeat < sb + lb)
             {
@@ -215,7 +214,7 @@ void PianoRollWidget::resized()
     rebuildNotes();
 }
 
-void PianoRollWidget::loadClip (const juce::ValueTree& state)
+void PianoRollWidget::loadClip (const PropertyTree& state)
 {
     if (clipState.isValid())
         clipState.removeListener (this);
@@ -228,10 +227,8 @@ void PianoRollWidget::loadClip (const juce::ValueTree& state)
         clipState.addListener (this);
 
         // Compute beat offset so ruler bar numbers match the arrangement
-        int64_t clipStart = static_cast<int64_t> (
-            static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
-        int64_t trimStart = static_cast<int64_t> (
-            static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0)));
+        int64_t clipStart = clipState.getProperty (IDs::startPosition).getIntOr (0);
+        int64_t trimStart = clipState.getProperty (IDs::trimStart).getIntOr (0);
         double sr = project.getSampleRate();
         double tempo = project.getTempo();
 
@@ -263,8 +260,7 @@ void PianoRollWidget::rebuildNotes()
     // Compute visible beat range from clip length
     double sr = project.getSampleRate();
     double tempo = project.getTempo();
-    int64_t clipLength = static_cast<int64_t> (
-        static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+    int64_t clipLength = clipState.getProperty (IDs::length).getIntOr (0);
     double clipLengthBeats = (sr > 0.0 && tempo > 0.0)
         ? (static_cast<double> (clipLength) / sr) * tempo / 60.0
         : 1e12;
@@ -272,13 +268,13 @@ void PianoRollWidget::rebuildNotes()
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
         auto note = clipState.getChild (i);
-        if (note.getType().toString() != "NOTE")
+        if (note.getType() != IDs::NOTE)
             continue;
 
-        int noteNum = static_cast<int> (note.getProperty ("noteNumber", 60));
-        auto startBeat = static_cast<double> (note.getProperty ("startBeat", 0.0)) - trimOffsetBeats;
-        auto lengthBeats = static_cast<double> (note.getProperty ("lengthBeats", 0.25));
-        int velocity = static_cast<int> (note.getProperty ("velocity", 100));
+        int noteNum = static_cast<int> (note.getProperty (IDs::noteNumber).getIntOr (60));
+        auto startBeat = note.getProperty (IDs::startBeat).getDoubleOr (0.0) - trimOffsetBeats;
+        auto lengthBeats = note.getProperty (IDs::lengthBeats).getDoubleOr (0.25);
+        int velocity = static_cast<int> (note.getProperty (IDs::velocity).getIntOr (100));
 
         // Skip notes outside the visible clip region
         if (startBeat + lengthBeats <= 0.0 || startBeat >= clipLengthBeats)
@@ -309,14 +305,14 @@ void PianoRollWidget::rebuildNotes()
                 return;
 
             auto noteState = clipState.getChild (noteIndex);
-            if (! noteState.hasType (juce::Identifier ("NOTE")))
+            if (noteState.getType() != IDs::NOTE)
                 return;
 
             project.getUndoSystem().beginCoalescedTransaction ("Move Note");
             auto& um = project.getUndoManager();
 
-            double curBeat = static_cast<double> (noteState.getProperty ("startBeat", 0.0));
-            int curNote = static_cast<int> (noteState.getProperty ("noteNumber", 60));
+            double curBeat = noteState.getProperty (IDs::startBeat).getDoubleOr (0.0);
+            int curNote = static_cast<int> (noteState.getProperty (IDs::noteNumber).getIntOr (60));
 
             double newBeat = curBeat + static_cast<double> (dx) / pixelsPerBeat;
             int newNote = curNote - static_cast<int> (dy / rowHeight);
@@ -325,10 +321,10 @@ void PianoRollWidget::rebuildNotes()
                 newBeat = snapBeat (newBeat);
 
             newBeat = std::max (0.0, newBeat);
-            newNote = juce::jlimit (0, 127, newNote);
+            newNote = std::clamp (newNote, 0, 127);
 
-            noteState.setProperty ("startBeat", newBeat, &um);
-            noteState.setProperty ("noteNumber", newNote, &um);
+            noteState.setProperty (IDs::startBeat, Variant (newBeat), &um);
+            noteState.setProperty (IDs::noteNumber, Variant (newNote), &um);
 
             MidiClip clip (clipState);
             clip.collapseChildrenToMidiData (&um);
@@ -341,7 +337,7 @@ void PianoRollWidget::rebuildNotes()
                 return;
 
             auto noteState = clipState.getChild (noteIndex);
-            if (! noteState.hasType (juce::Identifier ("NOTE")))
+            if (noteState.getType() != IDs::NOTE)
                 return;
 
             project.getUndoSystem().beginCoalescedTransaction ("Resize Note");
@@ -356,7 +352,7 @@ void PianoRollWidget::rebuildNotes()
             if (snapEnabled)
                 newLengthBeats = snapBeat (newLengthBeats);
 
-            noteState.setProperty ("lengthBeats", newLengthBeats, &um);
+            noteState.setProperty (IDs::lengthBeats, Variant (newLengthBeats), &um);
 
             MidiClip clip (clipState);
             clip.collapseChildrenToMidiData (&um);
@@ -398,7 +394,7 @@ void PianoRollWidget::setTool (Tool t)
 
 void PianoRollWidget::setGridDivision (int div)
 {
-    gridDivision = juce::jlimit (1, 16, div);
+    gridDivision = std::clamp (div, 1, 16);
     noteGrid.setGridDivision (gridDivision);
     repaint();
 }
@@ -422,7 +418,7 @@ void PianoRollWidget::selectNote (int index, bool addToSelection)
     int noteIdx = 0;
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
-        if (! clipState.getChild (i).hasType (juce::Identifier ("NOTE")))
+        if (clipState.getChild (i).getType() != IDs::NOTE)
             continue;
 
         if (noteIdx < static_cast<int> (noteWidgets.size()))
@@ -447,7 +443,7 @@ void PianoRollWidget::selectAll()
     selectedNoteIndices.clear();
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
-        if (clipState.getChild (i).hasType (juce::Identifier ("NOTE")))
+        if (clipState.getChild (i).getType() == IDs::NOTE)
             selectedNoteIndices.insert (i);
     }
 
@@ -464,7 +460,7 @@ void PianoRollWidget::selectNotesInRect (float x, float y, float w, float h)
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
         auto child = clipState.getChild (i);
-        if (! child.hasType (juce::Identifier ("NOTE")))
+        if (child.getType() != IDs::NOTE)
             continue;
 
         if (noteIdx < static_cast<int> (noteWidgets.size()))
@@ -505,7 +501,7 @@ void PianoRollWidget::deleteSelectedNotes (char reg)
         {
             if (idx < clipState.getNumChildren())
             {
-                double sb = static_cast<double> (clipState.getChild (idx).getProperty ("startBeat", 0.0));
+                double sb = clipState.getChild (idx).getProperty (IDs::startBeat).getDoubleOr (0.0);
                 minBeat = std::min (minBeat, sb);
             }
         }
@@ -517,7 +513,7 @@ void PianoRollWidget::deleteSelectedNotes (char reg)
                 if (idx < clipState.getNumChildren())
                 {
                     auto note = clipState.getChild (idx);
-                    double sb = static_cast<double> (note.getProperty ("startBeat", 0.0));
+                    double sb = note.getProperty (IDs::startBeat).getDoubleOr (0.0);
                     entries.push_back ({ note, sb - minBeat });
                 }
             }
@@ -555,7 +551,7 @@ void PianoRollWidget::copySelectedNotes (char reg)
     {
         if (idx < clipState.getNumChildren())
         {
-            double sb = static_cast<double> (clipState.getChild (idx).getProperty ("startBeat", 0.0));
+            double sb = clipState.getChild (idx).getProperty (IDs::startBeat).getDoubleOr (0.0);
             minBeat = std::min (minBeat, sb);
         }
     }
@@ -569,7 +565,7 @@ void PianoRollWidget::copySelectedNotes (char reg)
         if (idx < clipState.getNumChildren())
         {
             auto note = clipState.getChild (idx);
-            double sb = static_cast<double> (note.getProperty ("startBeat", 0.0));
+            double sb = note.getProperty (IDs::startBeat).getDoubleOr (0.0);
             entries.push_back ({ note, sb - minBeat });
         }
     }
@@ -599,9 +595,9 @@ void PianoRollWidget::pasteNotes (char reg)
 
     for (auto& entry : regEntry.noteEntries)
     {
-        auto newNote = entry.noteData.createCopy();
-        newNote.setProperty ("startBeat", cursorBeat + entry.beatOffset, &um);
-        clipState.appendChild (newNote, &um);
+        auto newNote = entry.noteData.createDeepCopy();
+        newNote.setProperty (IDs::startBeat, Variant (cursorBeat + entry.beatOffset), &um);
+        clipState.addChild (std::move (newNote), -1, &um);
         selectedNoteIndices.insert (clipState.getNumChildren() - 1);
     }
 
@@ -619,33 +615,33 @@ void PianoRollWidget::duplicateSelectedNotes()
 
     // Find rightmost edge to place duplicates after
     double maxEnd = 0.0;
-    std::vector<juce::ValueTree> copies;
+    std::vector<PropertyTree> copies;
 
     for (int idx : selectedNoteIndices)
     {
         if (idx < clipState.getNumChildren())
         {
             auto child = clipState.getChild (idx);
-            double end = static_cast<double> (child.getProperty ("startBeat", 0.0))
-                       + static_cast<double> (child.getProperty ("lengthBeats", 0.25));
+            double end = child.getProperty (IDs::startBeat).getDoubleOr (0.0)
+                       + child.getProperty (IDs::lengthBeats).getDoubleOr (0.25);
             maxEnd = std::max (maxEnd, end);
-            copies.push_back (child.createCopy());
+            copies.push_back (child.createDeepCopy());
         }
     }
 
     // Find minimum start to calculate span
     double minStart = 1e12;
     for (auto& c : copies)
-        minStart = std::min (minStart, static_cast<double> (c.getProperty ("startBeat", 0.0)));
+        minStart = std::min (minStart, c.getProperty (IDs::startBeat).getDoubleOr (0.0));
 
     double offset = maxEnd - minStart;
 
     selectedNoteIndices.clear();
     for (auto& c : copies)
     {
-        double sb = static_cast<double> (c.getProperty ("startBeat", 0.0));
-        c.setProperty ("startBeat", sb + offset, &um);
-        clipState.appendChild (c, &um);
+        double sb = c.getProperty (IDs::startBeat).getDoubleOr (0.0);
+        c.setProperty (IDs::startBeat, Variant (sb + offset), &um);
+        clipState.addChild (std::move (c), -1, &um);
         selectedNoteIndices.insert (clipState.getNumChildren() - 1);
     }
 
@@ -666,9 +662,9 @@ void PianoRollWidget::transposeSelected (int semitones)
         if (idx < clipState.getNumChildren())
         {
             auto child = clipState.getChild (idx);
-            int noteNum = static_cast<int> (child.getProperty ("noteNumber", 60));
-            noteNum = juce::jlimit (0, 127, noteNum + semitones);
-            child.setProperty ("noteNumber", noteNum, &um);
+            int noteNum = static_cast<int> (child.getProperty (IDs::noteNumber).getIntOr (60));
+            noteNum = std::clamp (noteNum + semitones, 0, 127);
+            child.setProperty (IDs::noteNumber, Variant (noteNum), &um);
         }
     }
 
@@ -691,10 +687,10 @@ void PianoRollWidget::quantizeSelected (double strength)
         if (idx < clipState.getNumChildren())
         {
             auto child = clipState.getChild (idx);
-            double startBeat = static_cast<double> (child.getProperty ("startBeat", 0.0));
+            double startBeat = child.getProperty (IDs::startBeat).getDoubleOr (0.0);
             double quantized = std::round (startBeat / gridSize) * gridSize;
             double newBeat = startBeat + (quantized - startBeat) * strength;
-            child.setProperty ("startBeat", newBeat, &um);
+            child.setProperty (IDs::startBeat, Variant (newBeat), &um);
         }
     }
 
@@ -721,13 +717,13 @@ void PianoRollWidget::humanizeSelected (double timingRange, double velocityRange
         {
             auto child = clipState.getChild (idx);
 
-            double startBeat = static_cast<double> (child.getProperty ("startBeat", 0.0));
+            double startBeat = child.getProperty (IDs::startBeat).getDoubleOr (0.0);
             startBeat = std::max (0.0, startBeat + timeDist (gen));
-            child.setProperty ("startBeat", startBeat, &um);
+            child.setProperty (IDs::startBeat, Variant (startBeat), &um);
 
-            int vel = static_cast<int> (child.getProperty ("velocity", 100));
-            vel = juce::jlimit (1, 127, vel + static_cast<int> (velDist (gen)));
-            child.setProperty ("velocity", vel, &um);
+            int vel = static_cast<int> (child.getProperty (IDs::velocity).getIntOr (100));
+            vel = std::clamp (vel + static_cast<int> (velDist (gen)), 1, 127);
+            child.setProperty (IDs::velocity, Variant (vel), &um);
         }
     }
 
@@ -739,14 +735,14 @@ void PianoRollWidget::humanizeSelected (double timingRange, double velocityRange
 
 void PianoRollWidget::zoomHorizontal (float factor)
 {
-    pixelsPerBeat = juce::jlimit (10.0f, 400.0f, pixelsPerBeat * factor);
+    pixelsPerBeat = std::clamp (pixelsPerBeat * factor, 10.0f, 400.0f);
     resized();
     repaint();
 }
 
 void PianoRollWidget::zoomVertical (float factor)
 {
-    rowHeight = juce::jlimit (4.0f, 30.0f, rowHeight * factor);
+    rowHeight = std::clamp (rowHeight * factor, 4.0f, 30.0f);
     keyboard.setRowHeight (rowHeight);
     resized();
     repaint();
@@ -763,12 +759,12 @@ void PianoRollWidget::zoomToFit()
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
         auto child = clipState.getChild (i);
-        if (! child.hasType (juce::Identifier ("NOTE")))
+        if (child.getType() != IDs::NOTE)
             continue;
 
-        double endBeat = static_cast<double> (child.getProperty ("startBeat", 0.0))
-                       + static_cast<double> (child.getProperty ("lengthBeats", 0.25));
-        int noteNum = static_cast<int> (child.getProperty ("noteNumber", 60));
+        double endBeat = child.getProperty (IDs::startBeat).getDoubleOr (0.0)
+                       + child.getProperty (IDs::lengthBeats).getDoubleOr (0.25);
+        int noteNum = static_cast<int> (child.getProperty (IDs::noteNumber).getIntOr (60));
 
         maxBeat = std::max (maxBeat, endBeat);
         minNote = std::min (minNote, noteNum);
@@ -781,11 +777,11 @@ void PianoRollWidget::zoomToFit()
     float availableW = getWidth() - keyboardWidth;
     float availableH = getHeight() - PianoRollRulerWidget::rulerHeight;
 
-    pixelsPerBeat = juce::jlimit (10.0f, 400.0f,
-        availableW / static_cast<float> (maxBeat + 1.0));
+    pixelsPerBeat = std::clamp (availableW / static_cast<float> (maxBeat + 1.0),
+        10.0f, 400.0f);
 
     int noteRange = maxNote - minNote + 2;
-    rowHeight = juce::jlimit (4.0f, 30.0f, availableH / static_cast<float> (noteRange));
+    rowHeight = std::clamp (availableH / static_cast<float> (noteRange), 4.0f, 30.0f);
 
     keyboard.setRowHeight (rowHeight);
     resized();
@@ -846,8 +842,7 @@ void PianoRollWidget::animationTick (double)
     if (sr > 0 && tempo > 0)
     {
         // Convert clip-relative sample position to beat
-        int64_t clipStart = static_cast<int64_t> (
-            static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
+        int64_t clipStart = clipState.getProperty (IDs::startPosition).getIntOr (0);
         double relativeSamples = static_cast<double> (posSamples - clipStart);
         double relativeSeconds = relativeSamples / sr;
         double relativeBeat = relativeSeconds * tempo / 60.0;
@@ -871,19 +866,19 @@ void PianoRollWidget::ensureCursorVisible()
     scrollView.scrollToMakeVisible (gfx::Rect (cursorX, cursorY, cursorW, rowHeight));
 }
 
-// ── ValueTree::Listener ──────────────────────────────────────────────────────
+// ── PropertyTree::Listener ───────────────────────────────────────────────────
 
-void PianoRollWidget::valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&)
+void PianoRollWidget::propertyChanged (PropertyTree&, PropertyId)
 {
     rebuildNotes();
 }
 
-void PianoRollWidget::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&)
+void PianoRollWidget::childAdded (PropertyTree&, PropertyTree&)
 {
     rebuildNotes();
 }
 
-void PianoRollWidget::valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int)
+void PianoRollWidget::childRemoved (PropertyTree&, PropertyTree&, int)
 {
     rebuildNotes();
 }

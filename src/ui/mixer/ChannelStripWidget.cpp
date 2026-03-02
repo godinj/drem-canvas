@@ -1,6 +1,7 @@
 #include "ChannelStripWidget.h"
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/Theme.h"
+#include "model/Project.h"
 #include <string>
 
 namespace dc
@@ -8,14 +9,14 @@ namespace dc
 namespace ui
 {
 
-ChannelStripWidget::ChannelStripWidget (const juce::ValueTree& state)
+ChannelStripWidget::ChannelStripWidget (const PropertyTree& state)
     : trackState (state),
       panKnob (gfx::SliderWidget::Rotary),
       muteButton ("M"),
       soloButton ("S"),
       fader (gfx::SliderWidget::LinearVertical)
 {
-    std::string name = trackState.getProperty ("name", "Track").toString().toStdString();
+    std::string name = trackState.getProperty (IDs::name).getStringOr ("Track");
     nameLabel.setText (name);
     nameLabel.setAlignment (gfx::LabelWidget::Centre);
     nameLabel.setFontSize (11.0f);

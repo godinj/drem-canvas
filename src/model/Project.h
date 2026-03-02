@@ -69,6 +69,20 @@ namespace IDs
     DECLARE_ID (probability)
     DECLARE_ID (noteLength)
 
+    // MIDI note children
+    DECLARE_ID (NOTE)
+    DECLARE_ID (startBeat)
+    DECLARE_ID (lengthBeats)
+
+    // CC automation children
+    DECLARE_ID (CC_POINT)
+    DECLARE_ID (ccNumber)
+    DECLARE_ID (beat)
+    DECLARE_ID (value)
+
+    // Step sequencer row labels
+    DECLARE_ID (label)
+
     #undef DECLARE_ID
 }
 

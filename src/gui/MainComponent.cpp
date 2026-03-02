@@ -567,7 +567,7 @@ void MainComponent::rebuildAudioGraph()
         for (int p = 0; p < track.getNumPlugins(); ++p)
         {
             auto pluginState = track.getPlugin (p);
-            auto desc = PluginHost::descriptionFromValueTree (pluginState);
+            auto desc = PluginHost::descriptionFromPropertyTree (pluginState);
 
             auto instance = PluginHost::createPluginSync (
                 pluginManager.getFormatManager(), desc, sampleRate, blockSize);

@@ -40,10 +40,10 @@ public:
     void vimModeChanged (VimEngine::Mode newMode) override;
     void vimContextChanged() override;
 
-    // ValueTree::Listener
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
+    // PropertyTree::Listener
+    void childAdded (PropertyTree&, PropertyTree&) override;
+    void childRemoved (PropertyTree&, PropertyTree&, int) override;
+    void propertyChanged (PropertyTree&, PropertyId) override;
 
 private:
     void updateSelectionVisuals();

@@ -8,10 +8,6 @@ namespace dc
 namespace ui
 {
 
-namespace
-{
-    const juce::Identifier ccPointId ("CC_POINT");
-}
 
 CCLaneWidget::CCLaneWidget (Project& p)
     : project (p)
@@ -43,15 +39,15 @@ void CCLaneWidget::paint (gfx::Canvas& canvas)
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
         auto child = clipState.getChild (i);
-        if (! child.hasType (ccPointId))
+        if (child.getType() != IDs::CC_POINT)
             continue;
 
-        int cc = static_cast<int> (child.getProperty ("ccNumber", 1));
+        int cc = static_cast<int> (child.getProperty (IDs::ccNumber).getIntOr (1));
         if (cc != ccNumber)
             continue;
 
-        double beat = static_cast<double> (child.getProperty ("beat", 0.0));
-        int value = static_cast<int> (child.getProperty ("value", 0));
+        double beat = child.getProperty (IDs::beat).getDoubleOr (0.0);
+        int value = static_cast<int> (child.getProperty (IDs::value).getIntOr (0));
         points.push_back ({ beat, value });
     }
 
@@ -89,7 +85,7 @@ void CCLaneWidget::mouseDown (const gfx::MouseEvent& e)
     double beat = static_cast<double> (e.x + scrollOffset) / static_cast<double> (pixelsPerBeat);
     float h = getHeight();
     int value = static_cast<int> ((1.0f - (e.y / h)) * 127.0f);
-    value = juce::jlimit (0, 127, value);
+    value = std::clamp (value, 0, 127);
 
     addOrUpdateCCPoint (beat, value);
 }
@@ -102,7 +98,7 @@ void CCLaneWidget::mouseDrag (const gfx::MouseEvent& e)
     double beat = static_cast<double> (e.x + scrollOffset) / static_cast<double> (pixelsPerBeat);
     float h = getHeight();
     int value = static_cast<int> ((1.0f - (e.y / h)) * 127.0f);
-    value = juce::jlimit (0, 127, value);
+    value = std::clamp (value, 0, 127);
 
     addOrUpdateCCPoint (beat, value);
 }
@@ -130,15 +126,15 @@ void CCLaneWidget::addOrUpdateCCPoint (double beat, int value)
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
         auto child = clipState.getChild (i);
-        if (! child.hasType (ccPointId))
+        if (child.getType() != IDs::CC_POINT)
             continue;
 
-        int cc = static_cast<int> (child.getProperty ("ccNumber", 1));
-        double existingBeat = static_cast<double> (child.getProperty ("beat", 0.0));
+        int cc = static_cast<int> (child.getProperty (IDs::ccNumber).getIntOr (1));
+        double existingBeat = child.getProperty (IDs::beat).getDoubleOr (0.0);
 
         if (cc == ccNumber && std::abs (existingBeat - beat) < 0.01)
         {
-            child.setProperty ("value", value, &um);
+            child.setProperty (IDs::value, Variant (value), &um);
 
             MidiClip clip (clipState);
             clip.collapseChildrenToMidiData (&um);
@@ -147,11 +143,11 @@ void CCLaneWidget::addOrUpdateCCPoint (double beat, int value)
     }
 
     // Add new CC point
-    juce::ValueTree ccPoint (ccPointId);
-    ccPoint.setProperty ("ccNumber", ccNumber, &um);
-    ccPoint.setProperty ("beat", beat, &um);
-    ccPoint.setProperty ("value", value, &um);
-    clipState.appendChild (ccPoint, &um);
+    PropertyTree ccPoint (IDs::CC_POINT);
+    ccPoint.setProperty (IDs::ccNumber, Variant (ccNumber), &um);
+    ccPoint.setProperty (IDs::beat, Variant (beat), &um);
+    ccPoint.setProperty (IDs::value, Variant (value), &um);
+    clipState.addChild (std::move (ccPoint), -1, &um);
 
     MidiClip clip (clipState);
     clip.collapseChildrenToMidiData (&um);

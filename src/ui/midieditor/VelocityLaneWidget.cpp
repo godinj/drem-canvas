@@ -33,11 +33,11 @@ void VelocityLaneWidget::paint (gfx::Canvas& canvas)
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
         auto child = clipState.getChild (i);
-        if (! child.hasType (juce::Identifier ("NOTE")))
+        if (child.getType() != IDs::NOTE)
             continue;
 
-        auto startBeat = static_cast<double> (child.getProperty ("startBeat", 0.0));
-        int velocity = static_cast<int> (child.getProperty ("velocity", 100));
+        auto startBeat = child.getProperty (IDs::startBeat).getDoubleOr (0.0);
+        int velocity = static_cast<int> (child.getProperty (IDs::velocity).getIntOr (100));
 
         float x = static_cast<float> (startBeat * pixelsPerBeat) - scrollOffset;
         float velNorm = static_cast<float> (velocity) / 127.0f;
@@ -80,10 +80,10 @@ void VelocityLaneWidget::mouseDown (const gfx::MouseEvent& e)
     for (int i = 0; i < clipState.getNumChildren(); ++i)
     {
         auto child = clipState.getChild (i);
-        if (! child.hasType (juce::Identifier ("NOTE")))
+        if (child.getType() != IDs::NOTE)
             continue;
 
-        auto startBeat = static_cast<double> (child.getProperty ("startBeat", 0.0));
+        auto startBeat = child.getProperty (IDs::startBeat).getDoubleOr (0.0);
         float x = static_cast<float> (startBeat * pixelsPerBeat) - scrollOffset;
 
         if (e.x >= x && e.x <= x + barWidth)
@@ -97,10 +97,10 @@ void VelocityLaneWidget::mouseDown (const gfx::MouseEvent& e)
     {
         float h = getHeight();
         int vel = static_cast<int> ((1.0f - (e.y / h)) * 127.0f);
-        vel = juce::jlimit (1, 127, vel);
+        vel = std::clamp (vel, 1, 127);
 
         project.getUndoSystem().beginCoalescedTransaction ("Edit Velocity");
-        clipState.getChild (dragNoteIndex).setProperty ("velocity", vel, &project.getUndoManager());
+        clipState.getChild (dragNoteIndex).setProperty (IDs::velocity, Variant (vel), &project.getUndoManager());
 
         MidiClip clip (clipState);
         clip.collapseChildrenToMidiData (&project.getUndoManager());
@@ -113,10 +113,10 @@ void VelocityLaneWidget::mouseDrag (const gfx::MouseEvent& e)
     {
         float h = getHeight();
         int vel = static_cast<int> ((1.0f - (e.y / h)) * 127.0f);
-        vel = juce::jlimit (1, 127, vel);
+        vel = std::clamp (vel, 1, 127);
 
         project.getUndoSystem().beginCoalescedTransaction ("Edit Velocity");
-        clipState.getChild (dragNoteIndex).setProperty ("velocity", vel, &project.getUndoManager());
+        clipState.getChild (dragNoteIndex).setProperty (IDs::velocity, Variant (vel), &project.getUndoManager());
 
         MidiClip clip (clipState);
         clip.collapseChildrenToMidiData (&project.getUndoManager());
