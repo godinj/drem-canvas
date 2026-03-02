@@ -98,6 +98,10 @@ void NativeWindow::show()
     {
         NSWindow* window = (__bridge NSWindow*) nativeWindow;
         [window makeKeyAndOrderFront:nil];
+
+        // Start maximized — zoom: toggles between user frame and screen frame;
+        // calling it once right after showing fills the available screen area.
+        [window zoom:nil];
     }
 }
 

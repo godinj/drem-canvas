@@ -22,6 +22,7 @@ GlfwWindow::GlfwWindow (const std::string& title, int w, int h)
     // No OpenGL — Vulkan manages its own context
     glfwWindowHint (GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint (GLFW_RESIZABLE, GLFW_TRUE);
+    glfwWindowHint (GLFW_MAXIMIZED, GLFW_TRUE);
 
     // Set app identity so desktop environments can match the window to its
     // .desktop file and display the correct icon in the taskbar / alt-tab.
@@ -40,6 +41,9 @@ GlfwWindow::GlfwWindow (const std::string& title, int w, int h)
 
     // Store this pointer for static callbacks
     glfwSetWindowUserPointer (window, this);
+
+    // Query actual window size (may differ from requested if maximized)
+    glfwGetWindowSize (window, &width, &height);
 
     // Query content scale (HiDPI)
     float xScale, yScale;
