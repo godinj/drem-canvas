@@ -2,6 +2,7 @@
 #include "dc/plugins/PluginDescription.h"
 #include "dc/plugins/PluginScanner.h"
 #include "dc/plugins/PluginInstance.h"
+#include "dc/plugins/ProbeCache.h"
 #include "dc/plugins/VST3Module.h"
 #include <filesystem>
 #include <functional>
@@ -52,6 +53,7 @@ public:
 
 private:
     PluginScanner scanner_;
+    ProbeCache probeCache_;
     std::vector<PluginDescription> knownPlugins_;
 
     /// Cache of loaded modules (keyed by bundle path string)

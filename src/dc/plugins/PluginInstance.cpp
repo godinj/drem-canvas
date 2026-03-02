@@ -8,13 +8,82 @@
 #include <pluginterfaces/base/ipluginbase.h>
 #include <pluginterfaces/base/ibstream.h>
 #include <pluginterfaces/base/funknown.h>
+#include <pluginterfaces/vst/ivstaudioprocessor.h>
 #include <pluginterfaces/vst/ivstcomponent.h>
+#include <pluginterfaces/vst/ivsthostapplication.h>
 #include <pluginterfaces/vst/ivstmessage.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 
 namespace dc {
+
+// ─── Minimal IHostApplication for component->initialize() ────────────────
+
+namespace
+{
+
+class HostContext : public Steinberg::Vst::IHostApplication
+{
+public:
+    Steinberg::tresult PLUGIN_API getName (Steinberg::Vst::String128 name) override
+    {
+        const char16_t appName[] = u"Drem Canvas";
+        std::memcpy (name, appName, sizeof (appName));
+        return Steinberg::kResultOk;
+    }
+
+    Steinberg::tresult PLUGIN_API createInstance (Steinberg::TUID /*cid*/,
+                                                   Steinberg::TUID /*_iid*/,
+                                                   void** obj) override
+    {
+        *obj = nullptr;
+        return Steinberg::kNotImplemented;
+    }
+
+    // ── FUnknown ──
+
+    Steinberg::tresult PLUGIN_API queryInterface (const Steinberg::TUID _iid,
+                                                   void** obj) override
+    {
+        if (Steinberg::FUnknownPrivate::iidEqual (_iid,
+                Steinberg::Vst::IHostApplication::iid))
+        {
+            addRef();
+            *obj = static_cast<IHostApplication*> (this);
+            return Steinberg::kResultOk;
+        }
+        if (Steinberg::FUnknownPrivate::iidEqual (_iid,
+                Steinberg::FUnknown::iid))
+        {
+            addRef();
+            *obj = static_cast<FUnknown*> (this);
+            return Steinberg::kResultOk;
+        }
+        *obj = nullptr;
+        return Steinberg::kNoInterface;
+    }
+
+    Steinberg::uint32 PLUGIN_API addRef() override  { return ++refCount_; }
+    Steinberg::uint32 PLUGIN_API release() override
+    {
+        auto r = --refCount_;
+        if (r == 0) delete this;
+        return r;
+    }
+
+private:
+    std::atomic<Steinberg::uint32> refCount_ { 1 };
+};
+
+HostContext& getHostContext()
+{
+    static HostContext instance;
+    return instance;
+}
+
+} // anonymous namespace
 
 // ─── MemoryStream — IBStream backed by std::vector<uint8_t> ──────────────
 
@@ -293,28 +362,53 @@ std::unique_ptr<PluginInstance> PluginInstance::create (
         return nullptr;
     }
 
-    // 1. Convert UID hex string to TUID
+    // 1. Convert UID hex string to TUID and create IComponent
+    IComponent* component = nullptr;
     char uid[16] = {};
 
-    if (! PluginDescription::hexStringToUid (desc.uid, uid))
+    if (PluginDescription::hexStringToUid (desc.uid, uid))
     {
-        dc_log ("PluginInstance::create: invalid UID hex string");
-        return nullptr;
+        factory->createInstance (
+            uid, IComponent::iid, reinterpret_cast<void**> (&component));
     }
 
-    // 2. Create IComponent
-    IComponent* component = nullptr;
-    auto result = factory->createInstance (
-        uid, IComponent::iid, reinterpret_cast<void**> (&component));
+    // Fallback: if UID was invalid or createInstance failed, enumerate
+    // factory classes and find the first audio effect (handles legacy
+    // projects that store integer UIDs from the old JUCE format).
+    if (component == nullptr)
+    {
+        auto numClasses = factory->countClasses();
 
-    if (result != kResultOk || component == nullptr)
+        for (Steinberg::int32 i = 0; i < numClasses; ++i)
+        {
+            Steinberg::PClassInfo classInfo;
+
+            if (factory->getClassInfo (i, &classInfo) != Steinberg::kResultOk)
+                continue;
+
+            if (std::strcmp (classInfo.category, kVstAudioEffectClass) != 0)
+                continue;
+
+            factory->createInstance (
+                classInfo.cid, IComponent::iid,
+                reinterpret_cast<void**> (&component));
+
+            if (component != nullptr)
+            {
+                dc_log ("PluginInstance::create: resolved by class enumeration");
+                break;
+            }
+        }
+    }
+
+    if (component == nullptr)
     {
         dc_log ("PluginInstance::create: failed to create IComponent");
         return nullptr;
     }
 
-    // 3. Initialize component
-    result = component->initialize (nullptr);
+    // 2. Initialize component with host context
+    auto result = component->initialize (&getHostContext());
 
     if (result != kResultOk)
     {

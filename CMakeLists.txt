@@ -197,6 +197,7 @@ add_executable(DremCanvas
     src/dc/plugins/ComponentHandler.cpp
     src/dc/plugins/PluginInstance.cpp
     src/dc/plugins/PluginEditor.cpp
+    src/dc/plugins/ProbeCache.cpp
     src/dc/plugins/VST3Host.cpp
 
     # VST3 SDK base (IID definitions)

@@ -6,7 +6,12 @@
 
 namespace dc {
 
-VST3Host::VST3Host() = default;
+VST3Host::VST3Host()
+    : probeCache_ (dc::getUserAppDataDirectory())
+{
+    probeCache_.load();
+}
+
 VST3Host::~VST3Host() = default;
 
 void VST3Host::scanPlugins (PluginScanner::ProgressCallback cb)
@@ -144,13 +149,87 @@ VST3Module* VST3Host::getOrLoadModule (const std::filesystem::path& bundlePath)
     if (it != loadedModules_.end())
         return it->second.get();
 
-    auto module = VST3Module::load (bundlePath);
-    if (! module)
-        return nullptr;
+    auto status = probeCache_.getStatus (bundlePath);
 
-    auto* raw = module.get();
-    loadedModules_.emplace (key, std::move (module));
-    return raw;
+    // Previously blocked and bundle hasn't changed — skip
+    if (status == ProbeCache::Status::blocked)
+    {
+        dc_log ("VST3Host: skipping blocked module: %s", key.c_str());
+        return nullptr;
+    }
+
+    // Previously safe — skip probe, load directly with pedal protection.
+    // If the load crashes (plugin updated and now broken), the pedal
+    // file survives and next startup will mark it as blocked.
+    if (status == ProbeCache::Status::safe)
+    {
+        probeCache_.setPedal (bundlePath);
+        auto module = VST3Module::load (bundlePath, /* skipProbe */ true);
+        probeCache_.clearPedal();
+
+        if (module)
+        {
+            auto* raw = module.get();
+            loadedModules_.emplace (key, std::move (module));
+            return raw;
+        }
+
+        // Cached as safe but load failed — invalidate
+        probeCache_.setStatus (bundlePath, ProbeCache::Status::unknown);
+        probeCache_.save();
+        return nullptr;
+    }
+
+    // Yabridge chainloaders can't be fork-probed: the forked child
+    // can't set up the Wine bridge, so GetPluginFactory() always aborts.
+    // Load them directly in-process with pedal protection.
+    if (VST3Module::isYabridgeBundle (bundlePath))
+    {
+        dc_log ("VST3Host: yabridge detected, loading directly: %s", key.c_str());
+        probeCache_.setPedal (bundlePath);
+        auto module = VST3Module::load (bundlePath, /* skipProbe */ true);
+        probeCache_.clearPedal();
+
+        if (module)
+        {
+            probeCache_.setStatus (bundlePath, ProbeCache::Status::safe);
+            probeCache_.save();
+
+            auto* raw = module.get();
+            loadedModules_.emplace (key, std::move (module));
+            return raw;
+        }
+
+        dc_log ("VST3Host: yabridge load failed: %s", key.c_str());
+        probeCache_.setStatus (bundlePath, ProbeCache::Status::blocked);
+        probeCache_.save();
+        return nullptr;
+    }
+
+    // Native plugin — run the fork probe first
+    if (VST3Module::probeModuleSafe (bundlePath))
+    {
+        probeCache_.setPedal (bundlePath);
+        auto module = VST3Module::load (bundlePath, /* skipProbe */ true);
+        probeCache_.clearPedal();
+
+        if (module)
+        {
+            probeCache_.setStatus (bundlePath, ProbeCache::Status::safe);
+            probeCache_.save();
+
+            auto* raw = module.get();
+            loadedModules_.emplace (key, std::move (module));
+            return raw;
+        }
+        return nullptr;
+    }
+
+    // Native probe failed — cache as blocked
+    dc_log ("VST3Host: probe failed, marking blocked: %s", key.c_str());
+    probeCache_.setStatus (bundlePath, ProbeCache::Status::blocked);
+    probeCache_.save();
+    return nullptr;
 }
 
 } // namespace dc
