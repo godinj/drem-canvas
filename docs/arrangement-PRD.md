@@ -27,6 +27,7 @@
 20. [Waveform Rendering](#20-waveform-rendering)
 21. [MIDI Clip Preview](#21-midi-clip-preview)
 22. [Viewport Management](#22-viewport-management)
+23. [Lane Versions](#23-lane-versions)
 
 ---
 
@@ -1481,6 +1482,161 @@ reduced size. The current viewport is represented as a highlighted rectangle.
 
 ---
 
+## 23. Lane Versions
+
+### 23.1 Concept
+
+Lane versions allow any lane on a track to maintain multiple independent versions of
+its content. A **lane** is either the clip lane (audio/MIDI clips) or an automation
+lane (volume, pan, plugin parameter, etc.). Each lane has its own version stack,
+and versions can be switched independently per lane.
+
+This enables non-destructive experimentation: try a different vocal arrangement in
+clip lane v2 while keeping the original in v1, or create an alternative volume
+automation curve in v3, all without losing any prior work.
+
+```
+Track: Vocals
+├── Clip lane        → v1 "Original"  |  v2 "Alt chorus"  |  v3 "Experimental"
+├── Auto: Volume     → v1 "Default"   |  v2 "Dramatic"
+├── Auto: Pan        → v1 (only one version)
+└── Auto: EQ Freq    → v1 "Subtle"    |  v2 "Aggressive"
+```
+
+Each lane always has at least one version (v1). Additional versions are created
+explicitly by the user.
+
+### 23.2 Relationship to Takes
+
+Lane versions and takes (§12) are orthogonal:
+
+- **Takes** live *within* a clip lane version. They represent recording passes in a
+  time region, created by loop or punch recording.
+- **Lane versions** represent whole-lane alternatives — the entire clip layout,
+  including any take lanes and comps.
+
+Switching clip lane versions switches to a completely different set of clips, takes,
+and comps:
+
+```
+Clip lane v1: [=====Verse 1=====][=====Chorus=====]
+              ├── Take 1
+              ├── Take 2
+              └── Comp
+
+Clip lane v2: [=====Verse 1=====][===Alt Chorus===][=Bridge=]
+              ├── Take 1
+              └── Take 2
+```
+
+### 23.3 Data Model
+
+Each lane version stores:
+
+| Field | Description |
+|-------|-------------|
+| `versionId` | Unique identifier |
+| `name` | User-assigned name (optional, defaults to "v1", "v2", …) |
+| `content` | Clip data (for clip lanes) or breakpoint data (for automation lanes) |
+| `takes` | Take lanes and comp data (clip lanes only) |
+
+The active version per lane is stored as a property on the lane itself. Inactive
+versions are retained in the model but not rendered or played back.
+
+### 23.4 Lane Version Commands
+
+All commands operate on the currently focused lane (clip lane or automation lane).
+
+| Command | Action |
+|---------|--------|
+| `:lv new` | Create a new empty lane version and switch to it |
+| `:lv new "name"` | Create a new empty lane version with a name |
+| `:lv dup` | Duplicate current lane version into a new version |
+| `:lv dup "name"` | Duplicate current lane version with a name |
+| `:lv {n}` | Switch to lane version `{n}` |
+| `:lv rename "name"` | Rename current lane version |
+| `:lv delete` | Delete current lane version (must have at least 2) |
+| `:lv list` | List all versions for the current lane |
+
+| Key | Action |
+|-----|--------|
+| `Alt+l` | Next lane version |
+| `Alt+h` | Previous lane version |
+
+### 23.5 Status Bar
+
+When the focused lane has more than one version, the status bar shows the active
+version:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ -- NORMAL -- │ [Slip] │ Grid: 1/8 │ Snap │ Track 3: "Vocals" │ LV:2 "Alt" │ …  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+The `LV:{n}` indicator is hidden when only one version exists (the common case).
+
+### 23.6 Version Groups
+
+Version groups coordinate lane version switches across multiple tracks and lanes.
+A version group is a named collection of (track, lane, version) tuples. Activating
+a group atomically switches all member lanes to their assigned versions.
+
+Use cases:
+- **Arrangement alternatives**: "Chorus A" vs "Chorus B" — different clip and
+  automation versions across several tracks
+- **Mix variations**: "Mix v1" vs "Mix v2" — different automation versions across
+  the mixer
+- **A/B comparison**: quickly toggle between two complete arrangements
+
+```
+Version group "Chorus B":
+  Vocals   → Clip lane   → v2
+  Drums    → Clip lane   → v3
+  Bass     → Auto:Volume → v2
+```
+
+Lanes not included in a group are unaffected when the group is activated. Groups
+target individual lanes selectively — they do not require all lanes on a track.
+
+### 23.7 Version Group Commands
+
+| Command | Action |
+|---------|--------|
+| `:lvgroup new "name"` | Create a new version group |
+| `:lvgroup add {track} {lane} {version}` | Add a lane+version mapping to the group |
+| `:lvgroup remove {track} {lane}` | Remove a lane from the group |
+| `:lvgroup activate "name"` | Switch all member lanes to their assigned versions |
+| `:lvgroup list` | List all version groups |
+| `:lvgroup show "name"` | Show all mappings in a version group |
+| `:lvgroup rename "old" "new"` | Rename a version group |
+| `:lvgroup delete "name"` | Delete a version group |
+
+**`{track}` identifier**: Track number or quoted track name (e.g., `3` or `"Vocals"`).
+
+**`{lane}` identifier**: `clip` for the clip lane, or the automation parameter name
+(e.g., `volume`, `pan`, `"EQ Freq"`).
+
+**Examples**:
+```
+:lvgroup new "Chorus B"
+:lvgroup add "Vocals" clip 2
+:lvgroup add "Drums" clip 3
+:lvgroup add "Bass" volume 2
+:lvgroup activate "Chorus B"
+```
+
+### 23.8 Playback Behavior
+
+- Only the **active version** of each lane is played back
+- Switching lane versions during playback takes effect immediately (at the next
+  audio buffer boundary)
+- Activating a version group during playback switches all member lanes atomically
+- Automation modes (§14) apply to the active version — recording automation writes
+  to the active version only
+
+---
+
 ## Appendix A: Default Key Reference
 
 ### Mode Entry/Exit
@@ -1562,6 +1718,24 @@ All arrangement-related `:` commands in one place:
 | `:auto mode {mode}` | Set automation mode |
 | `:auto draw/line/clear` | Drawing commands |
 | `:auto suspend/resume` | Global bypass |
+
+### Lane Versions
+| Command | Action |
+|---------|--------|
+| `:lv new` / `:lv new "name"` | New lane version |
+| `:lv dup` / `:lv dup "name"` | Duplicate lane version |
+| `:lv {n}` | Switch to lane version |
+| `:lv rename "name"` | Rename lane version |
+| `:lv delete` | Delete lane version |
+| `:lv list` | List lane versions |
+| `:lvgroup new "name"` | Create version group |
+| `:lvgroup add {track} {lane} {ver}` | Add to version group |
+| `:lvgroup remove {track} {lane}` | Remove from version group |
+| `:lvgroup activate "name"` | Activate version group |
+| `:lvgroup list` | List version groups |
+| `:lvgroup show "name"` | Show version group mappings |
+| `:lvgroup rename "old" "new"` | Rename version group |
+| `:lvgroup delete "name"` | Delete version group |
 
 ### Markers
 | Command | Action |
