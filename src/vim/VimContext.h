@@ -60,6 +60,12 @@ public:
     bool isPluginViewEnlarged() const { return pluginViewEnlarged; }
     void setPluginViewEnlarged (bool enlarged) { pluginViewEnlarged = enlarged; }
 
+    bool isPluginViewDragHorizontal() const { return pluginViewDragHorizontal; }
+    void setPluginViewDragHorizontal (bool horiz) { pluginViewDragHorizontal = horiz; }
+
+    bool isPluginViewCenterOnReverse() const { return pluginViewCenterOnReverse; }
+    void setPluginViewCenterOnReverse (bool center) { pluginViewCenterOnReverse = center; }
+
     // Master strip selection (separate from track index)
     bool isMasterStripSelected() const { return masterStripSelected; }
     void setMasterStripSelected (bool selected) { masterStripSelected = selected; }
@@ -127,6 +133,8 @@ private:
     bool numberEntryActive = false;
     std::string numberBuffer;
     bool pluginViewEnlarged = false;
+    bool pluginViewDragHorizontal = true;
+    bool pluginViewCenterOnReverse = true;
     int64_t gridCursorPosition = 0;
     int seqRow  = 0;
     int seqStep = 0;

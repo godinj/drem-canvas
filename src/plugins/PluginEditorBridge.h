@@ -52,6 +52,11 @@ public:
     /** Access the underlying JUCE editor (for ParameterFinderScanner). */
     virtual juce::AudioProcessorEditor* getEditor() const = 0;
 
+    /** Content scale factor (logical points → physical pixels).
+        Used by MouseEventForwarder to convert widget-space deltas
+        to X11 root-pixel deltas for XTest injection. */
+    virtual float getContentScale() const { return 1.0f; }
+
     /** Factory: create the platform-appropriate bridge implementation.
         @param nativeWindowHandle  Platform-specific parent window handle
                (GLFWwindow* on Linux, NSWindow* on macOS). */

@@ -39,6 +39,13 @@ void sendMouseProbe (void* display, unsigned long window, int x, int y,
  */
 void moveWindow (void* display, unsigned long window, int x, int y);
 
+/**
+ * Set _NET_WM_WINDOW_OPACITY on an X11 window.
+ * opacity 0.0 = fully transparent, 1.0 = fully opaque.
+ * Pass < 0 to delete the property (restore default opaque).
+ */
+void setWindowOpacity (void* display, unsigned long window, float opacity);
+
 } // namespace x11
 } // namespace platform
 } // namespace dc

@@ -36,6 +36,9 @@ void moveResize (void* display, unsigned long window, int x, int y, int w, int h
 /** Get the screen position of a GLFW window (works on both X11 and Wayland). */
 void getWindowPos (GLFWwindow* glfwWin, int& x, int& y);
 
+/** Get the content scale factor (logical points → physical pixels). */
+float getContentScale (GLFWwindow* glfwWin);
+
 } // namespace x11
 } // namespace platform
 } // namespace dc

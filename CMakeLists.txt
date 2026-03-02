@@ -121,6 +121,9 @@ target_sources(DremCanvas PRIVATE
     src/plugins/ParameterFinderScanner.cpp
     src/plugins/PluginEditorBridge.cpp
     src/plugins/SyntheticInputProbe.cpp
+    src/plugins/SyntheticMouseDrag.cpp
+    src/plugins/MouseEventForwarder.cpp
+    src/plugins/SpatialScanCache.cpp
 
     # Vim
     src/vim/VimContext.cpp
@@ -228,6 +231,7 @@ if(APPLE)
         src/platform/NativeDialogs.mm
         src/platform/MacPluginEditorBridge.mm
         src/platform/MacSyntheticInputProbe.mm
+        src/platform/MacSyntheticMouseDrag.mm
         src/graphics/rendering/MetalBackend.mm
     )
 elseif(UNIX AND NOT APPLE)
@@ -241,6 +245,8 @@ elseif(UNIX AND NOT APPLE)
         src/platform/linux/X11MouseProbe.cpp
         src/platform/linux/X11PluginEditorBridge.cpp
         src/platform/linux/X11SyntheticInputProbe.cpp
+        src/platform/linux/X11SyntheticMouseDrag.cpp
+        src/platform/linux/X11MouseEventForwarder.cpp
     )
 endif()
 
@@ -290,6 +296,7 @@ if(APPLE)
         src/platform/NativeDialogs.mm
         src/platform/MacPluginEditorBridge.mm
         src/platform/MacSyntheticInputProbe.mm
+        src/platform/MacSyntheticMouseDrag.mm
         src/graphics/rendering/MetalBackend.mm
         PROPERTIES
         COMPILE_FLAGS "-fobjc-arc"

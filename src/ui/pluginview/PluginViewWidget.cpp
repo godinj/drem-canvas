@@ -6,6 +6,11 @@
 #include "plugins/VST3ParameterFinderSupport.h"
 #include "plugins/PluginEditorBridge.h"
 #include "plugins/SyntheticInputProbe.h"
+#include "plugins/SyntheticMouseDrag.h"
+#include "plugins/MouseEventForwarder.h"
+#include "plugins/SpatialScanCache.h"
+#include "vim/VimEngine.h"
+#include <algorithm>
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -19,6 +24,8 @@ PluginViewWidget::PluginViewWidget()
 {
     addChild (&paramGrid);
     inputProbe = SyntheticInputProbe::create();
+    syntheticDrag = SyntheticMouseDrag::create();
+    mouseForwarder = MouseEventForwarder::create();
 }
 
 PluginViewWidget::~PluginViewWidget()
@@ -31,9 +38,12 @@ void PluginViewWidget::setEditorBridge (std::unique_ptr<PluginEditorBridge> brid
     editorBridge = std::move (bridge);
 }
 
-void PluginViewWidget::setPlugin (juce::AudioPluginInstance* plugin, const std::string& name)
+void PluginViewWidget::setPlugin (juce::AudioPluginInstance* plugin, const std::string& name,
+                                  const std::string& fileOrIdentifier)
 {
+    endMouseDrag();
     pluginName = name;
+    pluginFileOrIdentifier = fileOrIdentifier;
     currentPlugin = plugin;
     paramGrid.setPlugin (plugin);
 
@@ -55,13 +65,18 @@ void PluginViewWidget::setPlugin (juce::AudioPluginInstance* plugin, const std::
 
 void PluginViewWidget::clearPlugin()
 {
+    endMouseDrag();
+    forwardedButtonMask = 0;
+    if (mouseForwarder)
+        mouseForwarder->unbind();
+
     pluginName.clear();
     currentPlugin = nullptr;
     paramGrid.clearPlugin();
 
     spatialScanner.clear();
     spatialScanComplete = false;
-    paramGrid.setSpatialHintMap ({});
+    paramGrid.clearSpatialResults();
 
     if (editorBridge)
         editorBridge->closeEditor();
@@ -126,6 +141,28 @@ bool PluginViewWidget::hasSpatialHints()
     return spatialScanComplete;
 }
 
+bool PluginViewWidget::isSpatialMode() const
+{
+    return spatialScanComplete && spatialScanner.hasResults();
+}
+
+void PluginViewWidget::forceSpatialRescan()
+{
+    if (! editorBridge || ! editorBridge->isOpen())
+        return;
+
+    int nativeW = editorBridge->getNativeWidth();
+    int nativeH = editorBridge->getNativeHeight();
+
+    if (! pluginFileOrIdentifier.empty())
+        SpatialScanCache::invalidate (juce::String (pluginFileOrIdentifier), nativeW, nativeH);
+
+    spatialScanner.clear();
+    spatialScanComplete = false;
+    paramGrid.clearSpatialResults();
+    runSpatialScan();
+}
+
 void PluginViewWidget::runSpatialScan()
 {
     if (! editorBridge || ! editorBridge->isOpen() || currentPlugin == nullptr)
@@ -141,6 +178,24 @@ void PluginViewWidget::runSpatialScan()
 
     int nativeW = editorBridge->getNativeWidth();
     int nativeH = editorBridge->getNativeHeight();
+
+    // Try loading from cache first
+    if (! pluginFileOrIdentifier.empty())
+    {
+        std::vector<SpatialParamInfo> cached;
+        if (SpatialScanCache::load (juce::String (pluginFileOrIdentifier), nativeW, nativeH, cached))
+        {
+            // Regenerate hint labels from position order
+            int totalCount = static_cast<int> (cached.size());
+            for (int i = 0; i < totalCount; ++i)
+                cached[i].hintLabel = VimEngine::generateHintLabel (i, totalCount);
+
+            spatialScanner.getMutableResults() = std::move (cached);
+            spatialScanComplete = true;
+            paramGrid.setSpatialResults (spatialScanner.getResults(), currentPlugin);
+            return;
+        }
+    }
 
     spatialScanner.scan (*finder, currentPlugin, nativeW, nativeH);
 
@@ -212,14 +267,15 @@ void PluginViewWidget::runSpatialScan()
 
     spatialScanComplete = spatialScanner.hasResults();
 
-    // Build juceParamIndex -> hintLabel map for the parameter grid
+    // Push spatial results to the parameter grid — switches to spatial rendering mode
     if (spatialScanComplete)
     {
-        std::unordered_map<int, std::string> hintMap;
-        for (auto& info : spatialScanner.getResults())
-            if (info.juceParamIndex >= 0)
-                hintMap[info.juceParamIndex] = info.hintLabel;
-        paramGrid.setSpatialHintMap (std::move (hintMap));
+        paramGrid.setSpatialResults (spatialScanner.getResults(), currentPlugin);
+
+        // Save to disk cache for instant load next time
+        if (! pluginFileOrIdentifier.empty())
+            SpatialScanCache::save (juce::String (pluginFileOrIdentifier), juce::String (pluginName),
+                                    nativeW, nativeH, spatialScanner.getResults());
     }
 }
 
@@ -262,6 +318,9 @@ PluginViewWidget::CompositeGeometry PluginViewWidget::computeCompositeGeometry()
 
 void PluginViewWidget::updateEditorBounds()
 {
+    if (dragSuppressBounds)
+        return;
+
     if (! editorBridge || ! editorBridge->isOpen())
         return;
 
@@ -296,8 +355,8 @@ void PluginViewWidget::paint (gfx::Canvas& canvas)
     canvas.drawText (title, 8.0f, headerHeight * 0.5f + 5.0f, font, titleColor);
 
     // Key hint text (right-aligned)
-    auto hints = "z:zoom  f:hint  hjkl:nav  0-9:set  e:editor  Esc:close";
-    Rect hintArea (w - 400.0f, 0, 392.0f, headerHeight);
+    auto hints = "z:zoom  f:hint  R:rescan  hjkl:nav  0-9:set  x:axis  c:center  e:editor  Esc:close";
+    Rect hintArea (w - 560.0f, 0, 552.0f, headerHeight);
     canvas.drawTextRight (hints, hintArea, fm.getMonoFont(), Color::fromARGB (0xff585b70));
 
     // Active border
@@ -377,6 +436,28 @@ void PluginViewWidget::paint (gfx::Canvas& canvas)
                 }
             }
 
+            // Draw synthetic drag cursor on top of composited image
+            if (dragSession.active)
+            {
+                auto geo = computeCompositeGeometry();
+                if (geo.valid)
+                {
+                    float dragX = geo.drawX + static_cast<float> (dragSession.originX + dragSession.currentDeltaX) * geo.scaleX;
+                    float dragY = geo.drawY + static_cast<float> (dragSession.originY + dragSession.currentDeltaY) * geo.scaleY;
+
+                    // Crosshair + circle — clearly not a real cursor
+                    Color cursorColor = Color::fromARGB (0xcc94e2d5);  // teal, slightly transparent
+                    float r = 8.0f;
+                    float lineLen = 14.0f;
+
+                    canvas.fillCircle (dragX, dragY, 2.0f, cursorColor);
+                    canvas.drawLine (dragX - lineLen, dragY, dragX - r, dragY, cursorColor, 1.5f);
+                    canvas.drawLine (dragX + r, dragY, dragX + lineLen, dragY, cursorColor, 1.5f);
+                    canvas.drawLine (dragX, dragY - lineLen, dragX, dragY - r, cursorColor, 1.5f);
+                    canvas.drawLine (dragX, dragY + r, dragX, dragY + lineLen, cursorColor, 1.5f);
+                }
+            }
+
             // Keep repainting for continuous compositor updates
             repaint();
         }
@@ -400,6 +481,282 @@ void PluginViewWidget::resized()
     {
         paramGrid.setBounds (0, headerHeight, w, h - headerHeight);
     }
+}
+
+bool PluginViewWidget::getSpatialCentroid (int paramIndex, int& cx, int& cy) const
+{
+    if (! spatialScanComplete)
+        return false;
+
+    for (auto& info : spatialScanner.getResults())
+    {
+        if (info.juceParamIndex == paramIndex)
+        {
+            cx = info.centerX;
+            cy = info.centerY;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool PluginViewWidget::getSpatialCentroidBySpatialIndex (int spatialIdx, int& cx, int& cy) const
+{
+    auto& results = spatialScanner.getResults();
+    if (spatialIdx < 0 || spatialIdx >= static_cast<int> (results.size()))
+        return false;
+
+    cx = results[static_cast<size_t> (spatialIdx)].centerX;
+    cy = results[static_cast<size_t> (spatialIdx)].centerY;
+    return true;
+}
+
+bool PluginViewWidget::applyMouseDrag (int paramIndex, int pixelDelta)
+{
+    if (! syntheticDrag || ! editorBridge || ! editorBridge->isOpen())
+        return false;
+
+    int cx, cy;
+    bool found = isSpatialMode()
+        ? getSpatialCentroidBySpatialIndex (paramIndex, cx, cy)
+        : getSpatialCentroid (paramIndex, cx, cy);
+    if (! found)
+        return false;
+
+    // If switching to a different parameter, end the previous drag first
+    if (dragSession.active && dragSession.paramIndex != paramIndex)
+        endMouseDrag();
+
+    // Detect direction reversal — reset to centroid if enabled
+    int newSign = (pixelDelta > 0) ? 1 : -1;
+    if (dragSession.active && dragCenterOnReverse
+        && dragSession.lastDragSign != 0 && newSign != dragSession.lastDragSign)
+    {
+        endMouseDrag();
+    }
+
+    if (! dragSession.active)
+    {
+        // Suppress bounds updates so setTargetBounds can't move the
+        // editor window back off-screen during the XTest drag session
+        dragSuppressBounds = true;
+
+        // Begin new drag session at the parameter's centroid
+        if (! syntheticDrag->beginDrag (*editorBridge, cx, cy))
+        {
+            dragSuppressBounds = false;
+            return false;
+        }
+
+        dragSession.active = true;
+        dragSession.paramIndex = paramIndex;
+        dragSession.originX = cx;
+        dragSession.originY = cy;
+        dragSession.currentDeltaX = 0;
+        dragSession.currentDeltaY = 0;
+        dragSession.lastDragSign = 0;
+    }
+
+    dragSession.lastDragSign = newSign;
+
+    // Accumulate delta along the active axis
+    if (dragHorizontal)
+        dragSession.currentDeltaX += pixelDelta;
+    else
+        dragSession.currentDeltaY -= pixelDelta;  // negative = drag up = increase value
+
+    // Clamp accumulated offset to prevent runaway
+    dragSession.currentDeltaX = std::clamp (dragSession.currentDeltaX, -500, 500);
+    dragSession.currentDeltaY = std::clamp (dragSession.currentDeltaY, -500, 500);
+
+    syntheticDrag->moveDrag (dragSession.originX + dragSession.currentDeltaX,
+                             dragSession.originY + dragSession.currentDeltaY);
+    return true;
+}
+
+bool PluginViewWidget::applyAbsoluteDrag (int spatialIndex, float value)
+{
+    if (! syntheticDrag || ! editorBridge || ! editorBridge->isOpen())
+        return false;
+
+    int cx, cy;
+    if (! getSpatialCentroidBySpatialIndex (spatialIndex, cx, cy))
+        return false;
+
+    // End any active drag first
+    endMouseDrag();
+
+    constexpr int sweepPx = 300;
+
+    // Begin drag at centroid
+    if (! syntheticDrag->beginDrag (*editorBridge, cx, cy))
+        return false;
+
+    if (dragHorizontal)
+    {
+        // Sweep left to assumed 0%
+        syntheticDrag->moveDrag (cx - sweepPx, cy);
+        std::this_thread::sleep_for (std::chrono::milliseconds (20));
+
+        // Move right to target value
+        int targetX = cx - sweepPx + static_cast<int> (value * static_cast<float> (sweepPx));
+        syntheticDrag->moveDrag (targetX, cy);
+        std::this_thread::sleep_for (std::chrono::milliseconds (20));
+
+        // End drag
+        syntheticDrag->endDrag (targetX, cy);
+    }
+    else
+    {
+        // Sweep down to assumed 0%
+        syntheticDrag->moveDrag (cx, cy + sweepPx);
+        std::this_thread::sleep_for (std::chrono::milliseconds (20));
+
+        // Move up to target value
+        int targetY = cy + sweepPx - static_cast<int> (value * static_cast<float> (sweepPx));
+        syntheticDrag->moveDrag (cx, targetY);
+        std::this_thread::sleep_for (std::chrono::milliseconds (20));
+
+        // End drag
+        syntheticDrag->endDrag (cx, targetY);
+    }
+    return true;
+}
+
+void PluginViewWidget::toggleDragAxis()
+{
+    endMouseDrag();
+    dragHorizontal = ! dragHorizontal;
+}
+
+void PluginViewWidget::toggleDragCenterOnReverse()
+{
+    dragCenterOnReverse = ! dragCenterOnReverse;
+}
+
+void PluginViewWidget::endMouseDrag()
+{
+    if (! dragSession.active || ! syntheticDrag)
+    {
+        dragSession = {};
+        dragSuppressBounds = false;
+        return;
+    }
+
+    syntheticDrag->endDrag (dragSession.originX + dragSession.currentDeltaX,
+                        dragSession.originY + dragSession.currentDeltaY);
+    dragSession = {};
+
+    // Re-enable bounds updates and restore editor position
+    dragSuppressBounds = false;
+    updateEditorBounds();
+}
+
+bool PluginViewWidget::widgetToNativeCoords (float widgetX, float widgetY,
+                                              int& nativeX, int& nativeY) const
+{
+    auto geo = computeCompositeGeometry();
+    if (! geo.valid || geo.scaleX <= 0.0f || geo.scaleY <= 0.0f)
+        return false;
+
+    // Check if the point is within the composited image bounds
+    if (widgetX < geo.drawX || widgetX > geo.drawX + geo.drawW
+        || widgetY < geo.drawY || widgetY > geo.drawY + geo.drawH)
+        return false;
+
+    nativeX = static_cast<int> ((widgetX - geo.drawX) / geo.scaleX);
+    nativeY = static_cast<int> ((widgetY - geo.drawY) / geo.scaleY);
+    return true;
+}
+
+void PluginViewWidget::mouseDown (const gfx::MouseEvent& e)
+{
+    if (! mouseForwarder || ! editorBridge || ! editorBridge->isCompositing())
+        return;
+
+    // Don't forward mouse events while a synthetic drag is active
+    if (dragSession.active)
+        return;
+
+    int nx, ny;
+    if (! widgetToNativeCoords (e.x, e.y, nx, ny))
+        return;
+
+    if (! mouseForwarder->isBound())
+        mouseForwarder->bind (*editorBridge);
+
+    // Suppress bounds updates so setTargetBounds can't move the
+    // editor window back off-screen during the forwarded drag
+    dragSuppressBounds = true;
+
+    // Remember widget-space origin for screen-pixel delta computation
+    forwardStartX = e.x;
+    forwardStartY = e.y;
+
+    int button = e.rightButton ? 3 : 1;
+    unsigned int bit = 1u << (static_cast<unsigned int> (button) - 1u);
+    forwardedButtonMask |= bit;
+
+    mouseForwarder->sendMouseDown (nx, ny, button);
+}
+
+void PluginViewWidget::mouseDrag (const gfx::MouseEvent& e)
+{
+    if (! mouseForwarder || ! mouseForwarder->isBound() || forwardedButtonMask == 0)
+        return;
+
+    // Pass screen-pixel delta directly — 1:1 with user's physical drag,
+    // regardless of the composited image scale factor.
+    int dx = static_cast<int> (e.x - forwardStartX);
+    int dy = static_cast<int> (e.y - forwardStartY);
+
+    mouseForwarder->sendDragDelta (dx, dy);
+}
+
+void PluginViewWidget::mouseUp (const gfx::MouseEvent& e)
+{
+    if (! mouseForwarder || ! mouseForwarder->isBound() || forwardedButtonMask == 0)
+        return;
+
+    int dx = static_cast<int> (e.x - forwardStartX);
+    int dy = static_cast<int> (e.y - forwardStartY);
+
+    int button = e.rightButton ? 3 : 1;
+    mouseForwarder->sendMouseUp (dx, dy, button);
+
+    unsigned int bit = 1u << (static_cast<unsigned int> (button) - 1u);
+    forwardedButtonMask &= ~bit;
+
+    // Re-enable bounds updates when all buttons released
+    if (forwardedButtonMask == 0)
+    {
+        dragSuppressBounds = false;
+        updateEditorBounds();
+    }
+}
+
+void PluginViewWidget::mouseMove (const gfx::MouseEvent&)
+{
+    // Hover forwarding is not possible with XTest (it warps the cursor),
+    // so mouseMove is intentionally a no-op.  Click+drag interactions
+    // are handled via mouseDown/mouseDrag/mouseUp.
+}
+
+bool PluginViewWidget::mouseWheel (const gfx::WheelEvent& e)
+{
+    if (! mouseForwarder || ! editorBridge || ! editorBridge->isCompositing())
+        return false;
+
+    int nx, ny;
+    if (! widgetToNativeCoords (e.x, e.y, nx, ny))
+        return false;
+
+    if (! mouseForwarder->isBound())
+        mouseForwarder->bind (*editorBridge);
+
+    mouseForwarder->sendMouseWheel (nx, ny, e.deltaX, e.deltaY);
+    return true;
 }
 
 } // namespace ui

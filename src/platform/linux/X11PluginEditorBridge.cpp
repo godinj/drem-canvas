@@ -91,10 +91,12 @@ void X11PluginEditorBridge::setTargetBounds (int x, int y, int w, int h)
     if (! embeddedEditor || ! embeddedEditor->isOpen())
         return;
 
-    if (compositorActive && ! embeddedEditor->isReparented())
+    if (compositorActive)
     {
-        // Wayland + compositor: keep the editor at native size for full-res
-        // capture. Position is off-screen; Skia handles the scaling for display.
+        // Compositor active: keep the editor at native size off-screen for
+        // full-resolution capture.  Skia handles the scaling for display.
+        // On native X11 the window was hidden via hideWindow(); on XWayland
+        // it lives at (-10000,-10000).  Either way, don't move it back.
         int nativeW = embeddedEditor->getNativeWidth();
         int nativeH = embeddedEditor->getNativeHeight();
         if (nativeW > 0 && nativeH > 0)
@@ -107,12 +109,10 @@ void X11PluginEditorBridge::setTargetBounds (int x, int y, int w, int h)
     {
         if (embeddedEditor->isReparented())
         {
-            // X11: coordinates are relative to the GLFW parent window.
-            // setBounds scales the editor and anchors it bottom-right.
+            // X11 without compositor: coordinates are relative to the GLFW
+            // parent window. setBounds scales the editor and anchors it
+            // bottom-right.
             embeddedEditor->setBounds (x, y, w, h);
-
-            if (compositorActive && compositor)
-                compositor->handleResize();
         }
         else
         {
@@ -156,6 +156,13 @@ void* X11PluginEditorBridge::getXDisplay() const
 unsigned long X11PluginEditorBridge::getXWindow() const
 {
     return embeddedEditor ? embeddedEditor->getXWindow() : 0;
+}
+
+float X11PluginEditorBridge::getContentScale() const
+{
+    if (glfwWindow != nullptr)
+        return platform::x11::getContentScale (glfwWindow);
+    return 1.0f;
 }
 
 bool X11PluginEditorBridge::isReparented() const

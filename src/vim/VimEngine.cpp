@@ -3616,10 +3616,10 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
             {
                 if (isSpatial)
                 {
-                    // Resolve spatial index to JUCE param index
-                    int paramIdx = onResolveSpatialHint ? onResolveSpatialHint (resolved) : -1;
-                    if (paramIdx >= 0)
-                        context.setSelectedParamIndex (paramIdx);
+                    // Log/diagnostics only — spatial index IS the selection index
+                    if (onResolveSpatialHint)
+                        onResolveSpatialHint (resolved);
+                    context.setSelectedParamIndex (resolved);
                 }
                 else
                 {
@@ -3748,6 +3748,38 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     {
         context.setPluginViewEnlarged (! context.isPluginViewEnlarged());
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
+        return true;
+    }
+
+    // R: force spatial rescan (invalidate cache and re-run)
+    if (keyChar == 'R')
+    {
+        if (onPluginViewRescan)
+            onPluginViewRescan();
+        return true;
+    }
+
+    // x: toggle drag axis (horizontal ↔ vertical)
+    if (keyChar == 'x')
+    {
+        if (onPluginViewToggleDragAxis)
+            onPluginViewToggleDragAxis();
+        return true;
+    }
+
+    // q: end active drag session without closing plugin view
+    if (keyChar == 'q')
+    {
+        if (onPluginViewEndDrag)
+            onPluginViewEndDrag();
+        return true;
+    }
+
+    // c: toggle center-on-reverse (reset to middle when h↔l direction changes)
+    if (keyChar == 'c')
+    {
+        if (onPluginViewToggleDragCenter)
+            onPluginViewToggleDragCenter();
         return true;
     }
 

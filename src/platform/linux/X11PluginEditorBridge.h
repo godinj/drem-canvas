@@ -38,6 +38,7 @@ public:
     bool isCompositing() const override;
 
     juce::AudioProcessorEditor* getEditor() const override;
+    float getContentScale() const override;
 
     // X11-specific accessors (used by X11SyntheticInputProbe)
     void* getXDisplay() const;

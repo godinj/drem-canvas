@@ -22,10 +22,11 @@ bool X11SyntheticInputProbe::beginProbing (PluginEditorBridge& bridge)
     if (xDisplay == nullptr || xWindow == 0)
         return false;
 
-    // Move the editor on-screen so XTest root coords are positive.
-    // In Wayland mode the editor lives at (-10000,-10000) for compositor
-    // capture — XTest events at negative root coords never reach the
-    // plugin window on XWayland.
+    // Make the window fully transparent before moving on-screen.
+    // XTest needs positive root coords, so we must place the window at (0,0),
+    // but on XWayland the Wayland compositor still renders visible surfaces
+    // regardless of XComposite redirect. Setting opacity to 0 hides it.
+    platform::x11::setWindowOpacity (xDisplay, xWindow, 0.0f);
     platform::x11::moveWindow (xDisplay, xWindow, 0, 0);
     std::this_thread::sleep_for (std::chrono::milliseconds (50));
 
@@ -34,9 +35,12 @@ bool X11SyntheticInputProbe::beginProbing (PluginEditorBridge& bridge)
 
 void X11SyntheticInputProbe::endProbing (PluginEditorBridge& /*bridge*/)
 {
-    // Move editor back off-screen for compositor capture
     if (xDisplay != nullptr && xWindow != 0)
+    {
+        // Move back off-screen, then restore opacity
         platform::x11::moveWindow (xDisplay, xWindow, -10000, -10000);
+        platform::x11::setWindowOpacity (xDisplay, xWindow, -1.0f);
+    }
 
     xDisplay = nullptr;
     xWindow = 0;

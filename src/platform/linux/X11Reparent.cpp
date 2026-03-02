@@ -74,6 +74,13 @@ void getWindowPos (GLFWwindow* glfwWin, int& x, int& y)
     glfwGetWindowPos (glfwWin, &x, &y);
 }
 
+float getContentScale (GLFWwindow* glfwWin)
+{
+    float xScale = 1.0f, yScale = 1.0f;
+    glfwGetWindowContentScale (glfwWin, &xScale, &yScale);
+    return xScale;
+}
+
 } // namespace x11
 } // namespace platform
 } // namespace dc

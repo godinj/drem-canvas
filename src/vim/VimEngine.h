@@ -80,6 +80,10 @@ public:
     // Plugin view callbacks
     std::function<void (int trackIndex, int pluginIndex)> onOpenPluginView;
     std::function<void()> onClosePluginView;
+    std::function<void()> onPluginViewRescan;
+    std::function<void()> onPluginViewToggleDragAxis;
+    std::function<void()> onPluginViewToggleDragCenter;
+    std::function<void()> onPluginViewEndDrag;
     std::function<void (int paramIndex, float delta)> onPluginParamAdjust;
     std::function<void (int paramIndex, float newValue)> onPluginParamChanged;
     std::function<int()> onQuerySpatialHintCount;

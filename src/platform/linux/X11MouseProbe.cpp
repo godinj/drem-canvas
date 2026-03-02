@@ -6,6 +6,7 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 #include <X11/extensions/XTest.h>
 
 #include "X11MouseProbe.h"
@@ -87,6 +88,33 @@ void moveWindow (void* displayPtr, unsigned long windowId, int x, int y)
         return;
 
     XMoveWindow (dpy, win, x, y);
+    XFlush (dpy);
+}
+
+void setWindowOpacity (void* displayPtr, unsigned long windowId, float opacity)
+{
+    auto* dpy = static_cast<Display*> (displayPtr);
+    auto win = static_cast<Window> (windowId);
+    if (dpy == nullptr || win == 0)
+        return;
+
+    Atom opacityAtom = XInternAtom (dpy, "_NET_WM_WINDOW_OPACITY", False);
+
+    if (opacity < 0.0f)
+    {
+        // Delete property — restores default (fully opaque)
+        XDeleteProperty (dpy, win, opacityAtom);
+    }
+    else
+    {
+        // _NET_WM_WINDOW_OPACITY is a CARDINAL in range [0, 0xFFFFFFFF]
+        auto val = static_cast<unsigned long> (
+            static_cast<double> (opacity) * 0xFFFFFFFF);
+        XChangeProperty (dpy, win, opacityAtom, XA_CARDINAL, 32,
+                         PropModeReplace,
+                         reinterpret_cast<unsigned char*> (&val), 1);
+    }
+
     XFlush (dpy);
 }
 

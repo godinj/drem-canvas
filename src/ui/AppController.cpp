@@ -208,20 +208,55 @@ void AppController::initialise()
         auto trackState = project.getTrack (trackIdx);
         Track t (trackState);
         std::string name;
+        std::string fileOrId;
         if (pluginIdx < t.getNumPlugins())
         {
             auto pluginState = t.getPlugin (pluginIdx);
             name = pluginState.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
+            fileOrId = pluginState.getProperty (IDs::pluginFileOrIdentifier, juce::String()).toString().toStdString();
         }
 
         if (pluginViewWidget)
-            pluginViewWidget->setPlugin (dynamic_cast<juce::AudioPluginInstance*> (plugin), name);
+            pluginViewWidget->setPlugin (dynamic_cast<juce::AudioPluginInstance*> (plugin), name, fileOrId);
     };
 
     vimEngine->onClosePluginView = [this]
     {
         if (pluginViewWidget)
+        {
+            pluginViewWidget->endMouseDrag();
             pluginViewWidget->clearPlugin();
+        }
+    };
+
+    vimEngine->onPluginViewRescan = [this]
+    {
+        if (pluginViewWidget)
+            pluginViewWidget->forceSpatialRescan();
+    };
+
+    vimEngine->onPluginViewToggleDragAxis = [this]
+    {
+        if (pluginViewWidget)
+        {
+            pluginViewWidget->toggleDragAxis();
+            vimContext.setPluginViewDragHorizontal (pluginViewWidget->isDragHorizontal());
+        }
+    };
+
+    vimEngine->onPluginViewEndDrag = [this]
+    {
+        if (pluginViewWidget)
+            pluginViewWidget->endMouseDrag();
+    };
+
+    vimEngine->onPluginViewToggleDragCenter = [this]
+    {
+        if (pluginViewWidget)
+        {
+            pluginViewWidget->toggleDragCenterOnReverse();
+            vimContext.setPluginViewCenterOnReverse (pluginViewWidget->isDragCenterOnReverse());
+        }
     };
 
     vimEngine->onPluginParamAdjust = [this] (int paramIndex, float delta)
@@ -237,14 +272,48 @@ void AppController::initialise()
         auto* plugin = trackPluginChains[static_cast<size_t> (trackIdx)][static_cast<size_t> (pluginIdx)].plugin;
         if (plugin == nullptr) return;
 
-        auto& params = plugin->getParameters();
-        if (paramIndex < 0 || paramIndex >= params.size())
-            return;
+        if (pluginViewWidget && pluginViewWidget->isSpatialMode())
+        {
+            // Spatial mode: paramIndex is a spatial index
+            auto& results = pluginViewWidget->getSpatialResults();
+            if (paramIndex < 0 || paramIndex >= static_cast<int> (results.size()))
+                return;
 
-        auto* param = params[paramIndex];
-        float current = param->getValue();
-        float newVal = juce::jlimit (0.0f, 1.0f, current + delta);
-        param->setValueNotifyingHost (newVal);
+            auto& info = results[static_cast<size_t> (paramIndex)];
+
+            if (info.juceParamIndex >= 0)
+            {
+                // Mapped param: host API only
+                auto& params = plugin->getParameters();
+                if (info.juceParamIndex < params.size())
+                {
+                    auto* param = params[info.juceParamIndex];
+                    float current = param->getValue();
+                    float newVal = juce::jlimit (0.0f, 1.0f, current + delta);
+                    param->setValueNotifyingHost (newVal);
+                }
+            }
+            else
+            {
+                // Unmapped param: synthetic micro-drag at centroid
+                int pixelDelta = (std::abs (delta) > 0.02f) ? 8 : 2;
+                if (delta < 0.0f)
+                    pixelDelta = -pixelDelta;
+                pluginViewWidget->applyMouseDrag (paramIndex, pixelDelta);
+            }
+        }
+        else
+        {
+            // JUCE param mode (fallback) — all params are mapped
+            auto& params = plugin->getParameters();
+            if (paramIndex < 0 || paramIndex >= params.size())
+                return;
+
+            auto* param = params[paramIndex];
+            float current = param->getValue();
+            float newVal = juce::jlimit (0.0f, 1.0f, current + delta);
+            param->setValueNotifyingHost (newVal);
+        }
     };
 
     vimEngine->onQuerySpatialHintCount = [this]() -> int {
@@ -286,11 +355,39 @@ void AppController::initialise()
         auto* plugin = trackPluginChains[static_cast<size_t> (trackIdx)][static_cast<size_t> (pluginIdx)].plugin;
         if (plugin == nullptr) return;
 
-        auto& params = plugin->getParameters();
-        if (paramIndex < 0 || paramIndex >= params.size())
-            return;
+        if (pluginViewWidget && pluginViewWidget->isSpatialMode())
+        {
+            // Spatial mode: paramIndex is a spatial index
+            auto& results = pluginViewWidget->getSpatialResults();
+            if (paramIndex < 0 || paramIndex >= static_cast<int> (results.size()))
+                return;
 
-        params[paramIndex]->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, newValue));
+            auto& info = results[static_cast<size_t> (paramIndex)];
+
+            if (info.juceParamIndex >= 0)
+            {
+                // Mapped: set via host API
+                auto& params = plugin->getParameters();
+                if (info.juceParamIndex < params.size())
+                    params[info.juceParamIndex]->setValueNotifyingHost (
+                        juce::jlimit (0.0f, 1.0f, newValue));
+            }
+            else
+            {
+                // Unmapped: sweep-and-position drag
+                pluginViewWidget->applyAbsoluteDrag (paramIndex,
+                    juce::jlimit (0.0f, 1.0f, newValue));
+            }
+        }
+        else
+        {
+            // JUCE param mode (fallback)
+            auto& params = plugin->getParameters();
+            if (paramIndex < 0 || paramIndex >= params.size())
+                return;
+
+            params[paramIndex]->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, newValue));
+        }
     };
 
     // Wire plugin menu callbacks

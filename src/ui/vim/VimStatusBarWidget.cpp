@@ -200,6 +200,12 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
             {
                 breadcrumb += " > P" + std::to_string (context.getSelectedParamIndex() + 1);
             }
+
+            // Drag mode flags
+            breadcrumb += std::string (" [")
+                        + (context.isPluginViewDragHorizontal() ? "X" : "Y")
+                        + (context.isPluginViewCenterOnReverse() ? "|C" : "")
+                        + "]";
         }
         else if (panel == VimContext::Sequencer)
         {
