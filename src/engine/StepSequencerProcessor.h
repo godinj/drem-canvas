@@ -1,5 +1,6 @@
 #pragma once
-#include <JuceHeader.h>
+#include "dc/engine/AudioNode.h"
+#include "dc/engine/MidiBlock.h"
 #include "TransportController.h"
 #include "dc/audio/AudioBlock.h"
 #include "dc/midi/MidiBuffer.h"
@@ -9,7 +10,7 @@
 namespace dc
 {
 
-class StepSequencerProcessor : public juce::AudioProcessor
+class StepSequencerProcessor : public AudioNode
 {
 public:
     static constexpr int maxRows  = 16;
@@ -43,27 +44,16 @@ public:
 
     explicit StepSequencerProcessor (TransportController& transport);
 
-    // AudioProcessor overrides
-    const juce::String getName() const override { return "StepSequencer"; }
-    void prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock) override;
-    void releaseResources() override;
-    void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
+    // AudioNode interface
+    void prepare (double sampleRate, int maxBlockSize) override;
+    void release() override {}
+    void process (AudioBlock& audio, MidiBlock& midi, int numSamples) override;
 
-    double getTailLengthSeconds() const override { return 0.0; }
+    std::string getName() const override { return "StepSequencer"; }
+    int getNumInputChannels() const override { return 0; }
+    int getNumOutputChannels() const override { return 2; }
     bool acceptsMidi() const override  { return false; }
     bool producesMidi() const override { return true; }
-
-    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
-    bool hasEditor() const override { return false; }
-
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
-    void changeProgramName (int, const juce::String&) override {}
-
-    void getStateInformation (juce::MemoryBlock&) override {}
-    void setStateInformation (const void*, int) override {}
 
     // Lock-free pattern update (called from message thread)
     void updatePatternSnapshot (const PatternSnapshot& snapshot);
@@ -102,7 +92,7 @@ private:
     int numPendingNoteOffs = 0;
 
     void addNoteOff (int noteNumber, int channel, int64_t offSample);
-    void processNoteOffs (dc::MidiBuffer& dcMidi, int64_t blockStart, int numSamples);
+    void processNoteOffs (MidiBlock& midi, int64_t blockStart, int numSamples);
 
     StepSequencerProcessor (const StepSequencerProcessor&) = delete;
     StepSequencerProcessor& operator= (const StepSequencerProcessor&) = delete;

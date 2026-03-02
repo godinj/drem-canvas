@@ -1,5 +1,6 @@
 #pragma once
-#include <JuceHeader.h>
+#include "dc/engine/AudioNode.h"
+#include "dc/engine/MidiBlock.h"
 #include "TransportController.h"
 #include "dc/midi/MidiMessage.h"
 #include "dc/midi/MidiBuffer.h"
@@ -11,7 +12,7 @@
 namespace dc
 {
 
-class MidiClipProcessor : public juce::AudioProcessor
+class MidiClipProcessor : public AudioNode
 {
 public:
     struct MidiNoteEvent
@@ -32,27 +33,16 @@ public:
 
     explicit MidiClipProcessor (TransportController& transport);
 
-    // AudioProcessor overrides
-    const juce::String getName() const override { return "MidiClipProcessor"; }
-    void prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock) override;
-    void releaseResources() override;
-    void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
+    // AudioNode interface
+    void prepare (double sampleRate, int maxBlockSize) override;
+    void release() override {}
+    void process (AudioBlock& audio, MidiBlock& midi, int numSamples) override;
 
-    double getTailLengthSeconds() const override { return 0.0; }
+    std::string getName() const override { return "MidiClipProcessor"; }
+    int getNumInputChannels() const override { return 0; }
+    int getNumOutputChannels() const override { return 2; }
     bool acceptsMidi() const override  { return true; }
     bool producesMidi() const override { return true; }
-
-    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
-    bool hasEditor() const override { return false; }
-
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
-    void changeProgramName (int, const juce::String&) override {}
-
-    void getStateInformation (juce::MemoryBlock&) override {}
-    void setStateInformation (const void*, int) override {}
 
     // Lock-free snapshot update (called from message thread)
     void updateSnapshot (const MidiTrackSnapshot& snapshot);
@@ -90,10 +80,10 @@ private:
     std::atomic<float> peakLeft  { 0.0f };
     std::atomic<float> peakRight { 0.0f };
 
-    // Live MIDI injection FIFO (SPSC: message thread → audio thread)
+    // Live MIDI injection FIFO (SPSC: message thread -> audio thread)
     dc::SPSCQueue<dc::MidiMessage> liveMidiFifo { 256 };
 
-    void drainLiveMidiFifo (dc::MidiBuffer& dcMidi);
+    void drainLiveMidiFifo (MidiBlock& midi);
 
     // Note-off tracking
     struct PendingNoteOff
@@ -108,7 +98,7 @@ private:
     int numPendingNoteOffs = 0;
 
     void addNoteOff (int noteNumber, int channel, int64_t offSample);
-    void processNoteOffs (dc::MidiBuffer& dcMidi, int64_t blockStart, int numSamples);
+    void processNoteOffs (MidiBlock& midi, int64_t blockStart, int numSamples);
 
     MidiClipProcessor (const MidiClipProcessor&) = delete;
     MidiClipProcessor& operator= (const MidiClipProcessor&) = delete;

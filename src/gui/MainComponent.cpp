@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include "engine/PluginProcessorNode.h"
 #include "model/Track.h"
 #include "model/AudioClip.h"
 #include "model/MidiClip.h"
@@ -25,7 +26,12 @@ MainComponent::MainComponent()
     transportController.setSampleRate (audioEngine.getSampleRate());
 
     // Create mix bus processor and add to graph
-    mixBusNode = audioEngine.addProcessor (std::make_unique<MixBusProcessor> (transportController));
+    MixBusProcessor* mixBusProcessorPtr = nullptr;
+    {
+        auto proc = std::make_unique<MixBusProcessor> (transportController);
+        mixBusProcessorPtr = proc.get();
+        mixBusNode = audioEngine.addProcessor (std::move (proc));
+    }
 
     // Create master meter tap (sits after master plugin chain, before audio output)
     {
@@ -34,7 +40,7 @@ MainComponent::MainComponent()
         masterMeterTapNode = audioEngine.addProcessor (std::move (masterTap));
     }
 
-    // Connect: MixBus → [master plugins] → masterMeterTap → AudioOutput
+    // Connect: MixBus -> [master plugins] -> masterMeterTap -> AudioOutput
     connectMasterPluginChain();
 
     // Create step sequencer processor and add to graph
@@ -43,9 +49,9 @@ MainComponent::MainComponent()
         sequencerProcessor = proc.get();
         sequencerNode = audioEngine.addProcessor (std::move (proc));
 
-        // Connect sequencer to mix bus (stereo — MIDI flows internally)
-        audioEngine.connectNodes (sequencerNode->nodeID, 0, mixBusNode->nodeID, 0);
-        audioEngine.connectNodes (sequencerNode->nodeID, 1, mixBusNode->nodeID, 1);
+        // Connect sequencer to mix bus (stereo -- MIDI flows internally)
+        audioEngine.connectNodes (sequencerNode, 0, mixBusNode, 0);
+        audioEngine.connectNodes (sequencerNode, 1, mixBusNode, 1);
 
         sequencerProcessor->setTempo (project.getTempo());
         syncSequencerFromModel();
@@ -58,10 +64,10 @@ MainComponent::MainComponent()
         metronomeNode = audioEngine.addProcessor (std::move (proc));
 
         // Connect metronome directly to audio output (monitoring signal, not through mix bus)
-        audioEngine.connectNodes (metronomeNode->nodeID, 0,
-                                  audioEngine.getAudioOutputNode()->nodeID, 0);
-        audioEngine.connectNodes (metronomeNode->nodeID, 1,
-                                  audioEngine.getAudioOutputNode()->nodeID, 1);
+        audioEngine.connectNodes (metronomeNode, 0,
+                                  audioEngine.getAudioOutputNodeId(), 0);
+        audioEngine.connectNodes (metronomeNode, 1,
+                                  audioEngine.getAudioOutputNodeId(), 1);
 
         metronomeProcessor->setTempo (project.getTempo());
         metronomeProcessor->setBeatsPerBar (project.getTimeSigNumerator());
@@ -79,7 +85,7 @@ MainComponent::MainComponent()
     addAndMakeVisible (*arrangementView);
 
     mixerPanel = std::make_unique<MixerPanel> (project,
-        *dynamic_cast<MixBusProcessor*> (mixBusNode->getProcessor()),
+        *mixBusProcessorPtr,
         &project.getUndoSystem());
     addAndMakeVisible (*mixerPanel);
 
@@ -166,14 +172,14 @@ MainComponent::MainComponent()
         if (trackIdx < 0)
         {
             // Master strip
-            if (pluginIndex < masterPluginChain.size())
+            if (pluginIndex < static_cast<int> (masterPluginChain.size()))
             {
                 auto& info = masterPluginChain[static_cast<size_t> (pluginIndex)];
                 pluginWindowManager.closeEditorForPlugin (info.plugin);
 
-                audioEngine.getGraph().suspendProcessing (true);
+                // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
                 disconnectMasterPluginChain();
-                audioEngine.removeProcessor (info.node->nodeID);
+                audioEngine.removeProcessor (info.node);
                 masterPluginChain.erase (masterPluginChain.begin() + pluginIndex);
 
                 // Remove from model
@@ -183,7 +189,6 @@ MainComponent::MainComponent()
                     chain.removeChild (pluginIndex, &project.getUndoManager());
 
                 connectMasterPluginChain();
-                audioEngine.getGraph().suspendProcessing (false);
             }
         }
         else
@@ -192,19 +197,18 @@ MainComponent::MainComponent()
             auto trackState = project.getTrack (trackIdx);
             Track t (trackState);
 
-            if (trackIdx < trackPluginChains.size()
-                && pluginIndex < trackPluginChains[trackIdx].size())
+            if (trackIdx < static_cast<int> (trackPluginChains.size())
+                && pluginIndex < static_cast<int> (trackPluginChains[static_cast<size_t> (trackIdx)].size()))
             {
                 auto& info = trackPluginChains[static_cast<size_t> (trackIdx)][static_cast<size_t> (pluginIndex)];
                 pluginWindowManager.closeEditorForPlugin (info.plugin);
 
-                audioEngine.getGraph().suspendProcessing (true);
+                // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
                 disconnectTrackPluginChain (trackIdx);
-                audioEngine.removeProcessor (info.node->nodeID);
+                audioEngine.removeProcessor (info.node);
                 auto& chainVec = trackPluginChains[static_cast<size_t> (trackIdx)];
                 chainVec.erase (chainVec.begin() + pluginIndex);
                 connectTrackPluginChain (trackIdx);
-                audioEngine.getGraph().suspendProcessing (false);
             }
 
             t.removePlugin (pluginIndex, &project.getUndoManager());
@@ -227,10 +231,9 @@ MainComponent::MainComponent()
                 bool enabled = plugin.getProperty (IDs::pluginEnabled, true);
                 plugin.setProperty (IDs::pluginEnabled, ! enabled, &project.getUndoManager());
 
-                audioEngine.getGraph().suspendProcessing (true);
+                // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
                 disconnectMasterPluginChain();
                 connectMasterPluginChain();
-                audioEngine.getGraph().suspendProcessing (false);
             }
         }
         else
@@ -240,10 +243,9 @@ MainComponent::MainComponent()
             bool enabled = t.isPluginEnabled (pluginIndex);
             t.setPluginEnabled (pluginIndex, ! enabled, &project.getUndoManager());
 
-            audioEngine.getGraph().suspendProcessing (true);
+            // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
             disconnectTrackPluginChain (trackIdx);
             connectTrackPluginChain (trackIdx);
-            audioEngine.getGraph().suspendProcessing (false);
         }
     };
 
@@ -256,7 +258,7 @@ MainComponent::MainComponent()
             auto chain = masterBus.getChildWithType (IDs::PLUGIN_CHAIN);
             if (chain.isValid() && fromIndex < chain.getNumChildren() && toIndex < chain.getNumChildren())
             {
-                audioEngine.getGraph().suspendProcessing (true);
+                // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
                 disconnectMasterPluginChain();
 
                 chain.moveChild (fromIndex, toIndex, &project.getUndoManager());
@@ -264,7 +266,6 @@ MainComponent::MainComponent()
                            masterPluginChain[static_cast<size_t> (toIndex)]);
 
                 connectMasterPluginChain();
-                audioEngine.getGraph().suspendProcessing (false);
             }
         }
         else
@@ -272,9 +273,9 @@ MainComponent::MainComponent()
             auto trackState = project.getTrack (trackIdx);
             Track t (trackState);
 
-            if (trackIdx < trackPluginChains.size())
+            if (trackIdx < static_cast<int> (trackPluginChains.size()))
             {
-                audioEngine.getGraph().suspendProcessing (true);
+                // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
                 disconnectTrackPluginChain (trackIdx);
 
                 t.movePlugin (fromIndex, toIndex, &project.getUndoManager());
@@ -283,7 +284,6 @@ MainComponent::MainComponent()
                            chainVec[static_cast<size_t> (toIndex)]);
 
                 connectTrackPluginChain (trackIdx);
-                audioEngine.getGraph().suspendProcessing (false);
             }
         }
     };
@@ -462,9 +462,7 @@ void MainComponent::addTrackFromFile (const std::filesystem::path& file)
 
 void MainComponent::rebuildAudioGraph()
 {
-    // Suspend audio processing while modifying the graph to avoid
-    // the audio thread dereferencing nodes we're about to remove.
-    audioEngine.getGraph().suspendProcessing (true);
+    // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
 
     // Close plugin editor windows before removing nodes
     pluginWindowManager.closeAll();
@@ -472,23 +470,23 @@ void MainComponent::rebuildAudioGraph()
     // Remove existing plugin chain nodes
     for (auto& chain : trackPluginChains)
         for (auto& info : chain)
-            if (info.node != nullptr)
-                audioEngine.removeProcessor (info.node->nodeID);
+            if (info.node != 0)
+                audioEngine.removeProcessor (info.node);
     trackPluginChains.clear();
 
     // Remove existing meter tap nodes
-    for (auto& node : meterTapNodes)
-        if (node != nullptr)
-            audioEngine.removeProcessor (node->nodeID);
+    for (auto& nodeId : meterTapNodes)
+        if (nodeId != 0)
+            audioEngine.removeProcessor (nodeId);
     meterTapProcessors.clear();
     meterTapNodes.clear();
 
     // Remove existing track nodes
-    for (auto& node : trackNodes)
-        if (node != nullptr)
-            audioEngine.removeProcessor (node->nodeID);
+    for (auto& nodeId : trackNodes)
+        if (nodeId != 0)
+            audioEngine.removeProcessor (nodeId);
 
-    trackProcessors.clear();   // non-owning — graph deleted the processors above
+    trackProcessors.clear();   // non-owning -- graph deleted the processors above
     midiClipProcessors.clear();
     trackNodes.clear();
 
@@ -569,7 +567,8 @@ void MainComponent::rebuildAudioGraph()
                     PluginHost::restorePluginState (*instance, base64State.toStdString());
 
                 auto* pluginPtr = instance.get();
-                auto pluginNode = audioEngine.addProcessor (std::move (instance));
+                auto wrapper = std::make_unique<PluginProcessorNode> (std::move (instance));
+                auto pluginNode = audioEngine.addProcessor (std::move (wrapper));
                 pluginChain.push_back ({ pluginNode, pluginPtr });
             }
         }
@@ -591,8 +590,6 @@ void MainComponent::rebuildAudioGraph()
             syncMidiClipFromModel (i);
     }
 
-    audioEngine.getGraph().suspendProcessing (false);
-
     // Rebuild UI views
     if (arrangementView != nullptr)
         arrangementView->rebuildTrackLanes();
@@ -601,9 +598,9 @@ void MainComponent::rebuildAudioGraph()
     {
         mixerPanel->onWireMeter = [this] (int trackIndex, ChannelStrip& strip)
         {
-            if (trackIndex < meterTapProcessors.size())
+            if (trackIndex < static_cast<int> (meterTapProcessors.size()))
             {
-                auto* tap = meterTapProcessors[trackIndex];
+                auto* tap = meterTapProcessors[static_cast<size_t> (trackIndex)];
 
                 if (tap != nullptr)
                 {
@@ -627,10 +624,9 @@ void MainComponent::rebuildAudioGraph()
                     bool enabled = t.isPluginEnabled (pluginIndex);
                     t.setPluginEnabled (pluginIndex, ! enabled, &project.getUndoManager());
 
-                    audioEngine.getGraph().suspendProcessing (true);
+                    // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
                     disconnectTrackPluginChain (trackIndex);
                     connectTrackPluginChain (trackIndex);
-                    audioEngine.getGraph().suspendProcessing (false);
                 };
 
                 strip.onPluginRemoveRequested = [this, trackIndex] (int pluginIndex)
@@ -646,13 +642,12 @@ void MainComponent::rebuildAudioGraph()
                         pluginWindowManager.closeEditorForPlugin (info.plugin);
 
                         // Remove from graph
-                        audioEngine.getGraph().suspendProcessing (true);
+                        // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
                         disconnectTrackPluginChain (trackIndex);
-                        audioEngine.removeProcessor (info.node->nodeID);
+                        audioEngine.removeProcessor (info.node);
                         auto& chainVec = trackPluginChains[static_cast<size_t> (trackIndex)];
                         chainVec.erase (chainVec.begin() + pluginIndex);
                         connectTrackPluginChain (trackIndex);
-                        audioEngine.getGraph().suspendProcessing (false);
                     }
 
                     // Remove from model
@@ -1133,94 +1128,79 @@ void MainComponent::updatePanelVisibility()
 
 void MainComponent::connectTrackPluginChain (int trackIndex)
 {
-    if (trackIndex < 0 || trackIndex >= trackNodes.size()
-        || trackIndex >= trackPluginChains.size() || mixBusNode == nullptr)
+    if (trackIndex < 0 || trackIndex >= static_cast<int> (trackNodes.size())
+        || trackIndex >= static_cast<int> (trackPluginChains.size()) || mixBusNode == 0)
         return;
 
-    auto trackNode = trackNodes[static_cast<size_t> (trackIndex)];
+    auto trackNodeId = trackNodes[static_cast<size_t> (trackIndex)];
     auto& chain = trackPluginChains[static_cast<size_t> (trackIndex)];
     auto trackState = project.getTrack (trackIndex);
     Track track (trackState);
 
     // Build list of enabled plugin nodes
-    std::vector<juce::AudioProcessorGraph::Node::Ptr> enabledNodes;
+    std::vector<NodeId> enabledNodes;
     for (int p = 0; p < static_cast<int> (chain.size()); ++p)
     {
         if (track.isPluginEnabled (p))
             enabledNodes.push_back (chain[static_cast<size_t> (p)].node);
     }
 
-    // Wire: TrackNode → Plugin1 → Plugin2 → ... → MixBus (audio)
-    auto prevNode = trackNode;
+    // Wire: TrackNode -> Plugin1 -> Plugin2 -> ... -> MixBus (audio)
+    auto prevId = trackNodeId;
 
-    for (auto& pluginNode : enabledNodes)
+    for (auto pluginNodeId : enabledNodes)
     {
-        audioEngine.connectNodes (prevNode->nodeID, 0, pluginNode->nodeID, 0);
-        audioEngine.connectNodes (prevNode->nodeID, 1, pluginNode->nodeID, 1);
-        prevNode = pluginNode;
+        audioEngine.connectNodes (prevId, 0, pluginNodeId, 0);
+        audioEngine.connectNodes (prevId, 1, pluginNodeId, 1);
+        prevId = pluginNodeId;
     }
 
     // Route through meter tap (if available) before mix bus
-    if (trackIndex < meterTapNodes.size() && meterTapNodes[trackIndex] != nullptr)
+    if (trackIndex < static_cast<int> (meterTapNodes.size()) && meterTapNodes[static_cast<size_t> (trackIndex)] != 0)
     {
-        auto tapNode = meterTapNodes[trackIndex];
-        audioEngine.connectNodes (prevNode->nodeID, 0, tapNode->nodeID, 0);
-        audioEngine.connectNodes (prevNode->nodeID, 1, tapNode->nodeID, 1);
-        prevNode = tapNode;
+        auto tapId = meterTapNodes[static_cast<size_t> (trackIndex)];
+        audioEngine.connectNodes (prevId, 0, tapId, 0);
+        audioEngine.connectNodes (prevId, 1, tapId, 1);
+        prevId = tapId;
     }
 
     // Final connection to mix bus
-    audioEngine.connectNodes (prevNode->nodeID, 0, mixBusNode->nodeID, 0);
-    audioEngine.connectNodes (prevNode->nodeID, 1, mixBusNode->nodeID, 1);
+    audioEngine.connectNodes (prevId, 0, mixBusNode, 0);
+    audioEngine.connectNodes (prevId, 1, mixBusNode, 1);
 
     // Wire MIDI through the plugin chain (for MIDI tracks with instrument plugins)
-    auto prevNodeForMidi = trackNode;
-    for (auto& pluginNode : enabledNodes)
+    auto prevMidiId = trackNodeId;
+    for (auto pluginNodeId : enabledNodes)
     {
-        audioEngine.connectNodes (prevNodeForMidi->nodeID,
-            juce::AudioProcessorGraph::midiChannelIndex,
-            pluginNode->nodeID,
-            juce::AudioProcessorGraph::midiChannelIndex);
-        prevNodeForMidi = pluginNode;
+        audioEngine.connectNodes (prevMidiId, -1, pluginNodeId, -1);  // MIDI channel
+        prevMidiId = pluginNodeId;
     }
 }
 
 void MainComponent::disconnectTrackPluginChain (int trackIndex)
 {
-    if (trackIndex < 0 || trackIndex >= trackNodes.size()
-        || trackIndex >= trackPluginChains.size() || mixBusNode == nullptr)
+    if (trackIndex < 0 || trackIndex >= static_cast<int> (trackNodes.size())
+        || trackIndex >= static_cast<int> (trackPluginChains.size()) || mixBusNode == 0)
         return;
 
     auto& graph = audioEngine.getGraph();
-    auto trackNode = trackNodes[static_cast<size_t> (trackIndex)];
+    auto trackNodeId = trackNodes[static_cast<size_t> (trackIndex)];
     auto& chain = trackPluginChains[static_cast<size_t> (trackIndex)];
 
-    // Remove all connections from the track node output
-    for (auto& conn : graph.getConnections())
-    {
-        if (conn.source.nodeID == trackNode->nodeID)
-            graph.removeConnection (conn);
-    }
+    // Disconnect all connections from the track node
+    graph.disconnectNode (trackNodeId);
 
-    // Remove all connections from plugin nodes in this chain
+    // Disconnect all connections from plugin nodes in this chain
     for (auto& info : chain)
     {
-        if (info.node == nullptr) continue;
-        for (auto& conn : graph.getConnections())
-        {
-            if (conn.source.nodeID == info.node->nodeID)
-                graph.removeConnection (conn);
-        }
+        if (info.node != 0)
+            graph.disconnectNode (info.node);
     }
 
-    // Remove all connections from the meter tap node
-    if (trackIndex < meterTapNodes.size() && meterTapNodes[trackIndex] != nullptr)
+    // Disconnect all connections from the meter tap node
+    if (trackIndex < static_cast<int> (meterTapNodes.size()) && meterTapNodes[static_cast<size_t> (trackIndex)] != 0)
     {
-        for (auto& conn : graph.getConnections())
-        {
-            if (conn.source.nodeID == meterTapNodes[trackIndex]->nodeID)
-                graph.removeConnection (conn);
-        }
+        graph.disconnectNode (meterTapNodes[static_cast<size_t> (trackIndex)]);
     }
 }
 
@@ -1273,14 +1253,14 @@ void MainComponent::captureAllPluginStates()
 
 void MainComponent::connectMasterPluginChain()
 {
-    if (mixBusNode == nullptr || masterMeterTapNode == nullptr)
+    if (mixBusNode == 0 || masterMeterTapNode == 0)
         return;
 
     auto masterBus = project.getMasterBusState();
     auto chain = masterBus.getChildWithType (IDs::PLUGIN_CHAIN);
 
     // Build list of enabled plugin nodes
-    std::vector<juce::AudioProcessorGraph::Node::Ptr> enabledNodes;
+    std::vector<NodeId> enabledNodes;
     for (int p = 0; p < static_cast<int> (masterPluginChain.size()); ++p)
     {
         if (chain.isValid() && p < chain.getNumChildren())
@@ -1291,58 +1271,42 @@ void MainComponent::connectMasterPluginChain()
         }
     }
 
-    // Wire: MixBus → [enabled plugins] → masterMeterTap → AudioOutput
-    auto prevNode = mixBusNode;
-    for (auto& pluginNode : enabledNodes)
+    // Wire: MixBus -> [enabled plugins] -> masterMeterTap -> AudioOutput
+    auto prevId = mixBusNode;
+    for (auto pluginNodeId : enabledNodes)
     {
-        audioEngine.connectNodes (prevNode->nodeID, 0, pluginNode->nodeID, 0);
-        audioEngine.connectNodes (prevNode->nodeID, 1, pluginNode->nodeID, 1);
-        prevNode = pluginNode;
+        audioEngine.connectNodes (prevId, 0, pluginNodeId, 0);
+        audioEngine.connectNodes (prevId, 1, pluginNodeId, 1);
+        prevId = pluginNodeId;
     }
 
-    audioEngine.connectNodes (prevNode->nodeID, 0, masterMeterTapNode->nodeID, 0);
-    audioEngine.connectNodes (prevNode->nodeID, 1, masterMeterTapNode->nodeID, 1);
+    audioEngine.connectNodes (prevId, 0, masterMeterTapNode, 0);
+    audioEngine.connectNodes (prevId, 1, masterMeterTapNode, 1);
 
-    audioEngine.connectNodes (masterMeterTapNode->nodeID, 0,
-                              audioEngine.getAudioOutputNode()->nodeID, 0);
-    audioEngine.connectNodes (masterMeterTapNode->nodeID, 1,
-                              audioEngine.getAudioOutputNode()->nodeID, 1);
+    audioEngine.connectNodes (masterMeterTapNode, 0,
+                              audioEngine.getAudioOutputNodeId(), 0);
+    audioEngine.connectNodes (masterMeterTapNode, 1,
+                              audioEngine.getAudioOutputNodeId(), 1);
 }
 
 void MainComponent::disconnectMasterPluginChain()
 {
-    if (mixBusNode == nullptr)
+    if (mixBusNode == 0)
         return;
 
     auto& graph = audioEngine.getGraph();
 
-    // Remove connections from mixBus output
-    for (auto& conn : graph.getConnections())
-    {
-        if (conn.source.nodeID == mixBusNode->nodeID)
-            graph.removeConnection (conn);
-    }
+    // Disconnect all nodes in the master chain
+    graph.disconnectNode (mixBusNode);
 
-    // Remove connections from master plugin nodes
     for (auto& info : masterPluginChain)
     {
-        if (info.node == nullptr) continue;
-        for (auto& conn : graph.getConnections())
-        {
-            if (conn.source.nodeID == info.node->nodeID)
-                graph.removeConnection (conn);
-        }
+        if (info.node != 0)
+            graph.disconnectNode (info.node);
     }
 
-    // Remove connections from master meter tap
-    if (masterMeterTapNode != nullptr)
-    {
-        for (auto& conn : graph.getConnections())
-        {
-            if (conn.source.nodeID == masterMeterTapNode->nodeID)
-                graph.removeConnection (conn);
-        }
-    }
+    if (masterMeterTapNode != 0)
+        graph.disconnectNode (masterMeterTapNode);
 }
 
 void MainComponent::openMasterPluginEditor (int pluginIndex)
@@ -1388,14 +1352,14 @@ void MainComponent::insertPluginOnMaster (const juce::PluginDescription& desc)
 
             auto* pluginPtr = instance.get();
 
-            audioEngine.getGraph().suspendProcessing (true);
+            // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
             disconnectMasterPluginChain();
 
-            auto node = audioEngine.addProcessor (std::move (instance));
+            auto wrapper = std::make_unique<PluginProcessorNode> (std::move (instance));
+            auto node = audioEngine.addProcessor (std::move (wrapper));
             masterPluginChain.push_back ({ node, pluginPtr });
 
             connectMasterPluginChain();
-            audioEngine.getGraph().suspendProcessing (false);
         });
 }
 
@@ -1426,16 +1390,16 @@ void MainComponent::insertPluginOnTrack (int trackIndex, const juce::PluginDescr
 
             auto* pluginPtr = instance.get();
 
-            audioEngine.getGraph().suspendProcessing (true);
+            // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
             disconnectTrackPluginChain (trackIndex);
 
-            auto pluginNode = audioEngine.addProcessor (std::move (instance));
+            auto wrapper = std::make_unique<PluginProcessorNode> (std::move (instance));
+            auto pluginNode = audioEngine.addProcessor (std::move (wrapper));
 
             if (trackIndex < static_cast<int> (trackPluginChains.size()))
                 trackPluginChains[static_cast<size_t> (trackIndex)].push_back ({ pluginNode, pluginPtr });
 
             connectTrackPluginChain (trackIndex);
-            audioEngine.getGraph().suspendProcessing (false);
         });
 }
 

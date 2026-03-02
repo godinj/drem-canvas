@@ -156,6 +156,13 @@ target_sources(DremCanvas PRIVATE
     src/dc/audio/ThreadedRecorder.cpp
     src/dc/audio/PortAudioDeviceManager.cpp
 
+    # dc::engine library
+    src/dc/engine/MidiBlock.cpp
+    src/dc/engine/BufferPool.cpp
+    src/dc/engine/GraphExecutor.cpp
+    src/dc/engine/AudioGraph.cpp
+    src/dc/engine/DelayNode.cpp
+
     # dc::plugins library
     src/dc/plugins/VST3Module.cpp
     src/dc/plugins/PluginScanner.cpp

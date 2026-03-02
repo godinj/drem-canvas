@@ -6,32 +6,25 @@ namespace dc
 {
 
 MeterTapProcessor::MeterTapProcessor()
-    : AudioProcessor (BusesProperties()
-                          .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
 {
 }
 
-void MeterTapProcessor::prepareToPlay (double /*sampleRate*/, int /*maximumExpectedSamplesPerBlock*/)
+void MeterTapProcessor::prepare (double /*sampleRate*/, int /*maxBlockSize*/)
 {
     peakLeft.store (0.0f);
     peakRight.store (0.0f);
 }
 
-void MeterTapProcessor::releaseResources()
+void MeterTapProcessor::release()
 {
 }
 
-void MeterTapProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midiMessages*/)
+void MeterTapProcessor::process (AudioBlock& audio, MidiBlock& /*midi*/, int numSamples)
 {
-    dc::AudioBlock block (buffer.getArrayOfWritePointers(),
-                          buffer.getNumChannels(), buffer.getNumSamples());
-    const int numSamples = block.getNumSamples();
-
     // Pass audio through unchanged — just measure peaks
-    if (block.getNumChannels() >= 1)
+    if (audio.getNumChannels() >= 1)
     {
-        const float* data = block.getChannel (0);
+        const float* data = audio.getChannel (0);
         float mag = 0.0f;
         for (int i = 0; i < numSamples; ++i)
             mag = std::max (mag, std::abs (data[i]));
@@ -39,9 +32,9 @@ void MeterTapProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         peakLeft.store (std::max (mag, old * 0.95f));
     }
 
-    if (block.getNumChannels() >= 2)
+    if (audio.getNumChannels() >= 2)
     {
-        const float* data = block.getChannel (1);
+        const float* data = audio.getChannel (1);
         float mag = 0.0f;
         for (int i = 0; i < numSamples; ++i)
             mag = std::max (mag, std::abs (data[i]));

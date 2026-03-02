@@ -6,44 +6,37 @@ namespace dc
 {
 
 MixBusProcessor::MixBusProcessor (TransportController& transport)
-    : AudioProcessor (BusesProperties()
-                          .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      transportController (transport)
+    : transportController (transport)
 {
 }
 
-void MixBusProcessor::prepareToPlay (double /*sampleRate*/, int /*maximumExpectedSamplesPerBlock*/)
+void MixBusProcessor::prepare (double /*sampleRate*/, int /*maxBlockSize*/)
 {
     resetPeaks();
 }
 
-void MixBusProcessor::releaseResources()
+void MixBusProcessor::release()
 {
 }
 
-void MixBusProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midiMessages*/)
+void MixBusProcessor::process (AudioBlock& audio, MidiBlock& /*midi*/, int numSamples)
 {
-    dc::AudioBlock block (buffer.getArrayOfWritePointers(),
-                          buffer.getNumChannels(), buffer.getNumSamples());
-
-    transportController.advancePosition (block.getNumSamples());
+    transportController.advancePosition (numSamples);
 
     const float gain = masterGain.load();
-    const int numSamples = block.getNumSamples();
 
     // Apply master gain to all channels
-    for (int ch = 0; ch < block.getNumChannels(); ++ch)
+    for (int ch = 0; ch < audio.getNumChannels(); ++ch)
     {
-        float* data = block.getChannel (ch);
+        float* data = audio.getChannel (ch);
         for (int i = 0; i < numSamples; ++i)
             data[i] *= gain;
     }
 
     // Calculate peak levels for left and right channels
-    if (block.getNumChannels() >= 1)
+    if (audio.getNumChannels() >= 1)
     {
-        const float* data = block.getChannel (0);
+        const float* data = audio.getChannel (0);
         float mag = 0.0f;
         for (int i = 0; i < numSamples; ++i)
             mag = std::max (mag, std::abs (data[i]));
@@ -51,9 +44,9 @@ void MixBusProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         peakLeft.store (std::max (mag, oldPeak * 0.95f));
     }
 
-    if (block.getNumChannels() >= 2)
+    if (audio.getNumChannels() >= 2)
     {
-        const float* data = block.getChannel (1);
+        const float* data = audio.getChannel (1);
         float mag = 0.0f;
         for (int i = 0; i < numSamples; ++i)
             mag = std::max (mag, std::abs (data[i]));

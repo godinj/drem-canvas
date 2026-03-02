@@ -86,28 +86,28 @@ private:
 
     struct PluginNodeInfo
     {
-        juce::AudioProcessorGraph::Node::Ptr node;
+        NodeId node = 0;
         juce::AudioPluginInstance* plugin = nullptr;  // non-owning; graph owns
     };
 
     // Engine
     AudioEngine audioEngine;
     TransportController transportController;
-    juce::AudioProcessorGraph::Node::Ptr mixBusNode;
+    NodeId mixBusNode = 0;
     std::vector<TrackProcessor*> trackProcessors;              // non-owning; graph owns the processors
     std::vector<MidiClipProcessor*> midiClipProcessors;      // non-owning; graph owns (nullptr for audio tracks)
-    std::vector<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
+    std::vector<NodeId> trackNodes;
     StepSequencerProcessor* sequencerProcessor = nullptr;      // non-owning; graph owns
-    juce::AudioProcessorGraph::Node::Ptr sequencerNode;
+    NodeId sequencerNode = 0;
     MetronomeProcessor* metronomeProcessor = nullptr;          // non-owning; graph owns
-    juce::AudioProcessorGraph::Node::Ptr metronomeNode;
+    NodeId metronomeNode = 0;
     std::vector<std::vector<PluginNodeInfo>> trackPluginChains;
     std::vector<MeterTapProcessor*> meterTapProcessors;              // non-owning; graph owns
-    std::vector<juce::AudioProcessorGraph::Node::Ptr> meterTapNodes;
+    std::vector<NodeId> meterTapNodes;
 
     // Master bus plugin chain
     std::vector<PluginNodeInfo> masterPluginChain;
-    juce::AudioProcessorGraph::Node::Ptr masterMeterTapNode;
+    NodeId masterMeterTapNode = 0;
     MeterTapProcessor* masterMeterTapProcessor = nullptr;
 
     // Model

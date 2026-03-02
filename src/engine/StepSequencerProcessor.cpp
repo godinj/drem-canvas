@@ -1,5 +1,4 @@
 #include "StepSequencerProcessor.h"
-#include "MidiBridge.h"
 #include "dc/foundation/types.h"
 #include <cmath>
 
@@ -7,32 +6,20 @@ namespace dc
 {
 
 StepSequencerProcessor::StepSequencerProcessor (TransportController& transport)
-    : AudioProcessor (BusesProperties()
-                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      transportController (transport)
+    : transportController (transport)
 {
 }
 
-void StepSequencerProcessor::prepareToPlay (double sampleRate, int /*maximumExpectedSamplesPerBlock*/)
+void StepSequencerProcessor::prepare (double sampleRate, int /*maxBlockSize*/)
 {
     currentSampleRate = sampleRate;
     previousStepPosition = 0.0;
     numPendingNoteOffs = 0;
 }
 
-void StepSequencerProcessor::releaseResources()
+void StepSequencerProcessor::process (AudioBlock& audio, MidiBlock& midi, int numSamples)
 {
-}
-
-void StepSequencerProcessor::processBlock (juce::AudioBuffer<float>& buffer,
-                                            juce::MidiBuffer& midiMessages)
-{
-    dc::AudioBlock block (buffer.getArrayOfWritePointers(),
-                          buffer.getNumChannels(), buffer.getNumSamples());
-    block.clear();
-
-    // Accumulate into dc::MidiBuffer, convert to juce::MidiBuffer at the end
-    dc::MidiBuffer dcMidi;
+    audio.clear();
 
     if (! transportController.isPlaying())
     {
@@ -40,11 +27,9 @@ void StepSequencerProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         previousStepPosition = 0.0;
         // Send note-offs for any remaining notes
         for (int i = 0; i < numPendingNoteOffs; ++i)
-            dcMidi.addEvent (dc::MidiMessage::noteOff (pendingNoteOffs[i].channel,
-                                                        pendingNoteOffs[i].noteNumber), 0);
+            midi.addEvent (dc::MidiMessage::noteOff (pendingNoteOffs[i].channel,
+                                                      pendingNoteOffs[i].noteNumber), 0);
         numPendingNoteOffs = 0;
-
-        bridge::toJuce (dcMidi, midiMessages);
         return;
     }
 
@@ -61,11 +46,10 @@ void StepSequencerProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         return;
 
     const double currentTempo = tempo.load();
-    const int numSamples = block.getNumSamples();
     const int64_t blockStartSample = transportController.getPositionInSamples();
 
     // Process pending note-offs
-    processNoteOffs (dcMidi, blockStartSample, numSamples);
+    processNoteOffs (midi, blockStartSample, numSamples);
 
     // Steps per second: (tempo / 60) * stepDivision
     const double stepsPerSecond = (currentTempo / 60.0) * static_cast<double> (pattern.stepDivision);
@@ -118,7 +102,7 @@ void StepSequencerProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 int channel = 10; // MIDI drum channel
 
                 // Note on
-                dcMidi.addEvent (
+                midi.addEvent (
                     dc::MidiMessage::noteOn (channel, row.noteNumber,
                                               static_cast<float> (vel) / 127.0f),
                     sampleIdx);
@@ -132,8 +116,6 @@ void StepSequencerProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
         previousStepPosition = stepPosition;
     }
-
-    bridge::toJuce (dcMidi, midiMessages);
 }
 
 void StepSequencerProcessor::updatePatternSnapshot (const PatternSnapshot& snapshot)
@@ -152,7 +134,7 @@ void StepSequencerProcessor::addNoteOff (int noteNumber, int channel, int64_t of
     }
 }
 
-void StepSequencerProcessor::processNoteOffs (dc::MidiBuffer& dcMidi,
+void StepSequencerProcessor::processNoteOffs (MidiBlock& midi,
                                                 int64_t blockStart, int numSamples)
 {
     int64_t blockEnd = blockStart + numSamples;
@@ -166,7 +148,7 @@ void StepSequencerProcessor::processNoteOffs (dc::MidiBuffer& dcMidi,
         {
             int offset = static_cast<int> (std::max (noff.offSample - blockStart, int64_t (0)));
             offset = std::min (offset, numSamples - 1);
-            dcMidi.addEvent (
+            midi.addEvent (
                 dc::MidiMessage::noteOff (noff.channel, noff.noteNumber),
                 offset);
         }

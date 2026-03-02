@@ -1,14 +1,16 @@
 #pragma once
-#include <JuceHeader.h>
+#include "dc/engine/AudioNode.h"
+#include "dc/engine/MidiBlock.h"
 #include "TransportController.h"
 #include "dc/audio/DiskStreamer.h"
 #include <filesystem>
 #include <memory>
+#include <atomic>
 
 namespace dc
 {
 
-class TrackProcessor : public juce::AudioProcessor
+class TrackProcessor : public AudioNode
 {
 public:
     TrackProcessor (TransportController& transport);
@@ -17,27 +19,16 @@ public:
     bool loadFile (const std::filesystem::path& file);
     void clearFile();
 
-    // AudioProcessor interface
-    const juce::String getName() const override { return "TrackProcessor"; }
-    void prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock) override;
-    void releaseResources() override;
-    void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
+    // AudioNode interface
+    void prepare (double sampleRate, int maxBlockSize) override;
+    void release() override;
+    void process (AudioBlock& audio, MidiBlock& midi, int numSamples) override;
 
-    double getTailLengthSeconds() const override { return 0.0; }
+    std::string getName() const override { return "TrackProcessor"; }
+    int getNumInputChannels() const override { return 0; }
+    int getNumOutputChannels() const override { return 2; }
     bool acceptsMidi() const override  { return false; }
     bool producesMidi() const override { return false; }
-
-    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
-    bool hasEditor() const override { return false; }
-
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
-    void changeProgramName (int, const juce::String&) override {}
-
-    void getStateInformation (juce::MemoryBlock&) override {}
-    void setStateInformation (const void*, int) override {}
 
     // Gain/pan
     void setGain (float g) { gain.store (g); }

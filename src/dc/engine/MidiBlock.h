@@ -1,53 +1,31 @@
 #pragma once
+
 #include "dc/midi/MidiBuffer.h"
-#include "dc/midi/MidiMessage.h"
 
 namespace dc {
 
+/// Non-owning view over a dc::MidiBuffer.
+/// Thin wrapper that delegates to the underlying buffer.
 class MidiBlock
 {
 public:
-    MidiBlock() = default;
-    explicit MidiBlock (MidiBuffer& buffer) : buffer_ (&buffer) {}
+    MidiBlock();
+    explicit MidiBlock (MidiBuffer& buffer);
 
-    MidiBuffer::Iterator begin() const
-    {
-        if (buffer_)
-            return buffer_->begin();
-        return MidiBuffer::Iterator (nullptr, nullptr);
-    }
+    MidiBuffer::Iterator begin() const;
+    MidiBuffer::Iterator end() const;
 
-    MidiBuffer::Iterator end() const
-    {
-        if (buffer_)
-            return buffer_->end();
-        return MidiBuffer::Iterator (nullptr, nullptr);
-    }
+    void addEvent (const MidiMessage& msg, int sampleOffset);
+    void clear();
+    int getNumEvents() const;
+    bool isEmpty() const;
 
-    void addEvent (const MidiMessage& msg, int sampleOffset)
-    {
-        if (buffer_)
-            buffer_->addEvent (msg, sampleOffset);
-    }
-
-    void clear()
-    {
-        if (buffer_)
-            buffer_->clear();
-    }
-
-    int getNumEvents() const
-    {
-        return buffer_ ? buffer_->getNumEvents() : 0;
-    }
-
-    bool isEmpty() const
-    {
-        return ! buffer_ || buffer_->isEmpty();
-    }
+    /// Get the underlying buffer (for passing to legacy code)
+    MidiBuffer* getBuffer() { return buffer_; }
 
 private:
     MidiBuffer* buffer_ = nullptr;
+    MidiBuffer ownedBuffer_;  // used when constructed with default ctor
 };
 
 } // namespace dc

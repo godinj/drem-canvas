@@ -6,13 +6,11 @@ namespace dc
 {
 
 MetronomeProcessor::MetronomeProcessor (TransportController& transport)
-    : AudioProcessor (BusesProperties()
-                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      transportController (transport)
+    : transportController (transport)
 {
 }
 
-void MetronomeProcessor::prepareToPlay (double sampleRate, int /*maximumExpectedSamplesPerBlock*/)
+void MetronomeProcessor::prepare (double sampleRate, int /*maxBlockSize*/)
 {
     currentSampleRate = sampleRate;
     clickSampleLength = static_cast<int> (sampleRate * 0.02); // 20ms click
@@ -20,30 +18,25 @@ void MetronomeProcessor::prepareToPlay (double sampleRate, int /*maximumExpected
     previousBeatPosition = 0.0;
 }
 
-void MetronomeProcessor::releaseResources()
+void MetronomeProcessor::release()
 {
     // Nothing to release
 }
 
-void MetronomeProcessor::processBlock (juce::AudioBuffer<float>& buffer,
-                                        juce::MidiBuffer& /*midiMessages*/)
+void MetronomeProcessor::process (AudioBlock& audio, MidiBlock& /*midi*/, int numSamples)
 {
-    dc::AudioBlock block (buffer.getArrayOfWritePointers(),
-                          buffer.getNumChannels(), buffer.getNumSamples());
-
     if (! enabled.load() || ! transportController.isPlaying())
     {
-        block.clear();
+        audio.clear();
         return;
     }
 
     const double currentTempo = tempo.load();
     const float currentVolume = volume.load();
-    const int numSamples = block.getNumSamples();
-    const int numChannels = block.getNumChannels();
+    const int numChannels = audio.getNumChannels();
     const int64_t posInSamples = transportController.getPositionInSamples();
 
-    block.clear();
+    audio.clear();
 
     for (int sampleIdx = 0; sampleIdx < numSamples; ++sampleIdx)
     {
@@ -90,7 +83,7 @@ void MetronomeProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
             // Write to all channels
             for (int ch = 0; ch < numChannels; ++ch)
-                block.getChannel (ch)[sampleIdx] += sample;
+                audio.getChannel (ch)[sampleIdx] += sample;
 
             ++clickSamplePos;
         }

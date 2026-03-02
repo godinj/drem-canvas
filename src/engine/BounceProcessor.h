@@ -1,6 +1,7 @@
 #pragma once
-#include <JuceHeader.h>
+#include "dc/engine/AudioGraph.h"
 #include <filesystem>
+#include <functional>
 
 namespace dc
 {
@@ -19,9 +20,7 @@ public:
         int64_t lengthInSamples = 0;
     };
 
-    // Bounce the given processor graph to a file
-    bool bounce (juce::AudioProcessorGraph& graph,
-                 const BounceSettings& settings,
+    bool bounce (AudioGraph& graph, const BounceSettings& settings,
                  std::function<void (float progress)> progressCallback = nullptr);
 
 private:

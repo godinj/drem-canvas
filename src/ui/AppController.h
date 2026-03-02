@@ -89,7 +89,7 @@ private:
     // Plugin chain helpers
     struct PluginNodeInfo
     {
-        juce::AudioProcessorGraph::Node::Ptr node;
+        NodeId node = 0;
         juce::AudioPluginInstance* plugin = nullptr;
     };
 
@@ -126,16 +126,17 @@ private:
     // ─── Engine ──────────────────────────────────────────
     AudioEngine audioEngine;
     TransportController transportController;
-    juce::AudioProcessorGraph::Node::Ptr mixBusNode;
+    NodeId mixBusNode = 0;
+    MixBusProcessor* mixBusProcessor = nullptr;   // non-owning; graph owns
     std::vector<TrackProcessor*> trackProcessors;
     std::vector<MidiClipProcessor*> midiClipProcessors;
-    std::vector<juce::AudioProcessorGraph::Node::Ptr> trackNodes;
+    std::vector<NodeId> trackNodes;
     std::vector<std::vector<PluginNodeInfo>> trackPluginChains;
     std::vector<MeterTapProcessor*> meterTapProcessors;
-    std::vector<juce::AudioProcessorGraph::Node::Ptr> meterTapNodes;
-    std::vector<juce::AudioProcessorGraph::Node::Ptr> fallbackSynthNodes;
+    std::vector<NodeId> meterTapNodes;
+    std::vector<NodeId> fallbackSynthNodes;
     StepSequencerProcessor* sequencerProcessor = nullptr;
-    juce::AudioProcessorGraph::Node::Ptr sequencerNode;
+    NodeId sequencerNode = 0;
     dc::MessageQueue messageQueue;
     MidiEngine midiEngine { messageQueue };
 

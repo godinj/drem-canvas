@@ -2,14 +2,13 @@
 #include "dc/audio/AudioBlock.h"
 #include "dc/foundation/types.h"
 #include <cmath>
+#include <algorithm>
 
 namespace dc
 {
 
 TrackProcessor::TrackProcessor (TransportController& transport)
-    : AudioProcessor (BusesProperties()
-                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      transportController (transport)
+    : transportController (transport)
 {
 }
 
@@ -50,22 +49,22 @@ void TrackProcessor::clearFile()
     lastSeekPosition = -1;
 }
 
-void TrackProcessor::prepareToPlay (double /*sampleRate*/, int /*maximumExpectedSamplesPerBlock*/)
+void TrackProcessor::prepare (double /*sampleRate*/, int /*maxBlockSize*/)
 {
     // DiskStreamer manages its own background thread — nothing to prepare
 }
 
-void TrackProcessor::releaseResources()
+void TrackProcessor::release()
 {
     if (diskStreamer)
         diskStreamer->stop();
 }
 
-void TrackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midiMessages*/)
+void TrackProcessor::process (AudioBlock& audio, MidiBlock& /*midi*/, int numSamples)
 {
     if (muted.load() || diskStreamer == nullptr)
     {
-        buffer.clear();
+        audio.clear();
         return;
     }
 
@@ -74,7 +73,7 @@ void TrackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
     if (! transportController.isPlaying())
     {
-        buffer.clear();
+        audio.clear();
         lastSeekPosition = -1;
         return;
     }
@@ -83,14 +82,11 @@ void TrackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     if (lastSeekPosition < 0 || posInSamples != lastSeekPosition)
         diskStreamer->seek (posInSamples);
 
-    // Read from DiskStreamer into the juce::AudioBuffer via dc::AudioBlock wrapper
-    dc::AudioBlock block (buffer.getArrayOfWritePointers(),
-                          buffer.getNumChannels(),
-                          buffer.getNumSamples());
-    block.clear();
-    diskStreamer->read (block, buffer.getNumSamples());
+    // Read from DiskStreamer directly into the AudioBlock
+    audio.clear();
+    diskStreamer->read (audio, numSamples);
 
-    lastSeekPosition = posInSamples + buffer.getNumSamples();
+    lastSeekPosition = posInSamples + numSamples;
 
     // Apply gain and pan
     float currentGain = gain.load();
@@ -102,25 +98,39 @@ void TrackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     float leftAmp  = currentGain * std::cos (angle);
     float rightAmp = currentGain * std::sin (angle);
 
-    int numChannels = buffer.getNumChannels();
+    int numChannels = audio.getNumChannels();
 
     if (numChannels >= 1)
-        buffer.applyGain (0, 0, buffer.getNumSamples(), leftAmp);
+    {
+        float* data = audio.getChannel (0);
+        for (int i = 0; i < numSamples; ++i)
+            data[i] *= leftAmp;
+    }
 
     if (numChannels >= 2)
-        buffer.applyGain (1, 0, buffer.getNumSamples(), rightAmp);
+    {
+        float* data = audio.getChannel (1);
+        for (int i = 0; i < numSamples; ++i)
+            data[i] *= rightAmp;
+    }
 
     // Update peak meters
     if (numChannels >= 1)
     {
-        float mag = buffer.getMagnitude (0, 0, buffer.getNumSamples());
+        const float* data = audio.getChannel (0);
+        float mag = 0.0f;
+        for (int i = 0; i < numSamples; ++i)
+            mag = std::max (mag, std::abs (data[i]));
         float old = peakLeft.load();
         peakLeft.store (std::max (mag, old * 0.95f));
     }
 
     if (numChannels >= 2)
     {
-        float mag = buffer.getMagnitude (1, 0, buffer.getNumSamples());
+        const float* data = audio.getChannel (1);
+        float mag = 0.0f;
+        for (int i = 0; i < numSamples; ++i)
+            mag = std::max (mag, std::abs (data[i]));
         float old = peakRight.load();
         peakRight.store (std::max (mag, old * 0.95f));
     }

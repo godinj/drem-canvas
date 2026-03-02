@@ -1,6 +1,8 @@
 #pragma once
-#include <JuceHeader.h>
-#include "MidiBridge.h"
+#include "dc/engine/AudioNode.h"
+#include "dc/engine/MidiBlock.h"
+#include "dc/audio/AudioBlock.h"
+#include "dc/midi/MidiMessage.h"
 #include "dc/foundation/types.h"
 #include <array>
 #include <cmath>
@@ -9,35 +11,36 @@ namespace dc
 {
 
 /**
- * Minimal polyphonic sine-wave synthesizer for testing MIDI → audio pipeline.
+ * Minimal polyphonic sine-wave synthesizer for testing MIDI -> audio pipeline.
  * Accepts MIDI, generates audio. Used as default instrument on MIDI tracks
  * when no VST/AU plugin is loaded.
  */
-class SimpleSynthProcessor : public juce::AudioProcessor
+class SimpleSynthProcessor : public AudioNode
 {
 public:
-    SimpleSynthProcessor()
-        : AudioProcessor (BusesProperties()
-                            .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
-    {
-    }
+    SimpleSynthProcessor() = default;
 
-    const juce::String getName() const override { return "SimpleSynth"; }
-    void prepareToPlay (double sampleRate, int /*maximumExpectedSamplesPerBlock*/) override
+    std::string getName() const override { return "SimpleSynth"; }
+    int getNumInputChannels() const override { return 0; }
+    int getNumOutputChannels() const override { return 2; }
+    bool acceptsMidi() const override  { return true; }
+    bool producesMidi() const override { return false; }
+
+    void prepare (double sampleRate, int /*maxBlockSize*/) override
     {
         currentSampleRate = sampleRate;
         for (auto& v : voices)
             v = {};
     }
 
-    void releaseResources() override {}
+    void release() override {}
 
-    void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override
+    void process (AudioBlock& audio, MidiBlock& midi, int numSamples) override
     {
-        buffer.clear();
+        audio.clear();
 
-        auto dcMidi = bridge::fromJuce (midiMessages);
-        for (auto it = dcMidi.begin(); it != dcMidi.end(); ++it)
+        // Read MIDI directly from the MidiBlock parameter (no bridge conversion)
+        for (auto it = midi.begin(); it != midi.end(); ++it)
         {
             auto event = *it;
             const auto& msg = event.message;
@@ -50,9 +53,8 @@ public:
                 allNotesOff();
         }
 
-        auto* left  = buffer.getWritePointer (0);
-        auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
-        const int numSamples = buffer.getNumSamples();
+        auto* left  = audio.getChannel (0);
+        auto* right = audio.getNumChannels() > 1 ? audio.getChannel (1) : nullptr;
 
         for (int s = 0; s < numSamples; ++s)
         {
@@ -80,22 +82,6 @@ public:
                 right[s] = out;
         }
     }
-
-    double getTailLengthSeconds() const override { return 1.0; }
-    bool acceptsMidi() const override  { return true; }
-    bool producesMidi() const override { return false; }
-
-    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
-    bool hasEditor() const override { return false; }
-
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
-    void changeProgramName (int, const juce::String&) override {}
-
-    void getStateInformation (juce::MemoryBlock&) override {}
-    void setStateInformation (const void*, int) override {}
 
 private:
     static constexpr int maxVoices = 32;
