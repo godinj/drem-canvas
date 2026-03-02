@@ -20,7 +20,7 @@ namespace dc {
 /// via AudioFileWriter. On overflow, samples are dropped (never blocks the
 /// audio thread).
 ///
-/// Replaces juce::AudioFormatWriter::ThreadedWriter.
+/// Background threaded audio recorder with lock-free ring buffer.
 class ThreadedRecorder
 {
 public:

@@ -6,7 +6,6 @@
 #include "WaveformWidget.h"
 #include "MidiClipWidget.h"
 #include "vim/VimContext.h"
-#include <JuceHeader.h>  // juce::ValueTree (Phase 3 migration)
 #include <vector>
 #include <memory>
 

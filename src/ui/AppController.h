@@ -45,8 +45,7 @@ namespace ui
 {
 
 class AppController : public gfx::Widget,
-                      private VimEngine::Listener,
-                      private juce::Timer
+                      private VimEngine::Listener
 {
 public:
     AppController();
@@ -60,6 +59,9 @@ public:
 
     // Initialize the audio engine and all UI
     void initialise();
+
+    // Called by the platform render loop to push meter levels and process messages
+    void tick();
 
     // Access for wiring
     gfx::Renderer* getRenderer() { return renderer; }
@@ -76,9 +78,6 @@ private:
     // VimEngine::Listener
     void vimModeChanged (VimEngine::Mode newMode) override;
     void vimContextChanged() override;
-
-    // Timer — pushes meter levels from audio engine to UI widgets
-    void timerCallback() override;
 
     // Audio graph management
     void rebuildAudioGraph();

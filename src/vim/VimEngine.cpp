@@ -11,18 +11,16 @@
 namespace dc
 {
 
-static bool isEscapeOrCtrlC (const juce::KeyPress& key)
+static bool isEscapeOrCtrlC (const dc::KeyPress& key)
 {
-    if (key == juce::KeyPress::escapeKey)
+    if (key == dc::KeyCode::Escape)
         return true;
 
-    if (key.getModifiers().isCtrlDown())
+    if (key.control)
     {
         auto c = key.getTextCharacter();
-        auto code = key.getKeyCode();
-        // Ctrl-C: character may be ETX (3), 'c', 'C', or keyCode 'c'/'C'
-        if (c == 3 || c == 'c' || c == 'C'
-            || code == 'c' || code == 'C')
+        // Ctrl-C: character may be ETX (3), 'c', or 'C'
+        if (c == 3 || c == 'c' || c == 'C')
             return true;
     }
 
@@ -44,10 +42,10 @@ char VimEngine::consumeRegister()
     return reg;
 }
 
-bool VimEngine::keyPressed (const juce::KeyPress& key, juce::Component*)
+bool VimEngine::dispatch (const dc::KeyPress& key)
 {
     // Ctrl+P opens command palette from any mode
-    if (key.getModifiers().isCtrlDown() && key.getTextCharacter() == 'p')
+    if (key.control && key.getTextCharacter() == 'p')
     {
         if (onCommandPalette)
             onCommandPalette();
@@ -77,42 +75,32 @@ bool VimEngine::keyPressed (const juce::KeyPress& key, juce::Component*)
 
 bool VimEngine::handleKeyEvent (const gfx::KeyEvent& event)
 {
-    // Convert gfx::KeyEvent to juce::KeyPress for the shared dispatch logic
-    int juceKeyCode = 0;
+    dc::KeyCode code = dc::KeyCode::Unknown;
 
-    // Map macOS virtual key codes to JUCE key codes for special keys
     switch (event.keyCode)
     {
-        case 0x35: juceKeyCode = juce::KeyPress::escapeKey;    break; // Escape
-        case 0x24: juceKeyCode = juce::KeyPress::returnKey;    break; // Return
-        case 0x30: juceKeyCode = juce::KeyPress::tabKey;       break; // Tab
-        case 0x31: juceKeyCode = juce::KeyPress::spaceKey;     break; // Space
-        case 0x33: juceKeyCode = juce::KeyPress::backspaceKey; break; // Backspace
-        case 0x7E: juceKeyCode = juce::KeyPress::upKey;        break; // Up
-        case 0x7D: juceKeyCode = juce::KeyPress::downKey;      break; // Down
-        case 0x7B: juceKeyCode = juce::KeyPress::leftKey;      break; // Left
-        case 0x7C: juceKeyCode = juce::KeyPress::rightKey;     break; // Right
+        case 0x35: code = dc::KeyCode::Escape;     break;
+        case 0x24: code = dc::KeyCode::Return;      break;
+        case 0x30: code = dc::KeyCode::Tab;          break;
+        case 0x31: code = dc::KeyCode::Space;        break;
+        case 0x33: code = dc::KeyCode::Backspace;    break;
+        case 0x7E: code = dc::KeyCode::UpArrow;      break;
+        case 0x7D: code = dc::KeyCode::DownArrow;    break;
+        case 0x7B: code = dc::KeyCode::LeftArrow;    break;
+        case 0x7C: code = dc::KeyCode::RightArrow;   break;
+        case 0x75: code = dc::KeyCode::Delete;       break;
         default:
-            juceKeyCode = static_cast<int> (event.character);
+            code = static_cast<dc::KeyCode> (static_cast<int> (event.character));
             break;
     }
 
-    juce::ModifierKeys mods;
-    int modFlags = 0;
-    if (event.shift)   modFlags |= juce::ModifierKeys::shiftModifier;
-    if (event.control) modFlags |= juce::ModifierKeys::ctrlModifier;
-    if (event.alt)     modFlags |= juce::ModifierKeys::altModifier;
-    if (event.command) modFlags |= juce::ModifierKeys::commandModifier;
-    mods = juce::ModifierKeys (modFlags);
-
-    // Use unmodifiedCharacter so Ctrl+key checks (e.g. Ctrl+P == 'p') work correctly;
-    // event.character is a control code when modifiers are held on macOS.
     auto textChar = event.unmodifiedCharacter ? event.unmodifiedCharacter : event.character;
-    juce::KeyPress key (juceKeyCode, mods, static_cast<juce_wchar> (textChar));
-    return keyPressed (key, nullptr);
+
+    dc::KeyPress key { code, textChar, event.shift, event.control, event.alt, event.command };
+    return dispatch (key);
 }
 
-bool VimEngine::handleInsertKey (const juce::KeyPress& key)
+bool VimEngine::handleInsertKey (const dc::KeyPress& key)
 {
     if (isEscapeOrCtrlC (key))
     {
@@ -125,7 +113,7 @@ bool VimEngine::handleInsertKey (const juce::KeyPress& key)
 
 // ── Normal-mode phased dispatch ─────────────────────────────────────────────
 
-bool VimEngine::handleNormalKey (const juce::KeyPress& key)
+bool VimEngine::handleNormalKey (const dc::KeyPress& key)
 {
     // gp/gk — global g-prefix commands (work from any panel context)
     if (pendingKey == 'g')
@@ -159,10 +147,9 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
         return handlePluginViewNormalKey (key);
 
     auto keyChar = key.getTextCharacter();
-    auto modifiers = key.getModifiers();
 
     // Ctrl+K enters keyboard mode (from any panel context)
-    if (modifiers.isCtrlDown() && (keyChar == 'k' || keyChar == 'K'))
+    if (key.control && (keyChar == 'k' || keyChar == 'K'))
     {
         enterKeyboardMode();
         return true;
@@ -368,14 +355,14 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     if (keyChar == 's') { splitRegionAtPlayhead(); return true; }
 
     // Undo/redo
-    if (keyChar == 'u' || (modifiers.isCtrlDown() && keyChar == 'z'))
+    if (keyChar == 'u' || (key.control && keyChar == 'z'))
     {
         project.getUndoSystem().undo();
         updateClipIndexFromGridCursor();
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
-    if (keyChar == 'r' && modifiers.isCtrlDown())
+    if (keyChar == 'r' && key.control)
     {
         project.getUndoSystem().redo();
         updateClipIndexFromGridCursor();
@@ -414,13 +401,13 @@ bool VimEngine::handleNormalKey (const juce::KeyPress& key)
     if (keyChar == 'i') { enterInsertMode(); return true; }
 
     // Transport
-    if (key == juce::KeyPress::spaceKey) { togglePlayStop(); return true; }
+    if (key == dc::KeyCode::Space) { togglePlayStop(); return true; }
 
     // Panel
-    if (key == juce::KeyPress::tabKey) { cycleFocusPanel(); return true; }
+    if (key == dc::KeyCode::Tab) { cycleFocusPanel(); return true; }
 
     // Open item (stub)
-    if (key == juce::KeyPress::returnKey) { openFocusedItem(); return true; }
+    if (key == dc::KeyCode::Return) { openFocusedItem(); return true; }
 
     // Command mode
     if (keyChar == ':')
@@ -865,7 +852,7 @@ void VimEngine::toggleRecordArm()
 
 // ── Command mode ────────────────────────────────────────────────────────
 
-bool VimEngine::handleCommandKey (const juce::KeyPress& key)
+bool VimEngine::handleCommandKey (const dc::KeyPress& key)
 {
     if (isEscapeOrCtrlC (key))
     {
@@ -874,7 +861,7 @@ bool VimEngine::handleCommandKey (const juce::KeyPress& key)
         return true;
     }
 
-    if (key == juce::KeyPress::returnKey)
+    if (key == dc::KeyCode::Return)
     {
         executeCommand();
         commandBuffer.clear();
@@ -882,7 +869,7 @@ bool VimEngine::handleCommandKey (const juce::KeyPress& key)
         return true;
     }
 
-    if (key == juce::KeyPress::backspaceKey)
+    if (key == dc::KeyCode::Backspace)
     {
         if (! commandBuffer.empty())
             commandBuffer.pop_back();
@@ -959,7 +946,7 @@ void VimEngine::enterPluginMenuMode()
     listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
-bool VimEngine::handlePluginSearchKey (const juce::KeyPress& key)
+bool VimEngine::handlePluginSearchKey (const dc::KeyPress& key)
 {
     // Escape / Ctrl-C — clear filter, back to browse
     if (isEscapeOrCtrlC (key))
@@ -973,7 +960,7 @@ bool VimEngine::handlePluginSearchKey (const juce::KeyPress& key)
     }
 
     // Return — accept filter, back to browse
-    if (key == juce::KeyPress::returnKey)
+    if (key == dc::KeyCode::Return)
     {
         pluginSearchActive = false;
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
@@ -981,7 +968,7 @@ bool VimEngine::handlePluginSearchKey (const juce::KeyPress& key)
     }
 
     // Backspace — remove last char
-    if (key == juce::KeyPress::backspaceKey)
+    if (key == dc::KeyCode::Backspace)
     {
         if (! pluginSearchBuffer.empty())
             pluginSearchBuffer.pop_back();
@@ -994,7 +981,7 @@ bool VimEngine::handlePluginSearchKey (const juce::KeyPress& key)
 
     // Printable char (no Ctrl/Cmd) — append to buffer
     auto c = key.getTextCharacter();
-    if (c >= 32 && ! key.getModifiers().isCtrlDown() && ! key.getModifiers().isCommandDown())
+    if (c >= 32 && ! key.control && ! key.command)
     {
         pluginSearchBuffer += std::string (1, char (c));
         if (onPluginMenuFilter)
@@ -1006,7 +993,7 @@ bool VimEngine::handlePluginSearchKey (const juce::KeyPress& key)
     return true; // consume all keys while searching
 }
 
-bool VimEngine::handlePluginMenuKey (const juce::KeyPress& key)
+bool VimEngine::handlePluginMenuKey (const dc::KeyPress& key)
 {
     // Delegate to search handler when search is active
     if (pluginSearchActive)
@@ -1018,7 +1005,7 @@ bool VimEngine::handlePluginMenuKey (const juce::KeyPress& key)
         return true;
     }
 
-    if (key == juce::KeyPress::returnKey)
+    if (key == dc::KeyCode::Return)
     {
         if (onPluginMenuConfirm)
             onPluginMenuConfirm();
@@ -1027,7 +1014,6 @@ bool VimEngine::handlePluginMenuKey (const juce::KeyPress& key)
     }
 
     auto keyChar = key.getTextCharacter();
-    auto modifiers = key.getModifiers();
 
     // / — enter search sub-mode
     if (keyChar == '/')
@@ -1054,10 +1040,9 @@ bool VimEngine::handlePluginMenuKey (const juce::KeyPress& key)
     }
 
     // Ctrl-D — half-page down
-    if (modifiers.isCtrlDown()
+    if (key.control
         && (keyChar == 'd' || keyChar == 'D'
-            || keyChar == 4 /* Ctrl-D */
-            || key.getKeyCode() == 'd' || key.getKeyCode() == 'D'))
+            || keyChar == 4 /* Ctrl-D */))
     {
         if (onPluginMenuScroll)
             onPluginMenuScroll (1);
@@ -1065,10 +1050,9 @@ bool VimEngine::handlePluginMenuKey (const juce::KeyPress& key)
     }
 
     // Ctrl-U — half-page up
-    if (modifiers.isCtrlDown()
+    if (key.control
         && (keyChar == 'u' || keyChar == 'U'
-            || keyChar == 21 /* Ctrl-U */
-            || key.getKeyCode() == 'u' || key.getKeyCode() == 'U'))
+            || keyChar == 21 /* Ctrl-U */))
     {
         if (onPluginMenuScroll)
             onPluginMenuScroll (-1);
@@ -1132,10 +1116,9 @@ void VimEngine::closePianoRoll()
     }
 }
 
-bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
+bool VimEngine::handlePianoRollNormalKey (const dc::KeyPress& key)
 {
     auto keyChar = key.getTextCharacter();
-    auto modifiers = key.getModifiers();
 
     // Escape / Ctrl-C closes piano roll
     if (isEscapeOrCtrlC (key))
@@ -1168,7 +1151,7 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     }
 
     // Ctrl+P opens command palette
-    if (modifiers.isCtrlDown() && keyChar == 'p')
+    if (key.control && keyChar == 'p')
     {
         if (onCommandPalette)
             onCommandPalette();
@@ -1176,7 +1159,7 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     }
 
     // Ctrl+A selects all
-    if (modifiers.isCtrlDown() && keyChar == 'a')
+    if (key.control && keyChar == 'a')
     {
         if (onPianoRollSelectAll) onPianoRollSelectAll();
         return true;
@@ -1218,14 +1201,14 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     }
 
     // Undo/redo
-    if (keyChar == 'u' || (modifiers.isCtrlDown() && keyChar == 'z'))
+    if (keyChar == 'u' || (key.control && keyChar == 'z'))
     {
         project.getUndoSystem().undo();
         updateClipIndexFromGridCursor();
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
-    if (keyChar == 'r' && modifiers.isCtrlDown())
+    if (keyChar == 'r' && key.control)
     {
         project.getUndoSystem().redo();
         updateClipIndexFromGridCursor();
@@ -1234,17 +1217,17 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     }
 
     // Transport — Space is play/stop (consistent with other modes)
-    if (key == juce::KeyPress::spaceKey) { togglePlayStop(); return true; }
+    if (key == dc::KeyCode::Space) { togglePlayStop(); return true; }
 
     // Enter toggles note at cursor
-    if (key == juce::KeyPress::returnKey)
+    if (key == dc::KeyCode::Return)
     {
         if (onPianoRollAddNote) onPianoRollAddNote();
         return true;
     }
 
     // Panel cycling
-    if (key == juce::KeyPress::tabKey) { cycleFocusPanel(); return true; }
+    if (key == dc::KeyCode::Tab) { cycleFocusPanel(); return true; }
 
     // Tool switching
     if (keyChar == '1' || keyChar == 's')
@@ -1287,7 +1270,7 @@ bool VimEngine::handlePianoRollNormalKey (const juce::KeyPress& key)
     }
 
     // Delete
-    if (keyChar == 'x' || key == juce::KeyPress::deleteKey)
+    if (keyChar == 'x' || key == dc::KeyCode::Delete)
     {
         if (onPianoRollDeleteSelected) onPianoRollDeleteSelected (consumeRegister());
         return true;
@@ -1392,7 +1375,7 @@ void VimEngine::clearPending()
 
 // ── Count helpers ───────────────────────────────────────────────────────────
 
-bool VimEngine::isDigitForCount (juce_wchar c) const
+bool VimEngine::isDigitForCount (char32_t c) const
 {
     if (c >= '1' && c <= '9')
         return true;
@@ -1404,7 +1387,7 @@ bool VimEngine::isDigitForCount (juce_wchar c) const
     return false;
 }
 
-void VimEngine::accumulateDigit (juce_wchar c)
+void VimEngine::accumulateDigit (char32_t c)
 {
     int digit = c - '0';
 
@@ -1439,7 +1422,7 @@ void VimEngine::cancelOperator()
     resetCounts();
 }
 
-VimEngine::Operator VimEngine::charToOperator (juce_wchar c) const
+VimEngine::Operator VimEngine::charToOperator (char32_t c) const
 {
     if (c == 'd') return OpDelete;
     if (c == 'y') return OpYank;
@@ -1473,14 +1456,14 @@ static std::vector<int64_t> collectClipEdges (const Arrangement& arr, int trackI
 
 // ── Motion resolution ───────────────────────────────────────────────────────
 
-bool VimEngine::isMotionKey (juce_wchar c) const
+bool VimEngine::isMotionKey (char32_t c) const
 {
     return c == 'h' || c == 'j' || c == 'k' || c == 'l'
         || c == '0' || c == '$' || c == 'G' || c == 'g'
         || c == 'w' || c == 'b' || c == 'e';
 }
 
-VimEngine::MotionRange VimEngine::resolveMotion (juce_wchar key, int count) const
+VimEngine::MotionRange VimEngine::resolveMotion (char32_t key, int count) const
 {
     MotionRange range;
     int curTrack = arrangement.getSelectedTrackIndex();
@@ -1834,7 +1817,7 @@ void VimEngine::executeChange (const MotionRange& range)
     enterInsertMode();
 }
 
-void VimEngine::executeMotion (juce_wchar key, int count)
+void VimEngine::executeMotion (char32_t key, int count)
 {
     switch (key)
     {
@@ -2433,7 +2416,7 @@ void VimEngine::executeVisualSolo()
     exitVisualMode();
 }
 
-bool VimEngine::handleVisualKey (const juce::KeyPress& key)
+bool VimEngine::handleVisualKey (const dc::KeyPress& key)
 {
     auto keyChar = key.getTextCharacter();
 
@@ -2561,7 +2544,7 @@ bool VimEngine::handleVisualKey (const juce::KeyPress& key)
     return true; // consume all keys in visual mode
 }
 
-bool VimEngine::handleVisualLineKey (const juce::KeyPress& key)
+bool VimEngine::handleVisualLineKey (const dc::KeyPress& key)
 {
     auto keyChar = key.getTextCharacter();
 
@@ -2741,10 +2724,9 @@ std::string VimEngine::getPendingDisplay() const
 
 // ── Sequencer navigation ─────────────────────────────────────────────────────
 
-bool VimEngine::handleSequencerNormalKey (const juce::KeyPress& key)
+bool VimEngine::handleSequencerNormalKey (const dc::KeyPress& key)
 {
     auto keyChar = key.getTextCharacter();
-    auto modifiers = key.getModifiers();
 
     // Escape / Ctrl-C returns to normal mode
     if (isEscapeOrCtrlC (key))
@@ -2754,14 +2736,14 @@ bool VimEngine::handleSequencerNormalKey (const juce::KeyPress& key)
     }
 
     // Undo/redo
-    if (keyChar == 'u' || (modifiers.isCtrlDown() && keyChar == 'z'))
+    if (keyChar == 'u' || (key.control && keyChar == 'z'))
     {
         project.getUndoSystem().undo();
         updateClipIndexFromGridCursor();
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
-    if (keyChar == 'r' && modifiers.isCtrlDown())
+    if (keyChar == 'r' && key.control)
     {
         project.getUndoSystem().redo();
         updateClipIndexFromGridCursor();
@@ -2801,7 +2783,7 @@ bool VimEngine::handleSequencerNormalKey (const juce::KeyPress& key)
     }
 
     // Toggle step
-    if (key == juce::KeyPress::spaceKey)
+    if (key == dc::KeyCode::Space)
     {
         seqToggleStep();
         return true;
@@ -2817,13 +2799,13 @@ bool VimEngine::handleSequencerNormalKey (const juce::KeyPress& key)
     if (keyChar == 'S') { seqToggleRowSolo(); return true; }
 
     // Panel cycling
-    if (key == juce::KeyPress::tabKey) { cycleFocusPanel(); return true; }
+    if (key == dc::KeyCode::Tab) { cycleFocusPanel(); return true; }
 
     // Mode switch
     if (keyChar == 'i') { enterInsertMode(); return true; }
 
     // Transport (play/stop via Enter in sequencer)
-    if (key == juce::KeyPress::returnKey)
+    if (key == dc::KeyCode::Return)
     {
         togglePlayStop();
         return true;
@@ -3056,7 +3038,7 @@ void VimEngine::exitKeyboardMode()
     listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
-bool VimEngine::handleKeyboardKey (const juce::KeyPress& key)
+bool VimEngine::handleKeyboardKey (const dc::KeyPress& key)
 {
     if (isEscapeOrCtrlC (key))
     {
@@ -3123,7 +3105,7 @@ bool VimEngine::handleKeyUp (const gfx::KeyEvent& event)
     if (mode != Keyboard)
         return false;
 
-    auto keyChar = static_cast<juce_wchar> (event.unmodifiedCharacter
+    auto keyChar = static_cast<char32_t> (event.unmodifiedCharacter
                                                 ? event.unmodifiedCharacter
                                                 : event.character);
 
@@ -3165,10 +3147,9 @@ int VimEngine::getMixerPluginCount() const
     return track.getNumPlugins();
 }
 
-bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
+bool VimEngine::handleMixerNormalKey (const dc::KeyPress& key)
 {
     auto keyChar = key.getTextCharacter();
-    auto modifiers = key.getModifiers();
 
     // ── Escape / Ctrl-C
     if (isEscapeOrCtrlC (key))
@@ -3312,7 +3293,7 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
     }
 
     // ── Return: open plugin view or add plugin
-    if (key == juce::KeyPress::returnKey && focus == VimContext::FocusPlugins)
+    if (key == dc::KeyCode::Return && focus == VimContext::FocusPlugins)
     {
         int trackIdx = context.isMasterStripSelected() ? -1 : arrangement.getSelectedTrackIndex();
         int slot = context.getSelectedPluginSlot();
@@ -3400,10 +3381,10 @@ bool VimEngine::handleMixerNormalKey (const juce::KeyPress& key)
     if (keyChar == 'i') { enterInsertMode(); return true; }
 
     // ── Transport
-    if (key == juce::KeyPress::spaceKey) { togglePlayStop(); return true; }
+    if (key == dc::KeyCode::Space) { togglePlayStop(); return true; }
 
     // ── Panel cycling
-    if (key == juce::KeyPress::tabKey) { cycleFocusPanel(); return true; }
+    if (key == dc::KeyCode::Tab) { cycleFocusPanel(); return true; }
 
     // ── Command mode
     if (keyChar == ':')
@@ -3525,7 +3506,7 @@ void VimEngine::closePluginView()
     listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
-bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
+bool VimEngine::handlePluginViewNormalKey (const dc::KeyPress& key)
 {
     auto keyChar = key.getTextCharacter();
 
@@ -3550,7 +3531,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
             return true;
         }
 
-        if (key == juce::KeyPress::returnKey)
+        if (key == dc::KeyCode::Return)
         {
             float pct = std::stof (context.getNumberBuffer());
             pct = std::clamp (pct, 0.0f, 100.0f);
@@ -3568,7 +3549,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
             return true;
         }
 
-        if (key == juce::KeyPress::backspaceKey)
+        if (key == dc::KeyCode::Backspace)
         {
             auto buf = context.getNumberBuffer();
             if (! buf.empty())
@@ -3777,7 +3758,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     }
 
     // Tab: cycle panel
-    if (key == juce::KeyPress::tabKey)
+    if (key == dc::KeyCode::Tab)
     {
         closePluginView();
         cycleFocusPanel();
@@ -3785,7 +3766,7 @@ bool VimEngine::handlePluginViewNormalKey (const juce::KeyPress& key)
     }
 
     // Space: toggle play/stop
-    if (key == juce::KeyPress::spaceKey)
+    if (key == dc::KeyCode::Space)
     {
         togglePlayStop();
         return true;

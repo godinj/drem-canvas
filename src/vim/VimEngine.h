@@ -1,5 +1,5 @@
 #pragma once
-#include <JuceHeader.h>
+#include "dc/foundation/keycode.h"
 #include "VimContext.h"
 #include "model/Project.h"
 #include "model/Arrangement.h"
@@ -16,7 +16,7 @@
 namespace dc
 {
 
-class VimEngine : public juce::KeyListener
+class VimEngine
 {
 public:
     enum Mode { Normal, Insert, Command, Keyboard, PluginMenu, Visual, VisualLine };
@@ -44,9 +44,7 @@ public:
                Arrangement& arrangement, VimContext& context,
                GridSystem& gridSystem);
 
-    bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override;
-
-    // New event path for graphics engine (converts to KeyPress internally)
+    // Primary key dispatch entry point (converts gfx::KeyEvent to dc::KeyPress)
     bool handleKeyEvent (const gfx::KeyEvent& event);
 
     // Key-up event path (needed for Keyboard mode note-off)
@@ -216,20 +214,22 @@ public:
     void seqToggleRowSolo();
 
 private:
-    bool handleNormalKey (const juce::KeyPress& key);
-    bool handleInsertKey (const juce::KeyPress& key);
-    bool handleCommandKey (const juce::KeyPress& key);
-    bool handleKeyboardKey (const juce::KeyPress& key);
-    bool handlePluginMenuKey (const juce::KeyPress& key);
-    bool handlePluginSearchKey (const juce::KeyPress& key);
-    bool handleVisualKey (const juce::KeyPress& key);
-    bool handleVisualLineKey (const juce::KeyPress& key);
+    bool dispatch (const dc::KeyPress& key);
+
+    bool handleNormalKey (const dc::KeyPress& key);
+    bool handleInsertKey (const dc::KeyPress& key);
+    bool handleCommandKey (const dc::KeyPress& key);
+    bool handleKeyboardKey (const dc::KeyPress& key);
+    bool handlePluginMenuKey (const dc::KeyPress& key);
+    bool handlePluginSearchKey (const dc::KeyPress& key);
+    bool handleVisualKey (const dc::KeyPress& key);
+    bool handleVisualLineKey (const dc::KeyPress& key);
     void executeCommand();
 
-    bool handleSequencerNormalKey (const juce::KeyPress& key);
-    bool handlePianoRollNormalKey (const juce::KeyPress& key);
-    bool handleMixerNormalKey (const juce::KeyPress& key);
-    bool handlePluginViewNormalKey (const juce::KeyPress& key);
+    bool handleSequencerNormalKey (const dc::KeyPress& key);
+    bool handlePianoRollNormalKey (const dc::KeyPress& key);
+    bool handleMixerNormalKey (const dc::KeyPress& key);
+    bool handlePluginViewNormalKey (const dc::KeyPress& key);
 
     void openPluginView (int trackIndex, int pluginIndex);
     void closePluginView();
@@ -243,19 +243,19 @@ private:
     void clearPending();
 
     // Count helpers
-    bool isDigitForCount (juce_wchar c) const;
-    void accumulateDigit (juce_wchar c);
+    bool isDigitForCount (char32_t c) const;
+    void accumulateDigit (char32_t c);
     int  getEffectiveCount() const;
     void resetCounts();
 
     // Operator state
     void startOperator (Operator op);
     void cancelOperator();
-    Operator charToOperator (juce_wchar c) const;
+    Operator charToOperator (char32_t c) const;
 
     // Motion
-    bool isMotionKey (juce_wchar c) const;
-    MotionRange resolveMotion (juce_wchar key, int count) const;
+    bool isMotionKey (char32_t c) const;
+    MotionRange resolveMotion (char32_t key, int count) const;
     MotionRange resolveLinewiseMotion (int count) const;
 
     // Operator execution
@@ -263,7 +263,7 @@ private:
     void executeDelete (const MotionRange& range);
     void executeYank (const MotionRange& range);
     void executeChange (const MotionRange& range);
-    void executeMotion (juce_wchar key, int count);
+    void executeMotion (char32_t key, int count);
 
     // Clip collection helpers
     std::vector<Clipboard::ClipEntry> collectClipsForRange (const MotionRange& range) const;
@@ -287,7 +287,7 @@ private:
 
     Mode mode = Normal;
     std::string commandBuffer;
-    juce_wchar pendingKey = 0;
+    char32_t pendingKey = 0;
     int64_t pendingTimestamp = 0;
     static constexpr int64_t pendingTimeoutMs = 1000;
 

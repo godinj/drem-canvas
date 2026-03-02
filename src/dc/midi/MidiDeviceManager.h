@@ -31,7 +31,7 @@ public:
 };
 
 /// RtMidi wrapper for hardware MIDI I/O.
-/// Replaces juce::MidiInput / juce::MidiOutput device management.
+/// RtMidi-based hardware MIDI device enumeration and I/O.
 class MidiDeviceManager
 {
 public:

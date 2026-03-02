@@ -1,6 +1,5 @@
 #pragma once
 #include "dc/model/PropertyTree.h"
-#include <JuceHeader.h>
 #include <string>
 
 namespace dc

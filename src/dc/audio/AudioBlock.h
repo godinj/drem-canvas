@@ -24,8 +24,8 @@ public:
     {
     }
 
-    /// Overload for juce::AudioBuffer::getArrayOfWritePointers() which
-    /// returns float* const* (pointer to const array of channel pointers).
+    /// Overload accepting float* const* (pointer to const array of
+    /// channel pointers), as returned by some audio buffer implementations.
     AudioBlock (float* const* channelData, int numChannels, int numSamples)
         : channels_ (const_cast<float**> (channelData))
         , numChannels_ (numChannels)

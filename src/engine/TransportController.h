@@ -1,5 +1,4 @@
 #pragma once
-#include <JuceHeader.h>
 #include <atomic>
 #include <cstdint>
 #include <string>

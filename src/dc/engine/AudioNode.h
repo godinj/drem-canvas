@@ -7,7 +7,7 @@ namespace dc {
 class AudioBlock;
 class MidiBlock;
 
-/// Pure virtual interface replacing juce::AudioProcessor.
+/// Pure virtual audio processing interface.
 /// Deliberately simpler — no parameter system, no editor, no bus layout negotiation.
 class AudioNode
 {

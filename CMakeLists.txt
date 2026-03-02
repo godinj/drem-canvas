@@ -11,8 +11,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(BUILD_TESTING "Build test targets" OFF)
 
-add_subdirectory(libs/JUCE)
-
 # yaml-cpp for YAML session serialization
 include(FetchContent)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
@@ -25,21 +23,6 @@ set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(yaml-cpp)
-
-# VST3 SDK for direct plugin hosting
-set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
-set(SMTG_ADD_VSTGUI OFF CACHE BOOL "" FORCE)
-set(SMTG_RUN_VST_VALIDATOR OFF CACHE BOOL "" FORCE)
-set(SMTG_ADD_VST3_PLUGINS_SAMPLES OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-    vst3sdk
-    GIT_REPOSITORY https://github.com/steinbergmedia/vst3sdk.git
-    GIT_TAG        v3.7.9_build_61
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(vst3sdk)
 
 # ─── Skia ─────────────────────────────────────────────────────
 set(SKIA_DIR "${CMAKE_SOURCE_DIR}/libs/skia")
@@ -128,7 +111,7 @@ configure_file(
 )
 
 # ═══════════════════════════════════════════════════════════════
-# dc:: Library Targets (NO JUCE, NO Skia, NO GUI dependencies)
+# dc:: Library Targets (NO Skia, NO GUI dependencies)
 # ═══════════════════════════════════════════════════════════════
 
 # ─── dc_foundation ────────────────────────────────────────────
@@ -182,18 +165,8 @@ target_link_libraries(dc_audio PRIVATE ${SNDFILE_LIBRARIES})
 # Main Application Target
 # ═══════════════════════════════════════════════════════════════
 
-juce_add_gui_app(DremCanvas
-    PRODUCT_NAME "Drem Canvas"
-    COMPANY_NAME "Drem"
-    BUNDLE_ID "com.drem.canvas"
-    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon_1024.png"
-    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon_256.png"
-)
-
-juce_generate_juce_header(DremCanvas)
-
-# ─── Application sources (dc:: files now come from library targets) ──
-target_sources(DremCanvas PRIVATE
+# ─── Executable target ────────────────────────────────────────
+add_executable(DremCanvas
     # dc:: device managers (depend on PortAudio/RtMidi, stay in main target)
     src/dc/midi/MidiDeviceManager.cpp
     src/dc/audio/PortAudioDeviceManager.cpp
@@ -247,9 +220,6 @@ target_sources(DremCanvas PRIVATE
     src/plugins/ParameterFinderScanner.cpp
     src/plugins/PluginEditorBridge.cpp
     src/plugins/SyntheticInputProbe.cpp
-    src/plugins/SyntheticMouseDrag.cpp
-    src/plugins/MouseEventForwarder.cpp
-    src/plugins/SpatialScanCache.cpp
 
     # Vim
     src/vim/VimContext.cpp
@@ -357,7 +327,6 @@ if(APPLE)
         src/platform/NativeDialogs.mm
         src/platform/MacPluginEditorBridge.mm
         src/platform/MacSyntheticInputProbe.mm
-        src/platform/MacSyntheticMouseDrag.mm
         src/graphics/rendering/MetalBackend.mm
     )
 elseif(UNIX AND NOT APPLE)
@@ -371,8 +340,6 @@ elseif(UNIX AND NOT APPLE)
         src/platform/linux/X11MouseProbe.cpp
         src/platform/linux/X11PluginEditorBridge.cpp
         src/platform/linux/X11SyntheticInputProbe.cpp
-        src/platform/linux/X11SyntheticMouseDrag.cpp
-        src/platform/linux/X11MouseEventForwarder.cpp
     )
 endif()
 
@@ -400,10 +367,8 @@ endif()
 
 target_include_directories(DremCanvas PRIVATE
     src
-    "${CMAKE_BINARY_DIR}/generated"
     "${SKIA_DIR}/include"
     "${SKIA_DIR}"
-    "${vst3sdk_SOURCE_DIR}"
 )
 
 # ─── Platform-specific include directories ────────────────────
@@ -411,9 +376,6 @@ if(UNIX AND NOT APPLE)
     target_include_directories(DremCanvas PRIVATE
         ${GLFW_INCLUDE_DIRS}
         ${FONTCONFIG_INCLUDE_DIRS}
-        ${SNDFILE_INCLUDE_DIRS}
-        ${PORTAUDIO_INCLUDE_DIRS}
-        ${RTMIDI_INCLUDE_DIRS}
     )
 endif()
 
@@ -426,7 +388,6 @@ if(APPLE)
         src/platform/NativeDialogs.mm
         src/platform/MacPluginEditorBridge.mm
         src/platform/MacSyntheticInputProbe.mm
-        src/platform/MacSyntheticMouseDrag.mm
         src/graphics/rendering/MetalBackend.mm
         PROPERTIES
         COMPILE_FLAGS "-fobjc-arc"
@@ -435,26 +396,18 @@ endif()
 
 # ─── Compile definitions ─────────────────────────────────────
 target_compile_definitions(DremCanvas PRIVATE
-    JUCE_WEB_BROWSER=0
-    JUCE_USE_CURL=0
-    JUCE_PLUGINHOST_VST3=1
-    JUCE_DISPLAY_SPLASH_SCREEN=0
-    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:DremCanvas,JUCE_PRODUCT_NAME>"
-    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:DremCanvas,JUCE_VERSION>"
     SK_GANESH=1
+    DC_APP_NAME="Drem Canvas"
+    DC_APP_VERSION="${PROJECT_VERSION}"
 )
 
 if(APPLE)
     target_compile_definitions(DremCanvas PRIVATE
         SK_METAL=1
-        JUCE_PLUGINHOST_AU=1
     )
 elseif(UNIX AND NOT APPLE)
     target_compile_definitions(DremCanvas PRIVATE
         SK_VULKAN=1
-        JUCE_PLUGINHOST_AU=0
-        JUCE_ALSA=1
-        JUCE_JACK=0
     )
 endif()
 
@@ -464,19 +417,7 @@ target_link_libraries(DremCanvas PRIVATE
     dc_model
     dc_midi
     dc_audio
-    juce::juce_audio_basics
-    juce::juce_audio_devices
-    juce::juce_audio_formats
-    juce::juce_audio_processors
-    juce::juce_audio_utils
-    juce::juce_core
-    juce::juce_data_structures
-    juce::juce_gui_basics
-    juce::juce_gui_extra
-    juce::juce_recommended_config_flags
-    juce::juce_recommended_warning_flags
     yaml-cpp::yaml-cpp
-    sdk
     ${SKIA_LIB}
     PNG::PNG
 )
@@ -496,7 +437,6 @@ elseif(UNIX AND NOT APPLE)
         Vulkan::Vulkan
         ${GLFW_LIBRARIES}
         ${FONTCONFIG_LIBRARIES}
-        ${SNDFILE_LIBRARIES}
         ${DC_PORTAUDIO_LINK}
         ${DC_RTMIDI_LINK}
         Threads::Threads

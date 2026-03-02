@@ -97,13 +97,6 @@ case "$OS" in
         ;;
 esac
 
-# JUCE submodule
-if [ -f "$PROJECT_ROOT/libs/JUCE/CMakeLists.txt" ]; then
-    check "JUCE submodule" 0
-else
-    check "JUCE submodule (libs/JUCE/)" 1
-fi
-
 # Skia library
 if [ -f "$PROJECT_ROOT/libs/skia/lib/libskia.a" ]; then
     check "Skia library (libs/skia/lib/libskia.a)" 0

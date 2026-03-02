@@ -16,7 +16,7 @@ struct TimedMidiEvent
 };
 
 /// Sorted vector of timestamped MIDI events for the model layer.
-/// Replaces juce::MidiMessageSequence.
+/// Sorted vector of timestamped MIDI events.
 class MidiSequence
 {
 public:

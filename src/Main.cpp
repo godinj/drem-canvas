@@ -1,5 +1,5 @@
-#include <JuceHeader.h>
-#include <filesystem>
+#include <functional>
+#include <memory>
 
 #if defined(__APPLE__)
 #include "platform/NativeWindow.h"
@@ -7,6 +7,7 @@
 #include "platform/EventBridge.h"
 #include "graphics/rendering/MetalBackend.h"
 #elif defined(__linux__)
+#include <filesystem>
 #include "platform/linux/GlfwWindow.h"
 #include "platform/linux/VulkanBackend.h"
 #endif
@@ -16,209 +17,200 @@
 #include "graphics/core/EventDispatch.h"
 #include "ui/AppController.h"
 
-class DremCanvasApplication : public juce::JUCEApplication
-#if defined(__linux__)
-                            , private juce::Timer
-#endif
+// ─── macOS entry point ──────────────────────────────────────────
+
+#if defined(__APPLE__)
+
+// Implemented in platform/AppMain.mm — sets up NSApplication,
+// creates an NSApp delegate that calls the supplied callbacks
+// for applicationDidFinishLaunching and applicationWillTerminate,
+// then runs [NSApp run].
+extern void dc_runNSApplication (std::function<void()> onReady,
+                                 std::function<void()> onTerminate);
+
+int main (int /*argc*/, char* /*argv*/[])
 {
-public:
-    const juce::String getApplicationName() override    { return JUCE_APPLICATION_NAME_STRING; }    // JUCE API boundary
-    const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; } // JUCE API boundary
+    // Pointers kept alive across the NSApplication run loop.
+    // Created in onReady, torn down in onTerminate.
+    std::unique_ptr<dc::platform::NativeWindow> nativeWindow;
+    std::unique_ptr<dc::gfx::GpuBackend>        gpuBackend;
+    std::unique_ptr<dc::gfx::Renderer>           renderer;
+    std::unique_ptr<dc::ui::AppController>       appController;
+    std::unique_ptr<dc::gfx::EventDispatch>      eventDispatch;
+    std::unique_ptr<dc::platform::EventBridge>   eventBridge;
 
-    // JUCE's X11-based instance detection is unreliable on Wayland —
-    // it falsely detects a running instance and silently exits.
-    // Disable it on Linux; GLFW manages the actual window.
-    bool moreThanOneInstanceAllowed() override
-    {
-#if defined(__linux__)
-        return true;
-#else
-        return false;
-#endif
-    }
-
-    void initialise (const juce::String& /*commandLine*/) override // JUCE API boundary
-    {
-#if defined(__APPLE__)
-        // Create native Metal window (replaces JUCE MainWindow)
-        nativeWindow = std::make_unique<dc::platform::NativeWindow> ("Drem Canvas", 1280, 800);
-
-        // Create Skia Metal backend
-        gpuBackend = std::make_unique<dc::gfx::MetalBackend> (*nativeWindow->getMetalView());
-
-        // Create renderer
-        renderer = std::make_unique<dc::gfx::Renderer> (*gpuBackend);
-
-        // Create root widget (AppController)
-        appController = std::make_unique<dc::ui::AppController>();
-        appController->setRenderer (renderer.get());
-
-        // Set root widget bounds to window size
-        float w = static_cast<float> (nativeWindow->getWidth());
-        float h = static_cast<float> (nativeWindow->getHeight());
-        appController->setBounds (dc::gfx::Rect (0, 0, w, h));
-
-        // Create event dispatch with root widget
-        eventDispatch = std::make_unique<dc::gfx::EventDispatch> (*appController);
-
-        // Wire event bridge (connects MTKView events to EventDispatch)
-        eventBridge = std::make_unique<dc::platform::EventBridge> (
-            *nativeWindow->getMetalView(), *eventDispatch);
-
-        // Wire frame callback — Renderer drives the full frame loop
-        nativeWindow->getMetalView()->onFrame = [this]()
+    dc_runNSApplication (
+        // ── applicationDidFinishLaunching ──
+        [&]()
         {
-            renderer->renderFrame (*appController);
-        };
+            // Create native Metal window
+            nativeWindow = std::make_unique<dc::platform::NativeWindow> ("Drem Canvas", 1280, 800);
 
-        // Handle window resize
-        nativeWindow->onResize = [this] (int newW, int newH)
+            // Create Skia Metal backend
+            gpuBackend = std::make_unique<dc::gfx::MetalBackend> (*nativeWindow->getMetalView());
+
+            // Create renderer
+            renderer = std::make_unique<dc::gfx::Renderer> (*gpuBackend);
+
+            // Create root widget (AppController)
+            appController = std::make_unique<dc::ui::AppController>();
+            appController->setRenderer (renderer.get());
+
+            // Set root widget bounds to window size
+            float w = static_cast<float> (nativeWindow->getWidth());
+            float h = static_cast<float> (nativeWindow->getHeight());
+            appController->setBounds (dc::gfx::Rect (0, 0, w, h));
+
+            // Create event dispatch with root widget
+            eventDispatch = std::make_unique<dc::gfx::EventDispatch> (*appController);
+
+            // Wire event bridge (connects MTKView events to EventDispatch)
+            eventBridge = std::make_unique<dc::platform::EventBridge> (
+                *nativeWindow->getMetalView(), *eventDispatch);
+
+            // Wire frame callback — MTKView display-link drives rendering.
+            // tick() is called every frame for meter updates and message queue processing.
+            nativeWindow->getMetalView()->onFrame = [&]()
+            {
+                appController->tick();
+                renderer->renderFrame (*appController);
+            };
+
+            // Handle window resize
+            nativeWindow->onResize = [&] (int newW, int newH)
+            {
+                appController->setBounds (dc::gfx::Rect (0, 0,
+                    static_cast<float> (newW), static_cast<float> (newH)));
+                renderer->forceNextFrame();
+            };
+
+            // Handle window close — terminate the NSApplication run loop
+            nativeWindow->onClose = [&]()
+            {
+                // dc_runNSApplication is expected to call [NSApp terminate:nil]
+                // when the window close callback fires. The implementation can
+                // also simply post NSApplicationWillTerminateNotification.
+                // For now we leave the mechanics to the .mm helper.
+            };
+
+            // Pass native window handle for plugin editor compositing
+            appController->setNativeWindowHandle (nativeWindow->getNativeHandle());
+
+            // Initialize the audio engine and all UI
+            appController->initialise();
+
+            nativeWindow->show();
+        },
+
+        // ── applicationWillTerminate ──
+        [&]()
         {
-            appController->setBounds (dc::gfx::Rect (0, 0,
-                static_cast<float> (newW), static_cast<float> (newH)));
-            renderer->forceNextFrame();
-        };
+            // Tear down in reverse order
+            appController.reset();
+            eventBridge.reset();
+            eventDispatch.reset();
+            renderer.reset();
+            gpuBackend.reset();
+            nativeWindow.reset();
+        }
+    );
 
-        // Handle window close
-        nativeWindow->onClose = [this]()
-        {
-            systemRequestedQuit();
-        };
+    return 0;
+}
 
-        // Pass native window handle for plugin editor compositing
-        appController->setNativeWindowHandle (nativeWindow->getNativeHandle());
-
-        // Initialize the audio engine and all UI
-        appController->initialise();
-
-        nativeWindow->show();
+// ─── Linux entry point ──────────────────────────────────────────
 
 #elif defined(__linux__)
-        // Create GLFW window (Vulkan-ready, no GL context)
-        glfwWindow = std::make_unique<dc::platform::GlfwWindow> ("Drem Canvas", 1280, 800);
 
-        // Set window icon for X11 (Wayland uses the .desktop file instead)
-        auto exeDir = std::filesystem::canonical ("/proc/self/exe").parent_path();
-        auto iconFile = exeDir / "drem-canvas.png";
-        if (std::filesystem::exists (iconFile))
-            glfwWindow->setWindowIcon (iconFile.string());
+int main (int /*argc*/, char* /*argv*/[])
+{
+    // Create GLFW window
+    auto glfwWindow = std::make_unique<dc::platform::GlfwWindow> ("Drem Canvas", 1280, 800);
 
-        // Create Skia Vulkan backend
-        gpuBackend = std::make_unique<dc::platform::VulkanBackend> (
-            glfwWindow->getHandle(),
-            glfwWindow->getWidth(), glfwWindow->getHeight(),
-            glfwWindow->getScale());
+    // Set window icon for X11 (Wayland uses the .desktop file instead)
+    auto exeDir = std::filesystem::canonical ("/proc/self/exe").parent_path();
+    auto iconFile = exeDir / "drem-canvas.png";
+    if (std::filesystem::exists (iconFile))
+        glfwWindow->setWindowIcon (iconFile.string());
 
-        // Create renderer
-        renderer = std::make_unique<dc::gfx::Renderer> (*gpuBackend);
+    // Create Skia Vulkan backend
+    auto gpuBackend = std::make_unique<dc::platform::VulkanBackend> (
+        glfwWindow->getHandle(),
+        glfwWindow->getWidth(), glfwWindow->getHeight(),
+        glfwWindow->getScale());
 
-        // Create root widget (AppController)
-        appController = std::make_unique<dc::ui::AppController>();
-        appController->setRenderer (renderer.get());
+    auto renderer = std::make_unique<dc::gfx::Renderer> (*gpuBackend);
 
-        // Set root widget bounds to window size
-        float w = static_cast<float> (glfwWindow->getWidth());
-        float h = static_cast<float> (glfwWindow->getHeight());
-        appController->setBounds (dc::gfx::Rect (0, 0, w, h));
+    // Create root widget (AppController)
+    auto appController = std::make_unique<dc::ui::AppController>();
+    appController->setRenderer (renderer.get());
 
-        // Create event dispatch with root widget
-        eventDispatch = std::make_unique<dc::gfx::EventDispatch> (*appController);
+    float w = static_cast<float> (glfwWindow->getWidth());
+    float h = static_cast<float> (glfwWindow->getHeight());
+    appController->setBounds (dc::gfx::Rect (0, 0, w, h));
 
-        // Wire GLFW callbacks to EventDispatch
-        glfwWindow->onMouseDown = [this] (const dc::gfx::MouseEvent& e)
-        { eventDispatch->dispatchMouseDown (e); };
+    auto eventDispatch = std::make_unique<dc::gfx::EventDispatch> (*appController);
 
-        glfwWindow->onMouseUp = [this] (const dc::gfx::MouseEvent& e)
-        { eventDispatch->dispatchMouseUp (e); };
+    // Wire GLFW callbacks to EventDispatch
+    glfwWindow->onMouseDown = [&] (const dc::gfx::MouseEvent& e)
+    { eventDispatch->dispatchMouseDown (e); };
 
-        glfwWindow->onMouseMove = [this] (const dc::gfx::MouseEvent& e)
-        { eventDispatch->dispatchMouseMove (e); };
+    glfwWindow->onMouseUp = [&] (const dc::gfx::MouseEvent& e)
+    { eventDispatch->dispatchMouseUp (e); };
 
-        glfwWindow->onMouseDrag = [this] (const dc::gfx::MouseEvent& e)
-        { eventDispatch->dispatchMouseDrag (e); };
+    glfwWindow->onMouseMove = [&] (const dc::gfx::MouseEvent& e)
+    { eventDispatch->dispatchMouseMove (e); };
 
-        glfwWindow->onKeyDown = [this] (const dc::gfx::KeyEvent& e)
-        { eventDispatch->dispatchKeyDown (e); };
+    glfwWindow->onMouseDrag = [&] (const dc::gfx::MouseEvent& e)
+    { eventDispatch->dispatchMouseDrag (e); };
 
-        glfwWindow->onKeyUp = [this] (const dc::gfx::KeyEvent& e)
-        { eventDispatch->dispatchKeyUp (e); };
+    glfwWindow->onKeyDown = [&] (const dc::gfx::KeyEvent& e)
+    { eventDispatch->dispatchKeyDown (e); };
 
-        glfwWindow->onWheel = [this] (const dc::gfx::WheelEvent& e)
-        { eventDispatch->dispatchWheel (e); };
+    glfwWindow->onKeyUp = [&] (const dc::gfx::KeyEvent& e)
+    { eventDispatch->dispatchKeyUp (e); };
 
-        // Handle window resize
-        glfwWindow->onResize = [this] (int newW, int newH)
-        {
-            auto* vulkan = static_cast<dc::platform::VulkanBackend*> (gpuBackend.get());
-            vulkan->resize (newW, newH, glfwWindow->getScale());
-            appController->setBounds (dc::gfx::Rect (0, 0,
-                static_cast<float> (newW), static_cast<float> (newH)));
-            renderer->forceNextFrame();
-        };
+    glfwWindow->onWheel = [&] (const dc::gfx::WheelEvent& e)
+    { eventDispatch->dispatchWheel (e); };
 
-        // Handle window close
-        glfwWindow->onClose = [this]()
-        {
-            systemRequestedQuit();
-        };
-
-        // Pass native window handle for plugin editor compositing
-        appController->setNativeWindowHandle (glfwWindow->getHandle());
-
-        // Initialize the audio engine and all UI
-        appController->initialise();
-
-        glfwWindow->show();
-
-        // Start render loop via juce::Timer (60 Hz)
-        startTimerHz (60);
-#endif
-    }
-
-    void shutdown() override
+    // Handle window resize
+    glfwWindow->onResize = [&] (int newW, int newH)
     {
-#if defined(__linux__)
-        stopTimer();
-#endif
-        // Tear down in reverse order
-        appController.reset();
-#if defined(__APPLE__)
-        eventBridge.reset();
-#endif
-        eventDispatch.reset();
-        renderer.reset();
-        gpuBackend.reset();
-#if defined(__APPLE__)
-        nativeWindow.reset();
-#elif defined(__linux__)
-        glfwWindow.reset();
-#endif
-    }
+        auto* vulkan = static_cast<dc::platform::VulkanBackend*> (gpuBackend.get());
+        vulkan->resize (newW, newH, glfwWindow->getScale());
+        appController->setBounds (dc::gfx::Rect (0, 0,
+            static_cast<float> (newW), static_cast<float> (newH)));
+        renderer->forceNextFrame();
+    };
 
-    void systemRequestedQuit() override
-    {
-        quit();
-    }
+    bool shouldQuit = false;
+    glfwWindow->onClose = [&]() { shouldQuit = true; };
 
-#if defined(__linux__)
-    void timerCallback() override
+    // Pass native window handle for plugin editor compositing
+    appController->setNativeWindowHandle (glfwWindow->getHandle());
+
+    // Initialize the audio engine and all UI
+    appController->initialise();
+    glfwWindow->show();
+
+    // Main loop at ~60Hz (vsync-paced).
+    // GLFW pollEvents handles vsync pacing; tick() drives meter
+    // updates and message queue processing each frame.
+    while (! shouldQuit && ! glfwWindow->shouldClose())
     {
         glfwWindow->pollEvents();
+        appController->tick();
         renderer->renderFrame (*appController);
     }
-#endif
 
-private:
-#if defined(__APPLE__)
-    std::unique_ptr<dc::platform::NativeWindow> nativeWindow;
-    std::unique_ptr<dc::platform::EventBridge> eventBridge;
-#elif defined(__linux__)
-    std::unique_ptr<dc::platform::GlfwWindow> glfwWindow;
-#endif
-    std::unique_ptr<dc::gfx::GpuBackend> gpuBackend;
-    std::unique_ptr<dc::gfx::Renderer> renderer;
-    std::unique_ptr<dc::gfx::EventDispatch> eventDispatch;
-    std::unique_ptr<dc::ui::AppController> appController;
-};
+    // Tear down in reverse order
+    appController.reset();
+    eventDispatch.reset();
+    renderer.reset();
+    gpuBackend.reset();
+    glfwWindow.reset();
 
-START_JUCE_APPLICATION (DremCanvasApplication)
+    return 0;
+}
+
+#endif

@@ -37,7 +37,6 @@ AppController::~AppController()
 
     project.getState().removeListener (this);
 
-    stopTimer();
     midiEngine.shutdown();
     pluginWindowManager.closeAll();
     trackPluginChains.clear();
@@ -717,8 +716,8 @@ void AppController::initialise()
     if (arrangement.getNumTracks() > 0)
         arrangement.selectTrack (0);
 
-    // Start meter polling timer (30 Hz)
-    startTimerHz (30);
+    // Meter polling and message queue processing now driven by tick(),
+    // called from the platform render loop (~60 Hz).
 
     resized();
 }
@@ -1994,12 +1993,10 @@ void AppController::addMidiTrack (const std::string& name)
 void AppController::showAudioSettings()
 {
     auto deviceName = audioEngine.getCurrentDeviceName();
-    auto msg = juce::String ("Audio Device: ") + juce::String (deviceName)
-             + "\nSample Rate: " + juce::String (audioEngine.getSampleRate()) + " Hz"
-             + "\nBuffer Size: " + juce::String (audioEngine.getBufferSize()) + " samples";
-
-    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon,
-                                            "Audio Settings", msg);
+    auto msg = "Audio Device: " + deviceName
+             + "\nSample Rate: " + std::to_string (static_cast<int> (audioEngine.getSampleRate())) + " Hz"
+             + "\nBuffer Size: " + std::to_string (audioEngine.getBufferSize()) + " samples";
+    dc::platform::NativeDialogs::showAlert ("Audio Settings", msg);
 }
 
 // ─── Panel visibility ────────────────────────────────────────
@@ -2196,7 +2193,7 @@ void AppController::vimContextChanged()
     }
 }
 
-void AppController::timerCallback()
+void AppController::tick()
 {
     messageQueue.processAll();
 

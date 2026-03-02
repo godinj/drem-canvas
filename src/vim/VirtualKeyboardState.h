@@ -1,7 +1,7 @@
 #pragma once
 
+#include <cstdint>
 #include <set>
-#include <JuceHeader.h>
 #include "dc/foundation/listener_list.h"
 
 namespace dc
@@ -18,7 +18,7 @@ public:
 
     // Cubase-style two-row QWERTY → MIDI note mapping.
     // Returns -1 if key is not a piano key.
-    int keyToNote (juce_wchar key) const
+    int keyToNote (char32_t key) const
     {
         int semitone = -1;
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "graphics/core/Widget.h"
-#include <JuceHeader.h>
+#include <functional>
 
 namespace dc
 {

@@ -19,7 +19,7 @@ namespace dc {
 /// The audio thread drains the ring buffers via read(), which is lock-free
 /// and safe to call from the real-time thread.
 ///
-/// Replaces juce::AudioFormatReaderSource + juce::AudioTransportSource.
+/// Background disk reader with ring buffer for real-time playback.
 class DiskStreamer
 {
 public:

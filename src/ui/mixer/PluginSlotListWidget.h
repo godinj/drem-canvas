@@ -1,7 +1,6 @@
 #pragma once
 
 #include "graphics/core/Widget.h"
-#include <JuceHeader.h>
 #include <functional>
 #include <vector>
 #include <string>
