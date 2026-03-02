@@ -8,6 +8,7 @@
 #include "engine/TransportController.h"
 #include "graphics/core/Event.h"
 #include "vim/VirtualKeyboardState.h"
+#include "dc/midi/MidiMessage.h"
 #include "model/GridSystem.h"
 #include "dc/foundation/listener_list.h"
 #include <string>
@@ -134,7 +135,7 @@ public:
     std::function<void (int, int)> onPianoRollJumpCursor;  // absolute beatCol, noteRow (-1 = no change)
 
     // Live MIDI output callback (wired by AppController to selected MIDI track)
-    std::function<void (const juce::MidiMessage&)> onLiveMidiNote;
+    std::function<void (const dc::MidiMessage&)> onLiveMidiNote;
 
     // Keyboard state (public for widget access)
     VirtualKeyboardState& getKeyboardState() { return keyboardState; }

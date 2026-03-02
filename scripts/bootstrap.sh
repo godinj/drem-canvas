@@ -66,17 +66,21 @@ case "$OS" in
         pkg-config --exists glfw3 2>/dev/null || missing+=("glfw3")
         pkg-config --exists fontconfig 2>/dev/null || missing+=("fontconfig")
         pkg-config --exists alsa 2>/dev/null || missing+=("alsa")
+        # portaudio-2 is optional — CMake will FetchContent it if not found
+        if ! pkg-config --exists portaudio-2 2>/dev/null; then
+            echo "  Note: portaudio-2 not found — CMake will build from source"
+        fi
 
         if [ ${#missing[@]} -gt 0 ]; then
             echo "Error: Missing prerequisites: ${missing[*]}"
             echo ""
             echo "  Install on Debian/Ubuntu:"
             echo "    sudo apt install cmake ninja-build python3 libpng-dev \\"
-            echo "        libvulkan-dev libglfw3-dev libfontconfig-dev libasound2-dev"
+            echo "        libvulkan-dev libglfw3-dev libfontconfig-dev libasound2-dev portaudio19-dev"
             echo ""
             echo "  Install on Fedora:"
             echo "    sudo dnf install cmake ninja-build python3 libpng-devel \\"
-            echo "        vulkan-devel glfw-devel fontconfig-devel alsa-lib-devel"
+            echo "        vulkan-devel glfw-devel fontconfig-devel alsa-lib-devel portaudio-devel"
             exit 1
         fi
 

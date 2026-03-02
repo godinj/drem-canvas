@@ -6,7 +6,7 @@
 #include "WaveformWidget.h"
 #include "MidiClipWidget.h"
 #include "vim/VimContext.h"
-#include <JuceHeader.h>
+#include <JuceHeader.h>  // juce::ValueTree (Phase 3 migration)
 #include <vector>
 #include <memory>
 
@@ -59,7 +59,6 @@ private:
 
     static constexpr float headerWidth = 150.0f;
 
-    juce::AudioFormatManager formatManager;
     std::vector<std::unique_ptr<gfx::WaveformCache>> waveformCaches;
     std::vector<std::unique_ptr<gfx::Widget>> clipViews;
 };

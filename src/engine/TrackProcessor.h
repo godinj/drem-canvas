@@ -1,7 +1,9 @@
 #pragma once
 #include <JuceHeader.h>
 #include "TransportController.h"
+#include "dc/audio/DiskStreamer.h"
 #include <filesystem>
+#include <memory>
 
 namespace dc
 {
@@ -53,16 +55,15 @@ public:
 
 private:
     TransportController& transportController;
-    juce::AudioFormatManager formatManager;
-
-    std::unique_ptr<juce::AudioFormatReaderSource> readerSource;
-    juce::AudioTransportSource transportSource;
+    std::unique_ptr<dc::DiskStreamer> diskStreamer;
 
     std::atomic<float> gain { 1.0f };
     std::atomic<float> pan { 0.0f };
     std::atomic<bool> muted { false };
     std::atomic<float> peakLeft { 0.0f };
     std::atomic<float> peakRight { 0.0f };
+
+    int64_t lastSeekPosition = -1;
 
     TrackProcessor (const TrackProcessor&) = delete;
     TrackProcessor& operator= (const TrackProcessor&) = delete;

@@ -73,18 +73,18 @@ void MidiClipWidget::paint (gfx::Canvas& canvas)
 
         for (int i = 0; i < seq.getNumEvents(); ++i)
         {
-            const auto* event = seq.getEventPointer (i);
-            const auto& msg = event->message;
+            const auto& event = seq.getEvent (i);
+            const auto& msg = event.message;
 
             if (! msg.isNoteOn())
                 continue;
 
             int noteNum = msg.getNoteNumber();
-            double startBeat = msg.getTimeStamp() - trimOffsetBeats;
+            double startBeat = event.timeInBeats - trimOffsetBeats;
             double lengthBeats = 0.25;
 
-            if (event->noteOffObject != nullptr)
-                lengthBeats = event->noteOffObject->message.getTimeStamp() - msg.getTimeStamp();
+            if (event.matchedPairIndex >= 0)
+                lengthBeats = seq.getEvent (event.matchedPairIndex).timeInBeats - event.timeInBeats;
             if (lengthBeats <= 0.0)
                 lengthBeats = 0.25;
 

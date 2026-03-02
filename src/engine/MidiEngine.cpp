@@ -17,72 +17,67 @@ MidiEngine::~MidiEngine()
 
 void MidiEngine::initialise()
 {
-    auto devices = juce::MidiInput::getAvailableDevices();
+    auto devices = midiDeviceManager.getInputDevices();
 
     dc_log ("Available MIDI input devices:");
     for (const auto& device : devices)
-        fprintf (stderr, "[DC]   %s (%s)\n", device.name.toRawUTF8(), device.identifier.toRawUTF8());
+        fprintf (stderr, "[DC]   %d: %s\n", device.index, device.name.c_str());
 
-    if (devices.isEmpty())
+    if (devices.empty())
         dc_log ("No MIDI input devices found.");
 }
 
 void MidiEngine::shutdown()
 {
-    if (activeMidiInput != nullptr)
-    {
-        activeMidiInput->stop();
-        activeMidiInput.reset();
-    }
+    activeInputIndex = -1;
+    midiDeviceManager.closeAll();
 }
 
 std::vector<std::string> MidiEngine::getAvailableMidiInputs() const
 {
     std::vector<std::string> result;
-    for (const auto& device : juce::MidiInput::getAvailableDevices())
-        result.push_back (device.name.toStdString());
+    for (const auto& device : midiDeviceManager.getInputDevices())
+        result.push_back (device.name);
 
     return result;
 }
 
-void MidiEngine::setMidiInput (const std::string& deviceIdentifier)
+void MidiEngine::setMidiInput (const std::string& deviceName)
 {
     // Close existing input
-    if (activeMidiInput != nullptr)
+    if (activeInputIndex >= 0)
     {
-        activeMidiInput->stop();
-        activeMidiInput.reset();
+        midiDeviceManager.closeInput (activeInputIndex);
+        activeInputIndex = -1;
     }
 
-    // Find the device
-    auto devices = juce::MidiInput::getAvailableDevices();
+    // Find the device by name
+    auto devices = midiDeviceManager.getInputDevices();
     for (const auto& device : devices)
     {
-        if (device.identifier.toStdString() == deviceIdentifier || device.name.toStdString() == deviceIdentifier)
+        if (device.name == deviceName)
         {
-            activeMidiInput = juce::MidiInput::openDevice (device.identifier, this);
-
-            if (activeMidiInput != nullptr)
+            if (midiDeviceManager.openInput (device.index, this))
             {
-                activeMidiInput->start();
-                fprintf (stderr, "[DC] Opened MIDI input: %s\n", device.name.toRawUTF8());
+                activeInputIndex = device.index;
+                fprintf (stderr, "[DC] Opened MIDI input: %s\n", device.name.c_str());
             }
             else
             {
-                fprintf (stderr, "[DC] Failed to open MIDI input: %s\n", device.name.toRawUTF8());
+                fprintf (stderr, "[DC] Failed to open MIDI input: %s\n", device.name.c_str());
             }
 
             return;
         }
     }
 
-    fprintf (stderr, "[DC] MIDI input device not found: %s\n", deviceIdentifier.c_str());
+    fprintf (stderr, "[DC] MIDI input device not found: %s\n", deviceName.c_str());
 }
 
-void MidiEngine::setMidiInputEnabled (const std::string& deviceIdentifier, bool enabled)
+void MidiEngine::setMidiInputEnabled (const std::string& deviceName, bool enabled)
 {
     if (enabled)
-        setMidiInput (deviceIdentifier);
+        setMidiInput (deviceName);
     else
         shutdown();
 }
@@ -106,7 +101,7 @@ void MidiEngine::stopRecording()
     dc_log ("MIDI recording stopped.");
 }
 
-juce::MidiMessageSequence MidiEngine::getRecordedSequence() const
+MidiSequence MidiEngine::getRecordedSequence() const
 {
     std::lock_guard<std::mutex> lock (sequenceLock);
     return recordedSequence;
@@ -118,20 +113,17 @@ void MidiEngine::clearRecordedSequence()
     recordedSequence.clear();
 }
 
-void MidiEngine::handleIncomingMidiMessage (juce::MidiInput* /*source*/,
-                                             const juce::MidiMessage& message)
+void MidiEngine::handleMidiMessage (const dc::MidiMessage& message,
+                                      double /*timestamp*/)
 {
     if (recording.load())
     {
         double currentTime = dc::hiResTimeMs() / 1000.0;
-        double timestamp = currentTime - recordStartTime;
-
-        auto timestampedMessage = juce::MidiMessage (message);
-        timestampedMessage.setTimeStamp (timestamp);
+        double relativeTime = currentTime - recordStartTime;
 
         {
             std::lock_guard<std::mutex> lock (sequenceLock);
-            recordedSequence.addEvent (timestampedMessage);
+            recordedSequence.addEvent (message, relativeTime);
         }
     }
 

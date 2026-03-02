@@ -8,7 +8,7 @@ namespace dc
 class BounceProcessor
 {
 public:
-    BounceProcessor();
+    BounceProcessor() = default;
 
     struct BounceSettings
     {
@@ -25,8 +25,6 @@ public:
                  std::function<void (float progress)> progressCallback = nullptr);
 
 private:
-    juce::AudioFormatManager formatManager;
-
     BounceProcessor (const BounceProcessor&) = delete;
     BounceProcessor& operator= (const BounceProcessor&) = delete;
 };

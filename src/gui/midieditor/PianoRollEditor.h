@@ -2,6 +2,9 @@
 #include <JuceHeader.h>
 #include "NoteComponent.h"
 #include "PianoKeyboard.h"
+#include "dc/midi/MidiSequence.h"
+#include <memory>
+#include <vector>
 
 namespace dc
 {
@@ -11,8 +14,8 @@ class PianoRollEditor : public juce::Component
 public:
     PianoRollEditor();
 
-    void setMidiSequence (const juce::MidiMessageSequence& sequence, double lengthInBeats);
-    juce::MidiMessageSequence getMidiSequence() const;
+    void setMidiSequence (const dc::MidiSequence& sequence, double lengthInBeats);
+    dc::MidiSequence getMidiSequence() const;
 
     void paint (juce::Graphics& g) override;
     void resized() override;
@@ -34,8 +37,8 @@ private:
     int yToNote (float y) const;
     float noteToY (int note) const;
 
-    juce::MidiMessageSequence midiSequence;
-    juce::OwnedArray<NoteComponent> noteComponents;
+    dc::MidiSequence midiSequence;
+    std::vector<std::unique_ptr<NoteComponent>> noteComponents;
 
     PianoKeyboard keyboard;
 

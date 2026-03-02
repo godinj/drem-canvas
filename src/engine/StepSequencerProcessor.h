@@ -1,6 +1,8 @@
 #pragma once
 #include <JuceHeader.h>
 #include "TransportController.h"
+#include "dc/audio/AudioBlock.h"
+#include "dc/midi/MidiBuffer.h"
 #include <atomic>
 #include <array>
 
@@ -100,7 +102,7 @@ private:
     int numPendingNoteOffs = 0;
 
     void addNoteOff (int noteNumber, int channel, int64_t offSample);
-    void processNoteOffs (juce::MidiBuffer& midiMessages, int64_t blockStart, int numSamples);
+    void processNoteOffs (dc::MidiBuffer& dcMidi, int64_t blockStart, int numSamples);
 
     StepSequencerProcessor (const StepSequencerProcessor&) = delete;
     StepSequencerProcessor& operator= (const StepSequencerProcessor&) = delete;

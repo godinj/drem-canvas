@@ -22,9 +22,7 @@ MainComponent::MainComponent()
 
     // Initialise audio engine with stereo I/O
     audioEngine.initialise (2, 2);
-    transportController.setSampleRate (audioEngine.getDeviceManager().getCurrentAudioDevice()
-        ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentSampleRate()
-        : 44100.0);
+    transportController.setSampleRate (audioEngine.getSampleRate());
 
     // Create mix bus processor and add to graph
     mixBusNode = audioEngine.addProcessor (std::make_unique<MixBusProcessor> (transportController));
@@ -420,18 +418,13 @@ void MainComponent::resized()
 
 void MainComponent::showAudioSettings()
 {
-    auto* selector = new juce::AudioDeviceSelectorComponent (
-        audioEngine.getDeviceManager(), 0, 2, 0, 2, true, false, true, false);
-    selector->setSize (500, 400);
+    auto deviceName = audioEngine.getCurrentDeviceName();
+    auto msg = juce::String ("Audio Device: ") + juce::String (deviceName)
+             + "\nSample Rate: " + juce::String (audioEngine.getSampleRate()) + " Hz"
+             + "\nBuffer Size: " + juce::String (audioEngine.getBufferSize()) + " samples";
 
-    juce::DialogWindow::LaunchOptions options;
-    options.content.setOwned (selector);
-    options.dialogTitle = "Audio Settings";
-    options.dialogBackgroundColour = toJuce (0xff1e1e2e);
-    options.escapeKeyTriggersCloseButton = true;
-    options.useNativeTitleBar = true;
-    options.resizable = false;
-    options.launchAsync();
+    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon,
+                                            "Audio Settings", msg);
 }
 
 void MainComponent::openFile()
@@ -499,12 +492,8 @@ void MainComponent::rebuildAudioGraph()
     midiClipProcessors.clear();
     trackNodes.clear();
 
-    auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()
-                          ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentSampleRate()
-                          : 44100.0;
-    auto blockSize = audioEngine.getDeviceManager().getCurrentAudioDevice()
-                         ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentBufferSizeSamples()
-                         : 512;
+    auto sampleRate = audioEngine.getSampleRate();
+    auto blockSize = audioEngine.getBufferSize();
 
     // Create a processor for each track
     for (int i = 0; i < project.getNumTracks(); ++i)
@@ -1387,12 +1376,8 @@ void MainComponent::insertPluginOnMaster (const juce::PluginDescription& desc)
     chain.addChild (pluginNode, -1, &project.getUndoManager());
 
     // Async instantiate and add to graph
-    auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()
-                          ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentSampleRate()
-                          : 44100.0;
-    auto blockSize = audioEngine.getDeviceManager().getCurrentAudioDevice()
-                         ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentBufferSizeSamples()
-                         : 512;
+    auto sampleRate = audioEngine.getSampleRate();
+    auto blockSize = audioEngine.getBufferSize();
 
     pluginHost.createPluginAsync (desc, sampleRate, blockSize,
         [this] (std::unique_ptr<juce::AudioPluginInstance> instance, const std::string& errorMessage)
@@ -1429,12 +1414,8 @@ void MainComponent::insertPluginOnTrack (int trackIndex, const juce::PluginDescr
                      &project.getUndoManager());
 
     // Async instantiate and add to graph
-    auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()
-                          ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentSampleRate()
-                          : 44100.0;
-    auto blockSize = audioEngine.getDeviceManager().getCurrentAudioDevice()
-                         ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentBufferSizeSamples()
-                         : 512;
+    auto sampleRate = audioEngine.getSampleRate();
+    auto blockSize = audioEngine.getBufferSize();
 
     pluginHost.createPluginAsync (desc, sampleRate, blockSize,
         [this, trackIndex] (std::unique_ptr<juce::AudioPluginInstance> instance, const std::string& errorMessage)

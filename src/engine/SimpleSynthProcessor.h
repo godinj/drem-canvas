@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "MidiBridge.h"
 #include "dc/foundation/types.h"
 #include <array>
 #include <cmath>
@@ -35,16 +36,17 @@ public:
     {
         buffer.clear();
 
-        for (const auto metadata : midiMessages)
+        auto dcMidi = bridge::fromJuce (midiMessages);
+        for (auto it = dcMidi.begin(); it != dcMidi.end(); ++it)
         {
-            auto msg = metadata.getMessage();
-            int sample = metadata.samplePosition;
+            auto event = *it;
+            const auto& msg = event.message;
 
             if (msg.isNoteOn())
-                noteOn (msg.getNoteNumber(), msg.getFloatVelocity(), sample);
+                noteOn (msg.getNoteNumber(), msg.getVelocity(), event.sampleOffset);
             else if (msg.isNoteOff())
-                noteOff (msg.getNoteNumber(), sample);
-            else if (msg.isAllNotesOff() || msg.isAllSoundOff())
+                noteOff (msg.getNoteNumber(), event.sampleOffset);
+            else if (msg.isController() && (msg.getControllerNumber() == 123 || msg.getControllerNumber() == 120))
                 allNotesOff();
         }
 

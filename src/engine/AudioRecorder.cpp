@@ -1,18 +1,17 @@
 #include "AudioRecorder.h"
+#include "dc/audio/AudioFileWriter.h"
+#include <filesystem>
 
 namespace dc
 {
 
 AudioRecorder::AudioRecorder()
 {
-    formatManager.registerBasicFormats();
-    writerThread.startThread (juce::Thread::Priority::normal);
 }
 
 AudioRecorder::~AudioRecorder()
 {
     stopRecording();
-    writerThread.stopThread (1000);
 }
 
 bool AudioRecorder::startRecording (const std::filesystem::path& outputFile, double sampleRate,
@@ -30,31 +29,22 @@ bool AudioRecorder::startRecording (const std::filesystem::path& outputFile, dou
     if (std::filesystem::exists (outputFile))
         std::filesystem::remove (outputFile);
 
-    auto* wavFormat = formatManager.findFormatForFileExtension ("wav");
-    if (wavFormat == nullptr)
+    // Map bitsPerSample to dc::AudioFileWriter::Format
+    dc::AudioFileWriter::Format format;
+    switch (bitsPerSample)
+    {
+        case 16: format = dc::AudioFileWriter::Format::WAV_16; break;
+        case 32: format = dc::AudioFileWriter::Format::WAV_32F; break;
+        default: format = dc::AudioFileWriter::Format::WAV_24; break;
+    }
+
+    recorder = std::make_unique<dc::ThreadedRecorder>();
+
+    if (! recorder->start (outputFile, format, numChannels, sampleRate))
+    {
+        recorder.reset();
         return false;
-
-    auto fileStream = std::make_unique<juce::FileOutputStream> (juce::File (outputFile.string()));
-    if (fileStream->failedToOpen())
-        return false;
-
-    std::unique_ptr<juce::OutputStream> outputStream (std::move (fileStream));
-
-    auto options = juce::AudioFormatWriterOptions{}
-                       .withSampleRate (sampleRate)
-                       .withNumChannels (numChannels)
-                       .withBitsPerSample (bitsPerSample);
-
-    auto writer = wavFormat->createWriterFor (outputStream, options);
-
-    if (writer == nullptr)
-        return false;
-
-    // Wrap in a ThreadedWriter for lock-free writing from the audio thread.
-    // Buffer size of 48000 samples gives roughly 1 second of buffering at 48 kHz.
-    constexpr int bufferSize = 48000;
-    threadedWriter = std::make_unique<juce::AudioFormatWriter::ThreadedWriter> (
-        writer.release(), writerThread, bufferSize);
+    }
 
     recordedFile = outputFile;
     recordedSamples.store (0);
@@ -67,20 +57,21 @@ void AudioRecorder::stopRecording()
 {
     recording.store (false);
 
-    // Reset the threaded writer which flushes remaining samples and
-    // closes the underlying file writer.
-    threadedWriter.reset();
+    if (recorder)
+    {
+        recorder->stop();
+        recorder.reset();
+    }
 }
 
-void AudioRecorder::writeAudioBlock (const juce::AudioBuffer<float>& buffer, int numSamples)
+void AudioRecorder::writeAudioBlock (const dc::AudioBlock& block, int numSamples)
 {
     if (! recording.load())
         return;
 
-    if (threadedWriter != nullptr)
+    if (recorder)
     {
-        // ThreadedWriter::write expects a pointer array and a sample count.
-        threadedWriter->write (buffer.getArrayOfReadPointers(), numSamples);
+        recorder->write (block, numSamples);
         recordedSamples.fetch_add (static_cast<int64_t> (numSamples));
     }
 }

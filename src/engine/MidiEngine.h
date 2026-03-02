@@ -1,7 +1,11 @@
 #pragma once
-#include <JuceHeader.h>
+
+#include "dc/midi/MidiDeviceManager.h"
+#include "dc/midi/MidiSequence.h"
 #include "dc/foundation/message_queue.h"
+
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -9,7 +13,7 @@
 namespace dc
 {
 
-class MidiEngine : private juce::MidiInputCallback
+class MidiEngine : public MidiInputCallback
 {
 public:
     explicit MidiEngine (dc::MessageQueue& mq);
@@ -20,8 +24,8 @@ public:
 
     // Device management
     std::vector<std::string> getAvailableMidiInputs() const;
-    void setMidiInput (const std::string& deviceIdentifier);
-    void setMidiInputEnabled (const std::string& deviceIdentifier, bool enabled);
+    void setMidiInput (const std::string& deviceName);
+    void setMidiInputEnabled (const std::string& deviceName, bool enabled);
 
     // Recording
     void startRecording();
@@ -29,19 +33,22 @@ public:
     bool isRecording() const { return recording.load(); }
 
     // Get recorded MIDI data (call from message thread)
-    juce::MidiMessageSequence getRecordedSequence() const;
+    MidiSequence getRecordedSequence() const;
     void clearRecordedSequence();
 
     // Live MIDI output for monitoring
-    std::function<void (const juce::MidiMessage&)> onMidiMessage;
+    std::function<void (const dc::MidiMessage&)> onMidiMessage;
 
 private:
-    void handleIncomingMidiMessage (juce::MidiInput* source,
-                                    const juce::MidiMessage& message) override;
+    // dc::MidiInputCallback — called on RtMidi thread
+    void handleMidiMessage (const dc::MidiMessage& msg,
+                             double timestamp) override;
 
     dc::MessageQueue& messageQueue;
-    std::unique_ptr<juce::MidiInput> activeMidiInput;
-    juce::MidiMessageSequence recordedSequence;
+    MidiDeviceManager midiDeviceManager;
+    int activeInputIndex = -1;
+
+    MidiSequence recordedSequence;
     mutable std::mutex sequenceLock;
 
     std::atomic<bool> recording { false };

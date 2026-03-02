@@ -1,7 +1,8 @@
 #pragma once
-#include <JuceHeader.h>
+
 #include <filesystem>
 #include <string>
+#include <cstdint>
 
 namespace dc
 {
@@ -9,12 +10,7 @@ namespace dc
 class AudioFileUtils
 {
 public:
-    AudioFileUtils();
-
-    juce::AudioFormatManager& getFormatManager() { return formatManager; }
-
-    // Create a reader for an audio file (caller owns the returned pointer)
-    std::unique_ptr<juce::AudioFormatReader> createReaderFor (const std::filesystem::path& file);
+    AudioFileUtils() = default;
 
     // Get supported file extensions as wildcard string
     std::string getSupportedFileExtensions() const;
@@ -29,8 +25,6 @@ public:
     int64_t getFileLengthInSamples (const std::filesystem::path& file);
 
 private:
-    juce::AudioFormatManager formatManager;
-
     AudioFileUtils (const AudioFileUtils&) = delete;
     AudioFileUtils& operator= (const AudioFileUtils&) = delete;
 };

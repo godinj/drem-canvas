@@ -1,5 +1,8 @@
 #pragma once
 #include <JuceHeader.h>
+#include "dc/audio/AudioDeviceManager.h"
+#include <memory>
+#include <string>
 
 namespace dc
 {
@@ -13,7 +16,6 @@ public:
     void initialise (int numInputChannels, int numOutputChannels);
     void shutdown();
 
-    juce::AudioDeviceManager& getDeviceManager()    { return deviceManager; }
     juce::AudioProcessorGraph& getGraph()            { return *graph; }
 
     // Node management
@@ -25,10 +27,17 @@ public:
     juce::AudioProcessorGraph::Node::Ptr getAudioInputNode()  const { return audioInputNode; }
     juce::AudioProcessorGraph::Node::Ptr getAudioOutputNode() const { return audioOutputNode; }
 
+    // Device info accessors (replace getDeviceManager())
+    double getSampleRate() const;
+    int getBufferSize() const;
+    std::string getCurrentDeviceName() const;
+
 private:
-    juce::AudioDeviceManager deviceManager;
+    class GraphCallback;
+
+    std::unique_ptr<dc::AudioDeviceManager> deviceManager_;
     std::unique_ptr<juce::AudioProcessorGraph> graph;
-    juce::AudioProcessorPlayer player;
+    std::unique_ptr<GraphCallback> graphCallback_;
 
     juce::AudioProcessorGraph::Node::Ptr audioInputNode;
     juce::AudioProcessorGraph::Node::Ptr audioOutputNode;

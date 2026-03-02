@@ -1,7 +1,9 @@
 #pragma once
-#include <JuceHeader.h>
+#include "dc/audio/ThreadedRecorder.h"
+#include "dc/audio/AudioBlock.h"
 #include <atomic>
 #include <filesystem>
+#include <memory>
 
 namespace dc
 {
@@ -19,15 +21,13 @@ public:
     bool isRecording() const { return recording.load(); }
 
     // Call from audio callback to feed samples
-    void writeAudioBlock (const juce::AudioBuffer<float>& buffer, int numSamples);
+    void writeAudioBlock (const dc::AudioBlock& block, int numSamples);
 
     std::filesystem::path getRecordedFile() const { return recordedFile; }
     int64_t getRecordedSampleCount() const { return recordedSamples.load(); }
 
 private:
-    juce::AudioFormatManager formatManager;
-    std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> threadedWriter;
-    juce::TimeSliceThread writerThread { "AudioRecorderWriter" };
+    std::unique_ptr<dc::ThreadedRecorder> recorder;
 
     std::atomic<bool> recording { false };
     std::atomic<int64_t> recordedSamples { 0 };

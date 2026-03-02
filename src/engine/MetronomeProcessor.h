@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "TransportController.h"
+#include "dc/audio/AudioBlock.h"
 #include <atomic>
 
 namespace dc

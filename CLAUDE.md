@@ -53,13 +53,13 @@ Install before running `scripts/bootstrap.sh`:
 Debian/Ubuntu:
 ```bash
 sudo apt install cmake ninja-build python3 libpng-dev \
-    libvulkan-dev libglfw3-dev libfontconfig-dev libasound2-dev
+    libvulkan-dev libglfw3-dev libfontconfig-dev libasound2-dev portaudio19-dev
 ```
 
 Fedora:
 ```bash
 sudo dnf install cmake ninja-build python3 libpng-devel \
-    vulkan-devel glfw-devel fontconfig-devel alsa-lib-devel
+    vulkan-devel glfw-devel fontconfig-devel alsa-lib-devel portaudio-devel
 ```
 
 ### Wine Version Requirement (VST Plugins)

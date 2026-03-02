@@ -1,49 +1,40 @@
 #include "AudioFileUtils.h"
+#include "dc/audio/AudioFileReader.h"
 
 namespace dc
 {
 
-AudioFileUtils::AudioFileUtils()
-{
-    formatManager.registerBasicFormats();
-}
-
-std::unique_ptr<juce::AudioFormatReader> AudioFileUtils::createReaderFor (const std::filesystem::path& file)
-{
-    return std::unique_ptr<juce::AudioFormatReader> (formatManager.createReaderFor (juce::File (file.string())));
-}
-
 std::string AudioFileUtils::getSupportedFileExtensions() const
 {
-    return formatManager.getWildcardForAllFormats().toStdString();
+    return "*.wav;*.aiff;*.aif;*.flac;*.ogg;*.caf;*.w64;*.rf64";
 }
 
 double AudioFileUtils::getFileDuration (const std::filesystem::path& file)
 {
-    auto reader = createReaderFor (file);
+    auto reader = AudioFileReader::open (file);
 
     if (reader != nullptr)
-        return static_cast<double> (reader->lengthInSamples) / reader->sampleRate;
+        return static_cast<double> (reader->getLengthInSamples()) / reader->getSampleRate();
 
     return 0.0;
 }
 
 double AudioFileUtils::getFileSampleRate (const std::filesystem::path& file)
 {
-    auto reader = createReaderFor (file);
+    auto reader = AudioFileReader::open (file);
 
     if (reader != nullptr)
-        return reader->sampleRate;
+        return reader->getSampleRate();
 
     return 0.0;
 }
 
 int64_t AudioFileUtils::getFileLengthInSamples (const std::filesystem::path& file)
 {
-    auto reader = createReaderFor (file);
+    auto reader = AudioFileReader::open (file);
 
     if (reader != nullptr)
-        return reader->lengthInSamples;
+        return reader->getLengthInSamples();
 
     return 0;
 }

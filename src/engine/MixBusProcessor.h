@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <atomic>
 #include "TransportController.h"
+#include "dc/audio/AudioBlock.h"
 
 namespace dc
 {

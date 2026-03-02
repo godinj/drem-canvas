@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "Project.h"
+#include "dc/midi/MidiSequence.h"
 
 namespace dc
 {
@@ -17,9 +18,9 @@ public:
     int64_t getLength() const;
     void setLength (int64_t len, UndoManager* um = nullptr);
 
-    // MIDI data stored as base64-encoded MidiMessageSequence
-    juce::MidiMessageSequence getMidiSequence() const;
-    void setMidiSequence (const juce::MidiMessageSequence& seq, UndoManager* um = nullptr);
+    // MIDI data stored as base64-encoded binary
+    MidiSequence getMidiSequence() const;
+    void setMidiSequence (const MidiSequence& seq, UndoManager* um = nullptr);
 
     // Data bridge: NOTE children ←→ base64 midiData
     // expandNotesToChildren() decodes base64 into NOTE PropertyTree children for editing.

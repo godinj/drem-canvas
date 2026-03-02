@@ -1,4 +1,5 @@
 #include "TrackProcessor.h"
+#include "dc/audio/AudioBlock.h"
 #include "dc/foundation/types.h"
 #include <cmath>
 
@@ -10,80 +11,86 @@ TrackProcessor::TrackProcessor (TransportController& transport)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       transportController (transport)
 {
-    formatManager.registerBasicFormats();
 }
 
 TrackProcessor::~TrackProcessor()
 {
-    transportSource.setSource (nullptr);
-    readerSource.reset();
+    if (diskStreamer)
+    {
+        diskStreamer->stop();
+        diskStreamer.reset();
+    }
 }
 
 bool TrackProcessor::loadFile (const std::filesystem::path& file)
 {
-    auto* reader = formatManager.createReaderFor (juce::File (file.string())); // JUCE API boundary
+    clearFile();
 
-    if (reader == nullptr)
+    diskStreamer = std::make_unique<dc::DiskStreamer>();
+
+    if (! diskStreamer->open (file))
+    {
+        diskStreamer.reset();
         return false;
+    }
 
-    readerSource = std::make_unique<juce::AudioFormatReaderSource> (reader, true);
-    transportSource.setSource (readerSource.get(), 0, nullptr, reader->sampleRate);
-
+    diskStreamer->start();
+    lastSeekPosition = -1;
     return true;
 }
 
 void TrackProcessor::clearFile()
 {
-    transportSource.setSource (nullptr);
-    readerSource.reset();
+    if (diskStreamer)
+    {
+        diskStreamer->stop();
+        diskStreamer.reset();
+    }
+
+    lastSeekPosition = -1;
 }
 
-void TrackProcessor::prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock)
+void TrackProcessor::prepareToPlay (double /*sampleRate*/, int /*maximumExpectedSamplesPerBlock*/)
 {
-    transportSource.prepareToPlay (maximumExpectedSamplesPerBlock, sampleRate);
+    // DiskStreamer manages its own background thread — nothing to prepare
 }
 
 void TrackProcessor::releaseResources()
 {
-    transportSource.releaseResources();
+    if (diskStreamer)
+        diskStreamer->stop();
 }
 
 void TrackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midiMessages*/)
 {
-    if (muted.load())
+    if (muted.load() || diskStreamer == nullptr)
     {
         buffer.clear();
         return;
     }
 
-    // Sync transport source position with the transport controller
-    double sr = transportController.getSampleRate();
+    // Seek if transport position changed
+    int64_t posInSamples = transportController.getPositionInSamples();
 
-    if (sr > 0.0)
+    if (! transportController.isPlaying())
     {
-        double positionInSeconds = static_cast<double> (transportController.getPositionInSamples()) / sr;
-        double currentPos = transportSource.getCurrentPosition();
-
-        // Only seek if positions differ significantly (avoid constant seeking noise)
-        if (std::abs (currentPos - positionInSeconds) > 0.01)
-            transportSource.setPosition (positionInSeconds);
+        buffer.clear();
+        lastSeekPosition = -1;
+        return;
     }
 
-    // Start or stop the transport source based on transport controller state
-    if (transportController.isPlaying() && readerSource != nullptr)
-    {
-        if (! transportSource.isPlaying())
-            transportSource.start();
-    }
-    else
-    {
-        if (transportSource.isPlaying())
-            transportSource.stop();
-    }
+    // Seek on position mismatch (e.g. user scrub, loop, etc.)
+    if (lastSeekPosition < 0 || posInSamples != lastSeekPosition)
+        diskStreamer->seek (posInSamples);
 
-    // Get the next audio block from the transport source
-    juce::AudioSourceChannelInfo channelInfo (buffer);
-    transportSource.getNextAudioBlock (channelInfo);
+    // Read from DiskStreamer into the juce::AudioBuffer via dc::AudioBlock wrapper
+    dc::AudioBlock block (buffer.getArrayOfWritePointers(),
+                          buffer.getNumChannels(),
+                          buffer.getNumSamples());
+    block.clear();
+    diskStreamer->read (block, buffer.getNumSamples());
+
+    lastSeekPosition = posInSamples + buffer.getNumSamples();
 
     // Apply gain and pan
     float currentGain = gain.load();
@@ -121,8 +128,8 @@ void TrackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
 int64_t TrackProcessor::getFileLengthInSamples() const
 {
-    if (readerSource != nullptr)
-        return readerSource->getTotalLength();
+    if (diskStreamer)
+        return diskStreamer->getLengthInSamples();
 
     return 0;
 }

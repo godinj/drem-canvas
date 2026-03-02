@@ -1,4 +1,6 @@
 #include "MixBusProcessor.h"
+#include <algorithm>
+#include <cmath>
 
 namespace dc
 {
@@ -22,29 +24,41 @@ void MixBusProcessor::releaseResources()
 
 void MixBusProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midiMessages*/)
 {
-    transportController.advancePosition (buffer.getNumSamples());
+    dc::AudioBlock block (buffer.getArrayOfWritePointers(),
+                          buffer.getNumChannels(), buffer.getNumSamples());
+
+    transportController.advancePosition (block.getNumSamples());
 
     const float gain = masterGain.load();
+    const int numSamples = block.getNumSamples();
 
     // Apply master gain to all channels
-    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-        buffer.applyGain (ch, 0, buffer.getNumSamples(), gain);
-
-    // Calculate peak levels for left and right channels
-    if (buffer.getNumChannels() >= 1)
+    for (int ch = 0; ch < block.getNumChannels(); ++ch)
     {
-        const float magnitudeLeft = buffer.getMagnitude (0, 0, buffer.getNumSamples());
-        float oldPeak = peakLeft.load();
-        float newPeak = std::max (magnitudeLeft, oldPeak * 0.95f);
-        peakLeft.store (newPeak);
+        float* data = block.getChannel (ch);
+        for (int i = 0; i < numSamples; ++i)
+            data[i] *= gain;
     }
 
-    if (buffer.getNumChannels() >= 2)
+    // Calculate peak levels for left and right channels
+    if (block.getNumChannels() >= 1)
     {
-        const float magnitudeRight = buffer.getMagnitude (1, 0, buffer.getNumSamples());
+        const float* data = block.getChannel (0);
+        float mag = 0.0f;
+        for (int i = 0; i < numSamples; ++i)
+            mag = std::max (mag, std::abs (data[i]));
+        float oldPeak = peakLeft.load();
+        peakLeft.store (std::max (mag, oldPeak * 0.95f));
+    }
+
+    if (block.getNumChannels() >= 2)
+    {
+        const float* data = block.getChannel (1);
+        float mag = 0.0f;
+        for (int i = 0; i < numSamples; ++i)
+            mag = std::max (mag, std::abs (data[i]));
         float oldPeak = peakRight.load();
-        float newPeak = std::max (magnitudeRight, oldPeak * 0.95f);
-        peakRight.store (newPeak);
+        peakRight.store (std::max (mag, oldPeak * 0.95f));
     }
 }
 

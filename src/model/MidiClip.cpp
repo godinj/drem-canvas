@@ -1,5 +1,7 @@
 #include "MidiClip.h"
 #include "dc/foundation/assert.h"
+#include "dc/foundation/base64.h"
+#include "dc/midi/MidiMessage.h"
 
 namespace dc
 {
@@ -44,58 +46,25 @@ void MidiClip::setLength (int64_t len, UndoManager* um)
     state.setProperty (IDs::length, Variant (len), um);
 }
 
-juce::MidiMessageSequence MidiClip::getMidiSequence() const
+MidiSequence MidiClip::getMidiSequence() const
 {
-    juce::MidiMessageSequence result;
-
     std::string base64Data = state.getProperty (midiDataId).getStringOr ("");
     if (base64Data.empty())
-        return result;
+        return {};
 
-    juce::MemoryBlock block;
-    if (! block.fromBase64Encoding (base64Data))
-        return result;
+    auto binary = dc::base64Decode (base64Data);
+    if (binary.empty())
+        return {};
 
-    juce::MemoryInputStream stream (block, false);
-
-    while (! stream.isExhausted())
-    {
-        double timestamp = stream.readDouble();
-        int messageSize = stream.readInt();
-
-        if (messageSize <= 0 || messageSize > 1024)
-            break;
-
-        juce::MemoryBlock msgData ((size_t) messageSize);
-        if (stream.read (msgData.getData(), messageSize) != messageSize)
-            break;
-
-        auto msg = juce::MidiMessage (msgData.getData(), messageSize);
-        msg.setTimeStamp (timestamp);
-        result.addEvent (msg);
-    }
-
-    return result;
+    return MidiSequence::fromBinary (binary);
 }
 
-void MidiClip::setMidiSequence (const juce::MidiMessageSequence& seq, UndoManager* um)
+void MidiClip::setMidiSequence (const MidiSequence& seq, UndoManager* um)
 {
-    juce::MemoryOutputStream stream;
+    auto binary = seq.toBinary();
+    auto base64Data = dc::base64Encode (binary);
 
-    for (int i = 0; i < seq.getNumEvents(); ++i)
-    {
-        const auto* event = seq.getEventPointer (i);
-        const auto& msg = event->message;
-
-        stream.writeDouble (msg.getTimeStamp());
-        stream.writeInt (msg.getRawDataSize());
-        stream.write (msg.getRawData(), (size_t) msg.getRawDataSize());
-    }
-
-    juce::MemoryBlock block (stream.getData(), stream.getDataSize());
-    auto base64Data = block.toBase64Encoding();
-
-    state.setProperty (midiDataId, Variant (std::string (base64Data.toStdString())), um);
+    state.setProperty (midiDataId, Variant (base64Data), um);
 }
 
 void MidiClip::expandNotesToChildren()
@@ -109,22 +78,22 @@ void MidiClip::expandNotesToChildren()
             state.removeChild (i, nullptr);
     }
 
-    // Decode base64 → MidiMessageSequence → NOTE + CC_POINT children
+    // Decode base64 → MidiSequence → NOTE + CC_POINT children
     auto seq = getMidiSequence();
     seq.updateMatchedPairs();
 
     for (int i = 0; i < seq.getNumEvents(); ++i)
     {
-        const auto* event = seq.getEventPointer (i);
-        const auto& msg = event->message;
+        const auto& event = seq.getEvent (i);
+        const auto& msg = event.message;
 
         if (msg.isNoteOn())
         {
-            double startBeat = msg.getTimeStamp();
+            double startBeat = event.timeInBeats;
             double lengthBeats = 0.25; // default
 
-            if (event->noteOffObject != nullptr)
-                lengthBeats = event->noteOffObject->message.getTimeStamp() - startBeat;
+            if (event.matchedPairIndex >= 0)
+                lengthBeats = seq.getEvent (event.matchedPairIndex).timeInBeats - startBeat;
 
             if (lengthBeats <= 0.0)
                 lengthBeats = 0.25;
@@ -141,7 +110,7 @@ void MidiClip::expandNotesToChildren()
         {
             PropertyTree ccPoint (ccPointTypeId);
             ccPoint.setProperty (ccNumberPropId, Variant (msg.getControllerNumber()), nullptr);
-            ccPoint.setProperty (beatPropId, Variant (msg.getTimeStamp()), nullptr);
+            ccPoint.setProperty (beatPropId, Variant (event.timeInBeats), nullptr);
             ccPoint.setProperty (valuePropId, Variant (msg.getControllerValue()), nullptr);
 
             state.addChild (ccPoint, -1, nullptr);
@@ -151,7 +120,7 @@ void MidiClip::expandNotesToChildren()
 
 void MidiClip::collapseChildrenToMidiData (UndoManager* um)
 {
-    juce::MidiMessageSequence seq;
+    MidiSequence seq;
 
     for (int i = 0; i < state.getNumChildren(); ++i)
     {
@@ -164,13 +133,12 @@ void MidiClip::collapseChildrenToMidiData (UndoManager* um)
             auto lengthBeats = child.getProperty (lengthBeatsPropId).getDoubleOr (0.25);
             int vel = static_cast<int> (child.getProperty (velocityPropId).getIntOr (100));
 
-            auto noteOn = juce::MidiMessage::noteOn (1, noteNum, (juce::uint8) vel);
-            noteOn.setTimeStamp (startBeat);
-            seq.addEvent (noteOn);
+            float velocity = static_cast<float> (vel) / 127.0f;
+            auto noteOn = dc::MidiMessage::noteOn (1, noteNum, velocity);
+            seq.addEvent (noteOn, startBeat);
 
-            auto noteOff = juce::MidiMessage::noteOff (1, noteNum);
-            noteOff.setTimeStamp (startBeat + lengthBeats);
-            seq.addEvent (noteOff);
+            auto noteOff = dc::MidiMessage::noteOff (1, noteNum);
+            seq.addEvent (noteOff, startBeat + lengthBeats);
         }
         else if (child.getType() == ccPointTypeId)
         {
@@ -178,9 +146,8 @@ void MidiClip::collapseChildrenToMidiData (UndoManager* um)
             auto beat = child.getProperty (beatPropId).getDoubleOr (0.0);
             int value = static_cast<int> (child.getProperty (valuePropId).getIntOr (0));
 
-            auto ccMsg = juce::MidiMessage::controllerEvent (1, ccNum, value);
-            ccMsg.setTimeStamp (beat);
-            seq.addEvent (ccMsg);
+            auto ccMsg = dc::MidiMessage::controllerEvent (1, ccNum, value);
+            seq.addEvent (ccMsg, beat);
         }
     }
 

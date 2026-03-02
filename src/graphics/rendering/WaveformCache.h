@@ -1,11 +1,11 @@
 #pragma once
 
-#include <JuceHeader.h>
 #include <filesystem>
 #include <vector>
 #include <array>
 #include <mutex>
 #include <atomic>
+#include <cstdint>
 
 namespace dc
 {
@@ -34,11 +34,11 @@ public:
     WaveformCache();
     ~WaveformCache();
 
-    // Load from audio file (runs on background thread)
-    void loadFromFile (const std::filesystem::path& audioFile, juce::AudioFormatManager& formatManager);
+    // Load from audio file (uses dc::AudioFileReader)
+    void loadFromFile (const std::filesystem::path& audioFile);
 
-    // Load from existing audio buffer
-    void loadFromBuffer (const juce::AudioBuffer<float>& buffer, double sampleRate);
+    // Load from existing raw sample buffer (channel 0, mono)
+    void loadFromBuffer (const float* samples, int64_t numSamples, double sampleRate);
 
     // Get the best LOD for current zoom level
     const LODData* getLOD (double pixelsPerSecond, double sampleRate) const;

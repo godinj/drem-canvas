@@ -28,19 +28,22 @@ void MetronomeProcessor::releaseResources()
 void MetronomeProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                         juce::MidiBuffer& /*midiMessages*/)
 {
+    dc::AudioBlock block (buffer.getArrayOfWritePointers(),
+                          buffer.getNumChannels(), buffer.getNumSamples());
+
     if (! enabled.load() || ! transportController.isPlaying())
     {
-        buffer.clear();
+        block.clear();
         return;
     }
 
     const double currentTempo = tempo.load();
     const float currentVolume = volume.load();
-    const int numSamples = buffer.getNumSamples();
-    const int numChannels = buffer.getNumChannels();
+    const int numSamples = block.getNumSamples();
+    const int numChannels = block.getNumChannels();
     const int64_t posInSamples = transportController.getPositionInSamples();
 
-    buffer.clear();
+    block.clear();
 
     for (int sampleIdx = 0; sampleIdx < numSamples; ++sampleIdx)
     {
@@ -87,7 +90,7 @@ void MetronomeProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
             // Write to all channels
             for (int ch = 0; ch < numChannels; ++ch)
-                buffer.addSample (ch, sampleIdx, sample);
+                block.getChannel (ch)[sampleIdx] += sample;
 
             ++clickSamplePos;
         }

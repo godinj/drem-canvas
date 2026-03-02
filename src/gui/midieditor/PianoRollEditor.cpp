@@ -1,6 +1,7 @@
 #include "PianoRollEditor.h"
 #include "gui/common/ColourBridge.h"
 #include "dc/foundation/types.h"
+#include <algorithm>
 #include <cmath>
 
 using dc::bridge::toJuce;
@@ -14,7 +15,7 @@ PianoRollEditor::PianoRollEditor()
     keyboard.setNoteHeight (noteHeight);
 }
 
-void PianoRollEditor::setMidiSequence (const juce::MidiMessageSequence& sequence,
+void PianoRollEditor::setMidiSequence (const dc::MidiSequence& sequence,
                                         double lengthInBeats)
 {
     midiSequence = sequence;
@@ -24,24 +25,21 @@ void PianoRollEditor::setMidiSequence (const juce::MidiMessageSequence& sequence
     repaint();
 }
 
-juce::MidiMessageSequence PianoRollEditor::getMidiSequence() const
+dc::MidiSequence PianoRollEditor::getMidiSequence() const
 {
-    juce::MidiMessageSequence result;
+    dc::MidiSequence result;
 
-    for (auto* noteComp : noteComponents)
+    for (auto& noteComp : noteComponents)
     {
         int noteNum = noteComp->getNoteNumber();
         double startBeat = noteComp->getStartBeat();
         double lengthBeats = noteComp->getLengthInBeats();
         int vel = noteComp->getVelocity();
 
-        auto noteOn = juce::MidiMessage::noteOn (1, noteNum, static_cast<juce::uint8> (vel));
-        noteOn.setTimeStamp (startBeat);
-        result.addEvent (noteOn);
-
-        auto noteOff = juce::MidiMessage::noteOff (1, noteNum);
-        noteOff.setTimeStamp (startBeat + lengthBeats);
-        result.addEvent (noteOff);
+        result.addEvent (dc::MidiMessage::noteOn (1, noteNum, static_cast<float> (vel) / 127.0f),
+                         startBeat);
+        result.addEvent (dc::MidiMessage::noteOff (1, noteNum),
+                         startBeat + lengthBeats);
     }
 
     result.sort();
@@ -52,37 +50,39 @@ juce::MidiMessageSequence PianoRollEditor::getMidiSequence() const
 
 void PianoRollEditor::rebuildNoteComponents()
 {
+    for (auto& nc : noteComponents)
+        removeChildComponent (nc.get());
     noteComponents.clear();
 
     // Create a working copy so updateMatchedPairs doesn't modify the original
-    juce::MidiMessageSequence seq (midiSequence);
+    dc::MidiSequence seq = midiSequence;
     seq.updateMatchedPairs();
 
     for (int i = 0; i < seq.getNumEvents(); ++i)
     {
-        const auto* event = seq.getEventPointer (i);
-        const auto& msg = event->message;
+        const auto& evt = seq.getEvent (i);
+        const auto& msg = evt.message;
 
         if (msg.isNoteOn())
         {
             int noteNum = msg.getNoteNumber();
-            double startBeat = msg.getTimeStamp();
-            int vel = msg.getVelocity();
+            double startBeat = evt.timeInBeats;
+            int vel = static_cast<int> (msg.getVelocity() * 127.0f);
 
             double lengthBeats = 1.0; // Default length
 
-            if (event->noteOffObject != nullptr)
+            if (evt.matchedPairIndex >= 0)
             {
-                lengthBeats = event->noteOffObject->message.getTimeStamp() - startBeat;
+                lengthBeats = seq.getEvent (evt.matchedPairIndex).timeInBeats - startBeat;
                 if (lengthBeats <= 0.0)
                     lengthBeats = 1.0;
             }
 
-            auto* noteComp = new NoteComponent (noteNum, startBeat, lengthBeats, vel);
+            auto noteComp = std::make_unique<NoteComponent> (noteNum, startBeat, lengthBeats, vel);
             noteComp->onMoved = [this]() { resized(); repaint(); };
 
-            addAndMakeVisible (noteComp);
-            noteComponents.add (noteComp);
+            addAndMakeVisible (noteComp.get());
+            noteComponents.push_back (std::move (noteComp));
         }
     }
 }
@@ -144,7 +144,7 @@ void PianoRollEditor::resized()
     keyboard.setNoteHeight (noteHeight);
 
     // Position each note component in the grid area
-    for (auto* noteComp : noteComponents)
+    for (auto& noteComp : noteComponents)
     {
         float x = beatsToX (noteComp->getStartBeat());
         float y = noteToY (noteComp->getNoteNumber());
@@ -152,7 +152,7 @@ void PianoRollEditor::resized()
 
         noteComp->setBounds (static_cast<int> (x),
                              static_cast<int> (y),
-                             juce::jmax (4, static_cast<int> (w)),
+                             std::max (4, static_cast<int> (w)),
                              noteHeight);
     }
 }
@@ -175,18 +175,18 @@ void PianoRollEditor::mouseDown (const juce::MouseEvent& e)
             beat = std::floor (beat / snapSize) * snapSize;
         }
 
-        noteNum = juce::jlimit (0, 127, noteNum);
+        noteNum = std::clamp (noteNum, 0, 127);
 
         // Default note length: one grid division
         double noteLength = 1.0 / static_cast<double> (gridDivision);
         if (noteLength <= 0.0)
             noteLength = 1.0;
 
-        auto* noteComp = new NoteComponent (noteNum, beat, noteLength, 100);
+        auto noteComp = std::make_unique<NoteComponent> (noteNum, beat, noteLength, 100);
         noteComp->onMoved = [this]() { resized(); repaint(); };
 
-        addAndMakeVisible (noteComp);
-        noteComponents.add (noteComp);
+        addAndMakeVisible (noteComp.get());
+        noteComponents.push_back (std::move (noteComp));
 
         resized();
         repaint();
@@ -194,12 +194,12 @@ void PianoRollEditor::mouseDown (const juce::MouseEvent& e)
     else if (currentTool == Tool::Erase)
     {
         // Find and remove note at click position
-        for (int i = noteComponents.size() - 1; i >= 0; --i)
+        for (int i = static_cast<int> (noteComponents.size()) - 1; i >= 0; --i)
         {
-            if (noteComponents[i]->getBounds().contains (e.getPosition()))
+            if (noteComponents[static_cast<size_t> (i)]->getBounds().contains (e.getPosition()))
             {
-                removeChildComponent (noteComponents[i]);
-                noteComponents.remove (i);
+                removeChildComponent (noteComponents[static_cast<size_t> (i)].get());
+                noteComponents.erase (noteComponents.begin() + i);
                 repaint();
                 break;
             }

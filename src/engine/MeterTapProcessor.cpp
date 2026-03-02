@@ -1,4 +1,6 @@
 #include "MeterTapProcessor.h"
+#include <algorithm>
+#include <cmath>
 
 namespace dc
 {
@@ -22,17 +24,27 @@ void MeterTapProcessor::releaseResources()
 
 void MeterTapProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midiMessages*/)
 {
+    dc::AudioBlock block (buffer.getArrayOfWritePointers(),
+                          buffer.getNumChannels(), buffer.getNumSamples());
+    const int numSamples = block.getNumSamples();
+
     // Pass audio through unchanged — just measure peaks
-    if (buffer.getNumChannels() >= 1)
+    if (block.getNumChannels() >= 1)
     {
-        float mag = buffer.getMagnitude (0, 0, buffer.getNumSamples());
+        const float* data = block.getChannel (0);
+        float mag = 0.0f;
+        for (int i = 0; i < numSamples; ++i)
+            mag = std::max (mag, std::abs (data[i]));
         float old = peakLeft.load();
         peakLeft.store (std::max (mag, old * 0.95f));
     }
 
-    if (buffer.getNumChannels() >= 2)
+    if (block.getNumChannels() >= 2)
     {
-        float mag = buffer.getMagnitude (1, 0, buffer.getNumSamples());
+        const float* data = block.getChannel (1);
+        float mag = 0.0f;
+        for (int i = 0; i < numSamples; ++i)
+            mag = std::max (mag, std::abs (data[i]));
         float old = peakRight.load();
         peakRight.store (std::max (mag, old * 0.95f));
     }

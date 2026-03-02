@@ -1,6 +1,10 @@
 #pragma once
 #include <JuceHeader.h>
 #include "TransportController.h"
+#include "dc/midi/MidiMessage.h"
+#include "dc/midi/MidiBuffer.h"
+#include "dc/audio/AudioBlock.h"
+#include "dc/foundation/spsc_queue.h"
 #include <atomic>
 #include <array>
 
@@ -54,7 +58,7 @@ public:
     void updateSnapshot (const MidiTrackSnapshot& snapshot);
 
     // Inject a live MIDI message from the message thread (lock-free SPSC FIFO)
-    void injectLiveMidi (const juce::MidiMessage& msg);
+    void injectLiveMidi (const dc::MidiMessage& msg);
 
     // Tempo (called from message thread)
     void setTempo (double bpm) { tempo.store (bpm); }
@@ -87,11 +91,9 @@ private:
     std::atomic<float> peakRight { 0.0f };
 
     // Live MIDI injection FIFO (SPSC: message thread → audio thread)
-    static constexpr int liveMidiFifoSize = 256;
-    juce::AbstractFifo liveMidiFifo { liveMidiFifoSize };
-    std::array<juce::MidiMessage, liveMidiFifoSize> liveMidiBuffer;
+    dc::SPSCQueue<dc::MidiMessage> liveMidiFifo { 256 };
 
-    void drainLiveMidiFifo (juce::MidiBuffer& midiMessages);
+    void drainLiveMidiFifo (dc::MidiBuffer& dcMidi);
 
     // Note-off tracking
     struct PendingNoteOff
@@ -106,7 +108,7 @@ private:
     int numPendingNoteOffs = 0;
 
     void addNoteOff (int noteNumber, int channel, int64_t offSample);
-    void processNoteOffs (juce::MidiBuffer& midiMessages, int64_t blockStart, int numSamples);
+    void processNoteOffs (dc::MidiBuffer& dcMidi, int64_t blockStart, int numSamples);
 
     MidiClipProcessor (const MidiClipProcessor&) = delete;
     MidiClipProcessor& operator= (const MidiClipProcessor&) = delete;

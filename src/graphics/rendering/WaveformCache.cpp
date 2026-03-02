@@ -1,6 +1,8 @@
 #include "WaveformCache.h"
+#include "dc/audio/AudioFileReader.h"
 #include <cmath>
 #include <algorithm>
+#include <vector>
 
 namespace dc
 {
@@ -15,27 +17,35 @@ WaveformCache::~WaveformCache()
 {
 }
 
-void WaveformCache::loadFromFile (const std::filesystem::path& audioFile, juce::AudioFormatManager& formatManager)
+void WaveformCache::loadFromFile (const std::filesystem::path& audioFile)
 {
-    std::unique_ptr<juce::AudioFormatReader> reader (formatManager.createReaderFor (juce::File (audioFile.string())));
+    auto reader = dc::AudioFileReader::open (audioFile);
     if (!reader)
         return;
 
-    int64_t numSamples = static_cast<int64_t> (reader->lengthInSamples);
-    cachedSampleRate = reader->sampleRate;
+    int64_t numSamples = reader->getLengthInSamples();
+    cachedSampleRate = reader->getSampleRate();
+    int numChannels = reader->getNumChannels();
 
-    // Read into temporary buffer (channel 0 only for waveform display)
-    juce::AudioBuffer<float> buffer (1, static_cast<int> (std::min (numSamples, (int64_t) 10000000)));
-    reader->read (&buffer, 0, buffer.getNumSamples(), 0, true, false);
+    int64_t samplesToRead = std::min (numSamples, static_cast<int64_t> (10000000));
 
-    buildLODs (buffer.getReadPointer (0), buffer.getNumSamples());
+    // Read interleaved data
+    std::vector<float> interleaved (static_cast<size_t> (samplesToRead * numChannels));
+    int64_t framesRead = reader->read (interleaved.data(), 0, samplesToRead);
+
+    // Extract channel 0 by stepping every numChannels samples
+    std::vector<float> mono (static_cast<size_t> (framesRead));
+    for (int64_t i = 0; i < framesRead; ++i)
+        mono[static_cast<size_t> (i)] = interleaved[static_cast<size_t> (i * numChannels)];
+
+    buildLODs (mono.data(), framesRead);
 }
 
-void WaveformCache::loadFromBuffer (const juce::AudioBuffer<float>& buffer, double sampleRate)
+void WaveformCache::loadFromBuffer (const float* samples, int64_t numSamples, double sampleRate)
 {
     cachedSampleRate = sampleRate;
-    if (buffer.getNumChannels() > 0 && buffer.getNumSamples() > 0)
-        buildLODs (buffer.getReadPointer (0), buffer.getNumSamples());
+    if (samples != nullptr && numSamples > 0)
+        buildLODs (samples, numSamples);
 }
 
 void WaveformCache::buildLODs (const float* samples, int64_t numSamples)

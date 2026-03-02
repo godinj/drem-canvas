@@ -48,6 +48,41 @@ elseif(UNIX AND NOT APPLE)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GLFW REQUIRED glfw3)
     pkg_check_modules(FONTCONFIG REQUIRED fontconfig)
+    pkg_check_modules(SNDFILE REQUIRED sndfile)
+
+    # PortAudio: prefer system package, fall back to FetchContent
+    pkg_check_modules(PORTAUDIO portaudio-2)
+    if(PORTAUDIO_FOUND)
+        set(DC_PORTAUDIO_LINK ${PORTAUDIO_LIBRARIES})
+    else()
+        message(STATUS "System portaudio-2 not found — building from source via FetchContent")
+        FetchContent_Declare(
+            portaudio
+            GIT_REPOSITORY https://github.com/PortAudio/portaudio.git
+            GIT_TAG v19.7.0
+        )
+        set(PA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(PA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(portaudio)
+        set(DC_PORTAUDIO_LINK portaudio)
+    endif()
+
+    # RtMidi: prefer system package, fall back to FetchContent
+    pkg_check_modules(RTMIDI rtmidi)
+    if(RTMIDI_FOUND)
+        set(DC_RTMIDI_LINK ${RTMIDI_LIBRARIES})
+    else()
+        message(STATUS "System rtmidi not found — building from source via FetchContent")
+        set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+        set(RTMIDI_TARGETNAME_UNINSTALL "rtmidi_uninstall" CACHE STRING "" FORCE)
+        FetchContent_Declare(
+            rtmidi
+            GIT_REPOSITORY https://github.com/thestk/rtmidi.git
+            GIT_TAG 6.0.0
+        )
+        FetchContent_MakeAvailable(rtmidi)
+        set(DC_RTMIDI_LINK rtmidi)
+    endif()
     find_package(Threads REQUIRED)
     find_package(X11 REQUIRED)
     if(NOT X11_Xcomposite_FOUND)
@@ -92,6 +127,19 @@ target_sources(DremCanvas PRIVATE
     src/dc/model/Variant.cpp
     src/dc/model/UndoManager.cpp
     src/dc/model/PropertyTree.cpp
+
+    # dc::midi library
+    src/dc/midi/MidiMessage.cpp
+    src/dc/midi/MidiBuffer.cpp
+    src/dc/midi/MidiSequence.cpp
+    src/dc/midi/MidiDeviceManager.cpp
+
+    # dc::audio library
+    src/dc/audio/AudioFileReader.cpp
+    src/dc/audio/AudioFileWriter.cpp
+    src/dc/audio/DiskStreamer.cpp
+    src/dc/audio/ThreadedRecorder.cpp
+    src/dc/audio/PortAudioDeviceManager.cpp
 
     # Application entry point
     src/Main.cpp
@@ -290,6 +338,9 @@ if(UNIX AND NOT APPLE)
     target_include_directories(DremCanvas PRIVATE
         ${GLFW_INCLUDE_DIRS}
         ${FONTCONFIG_INCLUDE_DIRS}
+        ${SNDFILE_INCLUDE_DIRS}
+        ${PORTAUDIO_INCLUDE_DIRS}
+        ${RTMIDI_INCLUDE_DIRS}
     )
 endif()
 
@@ -367,6 +418,9 @@ elseif(UNIX AND NOT APPLE)
         Vulkan::Vulkan
         ${GLFW_LIBRARIES}
         ${FONTCONFIG_LIBRARIES}
+        ${SNDFILE_LIBRARIES}
+        ${DC_PORTAUDIO_LINK}
+        ${DC_RTMIDI_LINK}
         Threads::Threads
         X11::X11
         ${X11_Xcomposite_LIB}

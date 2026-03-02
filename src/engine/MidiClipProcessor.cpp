@@ -1,4 +1,5 @@
 #include "MidiClipProcessor.h"
+#include "MidiBridge.h"
 #include <cmath>
 
 namespace dc
@@ -21,44 +22,40 @@ void MidiClipProcessor::releaseResources()
 {
 }
 
-void MidiClipProcessor::injectLiveMidi (const juce::MidiMessage& msg)
+void MidiClipProcessor::injectLiveMidi (const dc::MidiMessage& msg)
 {
-    const auto scope = liveMidiFifo.write (1);
-    if (scope.blockSize1 > 0)
-        liveMidiBuffer[static_cast<size_t> (scope.startIndex1)] = msg;
-    else if (scope.blockSize2 > 0)
-        liveMidiBuffer[static_cast<size_t> (scope.startIndex2)] = msg;
+    liveMidiFifo.push (msg);
 }
 
-void MidiClipProcessor::drainLiveMidiFifo (juce::MidiBuffer& midiMessages)
+void MidiClipProcessor::drainLiveMidiFifo (dc::MidiBuffer& dcMidi)
 {
-    int numReady = liveMidiFifo.getNumReady();
-    if (numReady == 0)
-        return;
-
-    const auto scope = liveMidiFifo.read (numReady);
-    for (int i = 0; i < scope.blockSize1; ++i)
-        midiMessages.addEvent (liveMidiBuffer[static_cast<size_t> (scope.startIndex1 + i)], 0);
-    for (int i = 0; i < scope.blockSize2; ++i)
-        midiMessages.addEvent (liveMidiBuffer[static_cast<size_t> (scope.startIndex2 + i)], 0);
+    dc::MidiMessage msg;
+    while (liveMidiFifo.pop (msg))
+        dcMidi.addEvent (msg, 0);
 }
 
 void MidiClipProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                        juce::MidiBuffer& midiMessages)
 {
-    buffer.clear();
+    dc::AudioBlock block (buffer.getArrayOfWritePointers(),
+                          buffer.getNumChannels(), buffer.getNumSamples());
+    block.clear();
+
+    // Accumulate into dc::MidiBuffer, then convert to juce::MidiBuffer at the end
+    dc::MidiBuffer dcMidi;
 
     // Always drain live MIDI — allows playing even when transport is stopped
-    drainLiveMidiFifo (midiMessages);
+    drainLiveMidiFifo (dcMidi);
 
     if (! transportController.isPlaying())
     {
         // Send note-offs for any remaining notes
         for (int i = 0; i < numPendingNoteOffs; ++i)
-            midiMessages.addEvent (juce::MidiMessage::noteOff (pendingNoteOffs[i].channel,
-                                                                pendingNoteOffs[i].noteNumber),
-                                   0);
+            dcMidi.addEvent (dc::MidiMessage::noteOff (pendingNoteOffs[i].channel,
+                                                        pendingNoteOffs[i].noteNumber), 0);
         numPendingNoteOffs = 0;
+
+        bridge::toJuce (dcMidi, midiMessages);
         return;
     }
 
@@ -72,14 +69,17 @@ void MidiClipProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     const auto& snap = snapshots[readIndex.load()];
     if (snap.numEvents == 0)
+    {
+        bridge::toJuce (dcMidi, midiMessages);
         return;
+    }
 
-    const int numSamples = buffer.getNumSamples();
+    const int numSamples = block.getNumSamples();
     const int64_t blockStart = transportController.getPositionInSamples();
     const int64_t blockEnd = blockStart + numSamples;
 
     // Process pending note-offs first
-    processNoteOffs (midiMessages, blockStart, numSamples);
+    processNoteOffs (dcMidi, blockStart, numSamples);
 
     // Scan events for note-ons and note-offs in this block range
     for (int e = 0; e < snap.numEvents; ++e)
@@ -96,9 +96,9 @@ void MidiClipProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             int offset = static_cast<int> (evt.onSample - blockStart);
             int vel = std::clamp (evt.velocity, 1, 127);
 
-            midiMessages.addEvent (
-                juce::MidiMessage::noteOn (evt.channel, evt.noteNumber,
-                                           static_cast<uint8_t> (vel)),
+            dcMidi.addEvent (
+                dc::MidiMessage::noteOn (evt.channel, evt.noteNumber,
+                                          static_cast<float> (vel) / 127.0f),
                 offset);
 
             // Schedule note-off
@@ -109,11 +109,13 @@ void MidiClipProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         if (evt.onSample < blockStart && evt.offSample >= blockStart && evt.offSample < blockEnd)
         {
             int offset = static_cast<int> (evt.offSample - blockStart);
-            midiMessages.addEvent (
-                juce::MidiMessage::noteOff (evt.channel, evt.noteNumber),
+            dcMidi.addEvent (
+                dc::MidiMessage::noteOff (evt.channel, evt.noteNumber),
                 offset);
         }
     }
+
+    bridge::toJuce (dcMidi, midiMessages);
 }
 
 void MidiClipProcessor::updateSnapshot (const MidiTrackSnapshot& snapshot)
@@ -132,7 +134,7 @@ void MidiClipProcessor::addNoteOff (int noteNumber, int channel, int64_t offSamp
     }
 }
 
-void MidiClipProcessor::processNoteOffs (juce::MidiBuffer& midiMessages,
+void MidiClipProcessor::processNoteOffs (dc::MidiBuffer& dcMidi,
                                            int64_t blockStart, int numSamples)
 {
     int64_t blockEnd = blockStart + numSamples;
@@ -146,8 +148,8 @@ void MidiClipProcessor::processNoteOffs (juce::MidiBuffer& midiMessages,
         {
             int offset = static_cast<int> (std::max (noff.offSample - blockStart, int64_t (0)));
             offset = std::min (offset, numSamples - 1);
-            midiMessages.addEvent (
-                juce::MidiMessage::noteOff (noff.channel, noff.noteNumber),
+            dcMidi.addEvent (
+                dc::MidiMessage::noteOff (noff.channel, noff.noteNumber),
                 offset);
         }
         else

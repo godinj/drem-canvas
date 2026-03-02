@@ -70,6 +70,13 @@ case "$OS" in
         pkg-config --exists alsa 2>/dev/null
         check "alsa (pkg-config)" $?
 
+        if pkg-config --exists portaudio-2 2>/dev/null; then
+            check "portaudio-2 (system)" 0
+        else
+            printf "  [\033[33mFETCH\033[0m] %s\n" "portaudio-2 (not system — CMake will build from source)"
+            ((ok++))
+        fi
+
         # Wine version check — must be < 9.22 for yabridge plugin UIs
         if command -v wine &>/dev/null; then
             wine_ver="$(wine --version 2>/dev/null || echo 'unknown')"

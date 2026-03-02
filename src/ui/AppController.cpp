@@ -52,10 +52,7 @@ void AppController::initialise()
 {
     // Initialise audio engine with stereo I/O
     audioEngine.initialise (2, 2);
-    transportController.setSampleRate (
-        audioEngine.getDeviceManager().getCurrentAudioDevice()
-            ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentSampleRate()
-            : 44100.0);
+    transportController.setSampleRate (audioEngine.getSampleRate());
 
     // Create mix bus processor
     mixBusNode = audioEngine.addProcessor (std::make_unique<MixBusProcessor> (transportController));
@@ -101,7 +98,7 @@ void AppController::initialise()
     vimEngine->onCreateMidiTrack = [this] (const std::string& name) { addMidiTrack (name); };
 
     // Wire live MIDI keyboard output to selected MIDI track
-    vimEngine->onLiveMidiNote = [this] (const juce::MidiMessage& msg)
+    vimEngine->onLiveMidiNote = [this] (const dc::MidiMessage& msg)
     {
         int trackIndex = arrangement.getSelectedTrackIndex();
         if (trackIndex >= 0 && trackIndex < static_cast<int> (midiClipProcessors.size()))
@@ -579,7 +576,7 @@ void AppController::initialise()
 
     // Wire MIDI recording: when piano roll is open and recording,
     // incoming MIDI notes create notes in real-time
-    midiEngine.onMidiMessage = [this] (const juce::MidiMessage& msg)
+    midiEngine.onMidiMessage = [this] (const dc::MidiMessage& msg)
     {
         if (! pianoRollWidget || ! pianoRollWidget->isVisible())
             return;
@@ -607,7 +604,7 @@ void AppController::initialise()
             {
                 MidiClip clip (clipState);
                 clip.addNote (msg.getNoteNumber(), relativeBeat, 0.25,
-                              msg.getVelocity(), &project.getUndoManager());
+                              msg.getRawVelocity(), &project.getUndoManager());
             }
         }
     };
@@ -1372,12 +1369,8 @@ void AppController::rebuildAudioGraph()
     midiClipProcessors.clear();
     trackNodes.clear();
 
-    auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()
-                          ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentSampleRate()
-                          : 44100.0;
-    auto blockSize = audioEngine.getDeviceManager().getCurrentAudioDevice()
-                         ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentBufferSizeSamples()
-                         : 512;
+    auto sampleRate = audioEngine.getSampleRate();
+    auto blockSize = audioEngine.getBufferSize();
 
     // Create a processor for each track
     for (int i = 0; i < project.getNumTracks(); ++i)
@@ -1629,8 +1622,8 @@ void AppController::syncMidiClipFromModel (int trackIndex)
 
         for (int e = 0; e < seq.getNumEvents(); ++e)
         {
-            const auto* event = seq.getEventPointer (e);
-            const auto& msg = event->message;
+            const auto& event = seq.getEvent (e);
+            const auto& msg = event.message;
 
             if (! msg.isNoteOn())
                 continue;
@@ -1639,14 +1632,14 @@ void AppController::syncMidiClipFromModel (int trackIndex)
                 break;
 
             // Timestamps are in beats
-            double onBeat = msg.getTimeStamp();
+            double onBeat = event.timeInBeats;
             int64_t onSample = clipStartSample
                 + static_cast<int64_t> (onBeat * 60.0 / currentTempo * sr);
 
             int64_t offSample = onSample;
-            if (event->noteOffObject != nullptr)
+            if (event.matchedPairIndex >= 0)
             {
-                double offBeat = event->noteOffObject->message.getTimeStamp();
+                double offBeat = seq.getEvent (event.matchedPairIndex).timeInBeats;
                 offSample = clipStartSample
                     + static_cast<int64_t> (offBeat * 60.0 / currentTempo * sr);
             }
@@ -1659,7 +1652,7 @@ void AppController::syncMidiClipFromModel (int trackIndex)
             auto& evt = snapshot.events[snapshot.numEvents++];
             evt.noteNumber = msg.getNoteNumber();
             evt.channel    = msg.getChannel();
-            evt.velocity   = msg.getVelocity();
+            evt.velocity   = msg.getRawVelocity();
             evt.onSample   = onSample;
             evt.offSample  = offSample;
         }
@@ -1868,12 +1861,8 @@ void AppController::insertPluginOnTrack (int trackIndex, const juce::PluginDescr
                      desc.uniqueId, desc.fileOrIdentifier.toStdString(),
                      &project.getUndoManager());
 
-    auto sampleRate = audioEngine.getDeviceManager().getCurrentAudioDevice()
-                          ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentSampleRate()
-                          : 44100.0;
-    auto blockSize = audioEngine.getDeviceManager().getCurrentAudioDevice()
-                         ? audioEngine.getDeviceManager().getCurrentAudioDevice()->getCurrentBufferSizeSamples()
-                         : 512;
+    auto sampleRate = audioEngine.getSampleRate();
+    auto blockSize = audioEngine.getBufferSize();
 
     pluginHost.createPluginAsync (desc, sampleRate, blockSize,
         [this, trackIndex] (std::unique_ptr<juce::AudioPluginInstance> instance, const std::string& errorMessage)
@@ -2029,18 +2018,13 @@ void AppController::addMidiTrack (const std::string& name)
 
 void AppController::showAudioSettings()
 {
-    auto* selector = new juce::AudioDeviceSelectorComponent (
-        audioEngine.getDeviceManager(), 0, 2, 0, 2, true, false, true, false);
-    selector->setSize (500, 400);
+    auto deviceName = audioEngine.getCurrentDeviceName();
+    auto msg = juce::String ("Audio Device: ") + juce::String (deviceName)
+             + "\nSample Rate: " + juce::String (audioEngine.getSampleRate()) + " Hz"
+             + "\nBuffer Size: " + juce::String (audioEngine.getBufferSize()) + " samples";
 
-    juce::DialogWindow::LaunchOptions options;
-    options.content.setOwned (selector);
-    options.dialogTitle = "Audio Settings";
-    options.dialogBackgroundColour = decltype(options.dialogBackgroundColour) (0xff1e1e2eu);
-    options.escapeKeyTriggersCloseButton = true;
-    options.useNativeTitleBar = true;
-    options.resizable = false;
-    options.launchAsync();
+    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon,
+                                            "Audio Settings", msg);
 }
 
 // ─── Panel visibility ────────────────────────────────────────

@@ -14,7 +14,6 @@ namespace ui
 TrackLaneWidget::TrackLaneWidget (const PropertyTree& state)
     : trackState (state)
 {
-    formatManager.registerBasicFormats();
 }
 
 void TrackLaneWidget::paint (gfx::Canvas& canvas)
@@ -329,7 +328,7 @@ void TrackLaneWidget::rebuildClipViews()
             {
                 std::filesystem::path sourceFile (sourceFilePath);
                 if (std::filesystem::exists (sourceFile) && std::filesystem::is_regular_file (sourceFile))
-                    cache->loadFromFile (sourceFile, formatManager);
+                    cache->loadFromFile (sourceFile);
             }
 
             auto waveformWidget = std::make_unique<WaveformWidget>();

@@ -3046,7 +3046,7 @@ void VimEngine::exitKeyboardMode()
     for (int note : keyboardState.heldNotes)
     {
         if (onLiveMidiNote)
-            onLiveMidiNote (juce::MidiMessage::noteOff (keyboardState.midiChannel, note));
+            onLiveMidiNote (dc::MidiMessage::noteOff (keyboardState.midiChannel, note));
     }
     keyboardState.heldNotes.clear();
     keyboardState.notifyListeners();
@@ -3104,8 +3104,8 @@ bool VimEngine::handleKeyboardKey (const juce::KeyPress& key)
         keyboardState.heldNotes.insert (note);
 
         if (onLiveMidiNote)
-            onLiveMidiNote (juce::MidiMessage::noteOn (keyboardState.midiChannel, note,
-                                                        static_cast<uint8_t> (keyboardState.velocity)));
+            onLiveMidiNote (dc::MidiMessage::noteOn (keyboardState.midiChannel, note,
+                                                      static_cast<float> (keyboardState.velocity) / 127.0f));
 
         keyboardState.notifyListeners();
         return true;
@@ -3133,7 +3133,7 @@ bool VimEngine::handleKeyUp (const gfx::KeyEvent& event)
         keyboardState.heldNotes.erase (note);
 
         if (onLiveMidiNote)
-            onLiveMidiNote (juce::MidiMessage::noteOff (keyboardState.midiChannel, note));
+            onLiveMidiNote (dc::MidiMessage::noteOff (keyboardState.midiChannel, note));
 
         keyboardState.notifyListeners();
         return true;

@@ -1,12 +1,12 @@
 #include "BounceProcessor.h"
+#include "dc/audio/AudioFileWriter.h"
+#include "dc/audio/AudioBlock.h"
+#include "dc/midi/MidiBuffer.h"
+#include "MidiBridge.h"
+#include <vector>
 
 namespace dc
 {
-
-BounceProcessor::BounceProcessor()
-{
-    formatManager.registerBasicFormats();
-}
 
 bool BounceProcessor::bounce (juce::AudioProcessorGraph& graph,
                               const BounceSettings& settings,
@@ -22,27 +22,21 @@ bool BounceProcessor::bounce (juce::AudioProcessorGraph& graph,
     if (std::filesystem::exists (settings.outputFile))
         std::filesystem::remove (settings.outputFile);
 
-    auto* wavFormat = formatManager.findFormatForFileExtension ("wav");
-    if (wavFormat == nullptr)
-        return false;
-
     const int numChannels = graph.getMainBusNumOutputChannels();
     if (numChannels <= 0)
         return false;
 
-    auto fileStream = std::make_unique<juce::FileOutputStream> (juce::File (settings.outputFile.string()));
-    if (fileStream->failedToOpen())
-        return false;
+    // Map bitsPerSample to dc::AudioFileWriter::Format
+    AudioFileWriter::Format format;
+    switch (settings.bitsPerSample)
+    {
+        case 16: format = AudioFileWriter::Format::WAV_16; break;
+        case 32: format = AudioFileWriter::Format::WAV_32F; break;
+        default: format = AudioFileWriter::Format::WAV_24; break;
+    }
 
-    std::unique_ptr<juce::OutputStream> outputStream (std::move (fileStream));
-
-    auto options = juce::AudioFormatWriterOptions{}
-                       .withSampleRate (settings.sampleRate)
-                       .withNumChannels (numChannels)
-                       .withBitsPerSample (settings.bitsPerSample);
-
-    auto writer = wavFormat->createWriterFor (outputStream, options);
-
+    auto writer = AudioFileWriter::create (settings.outputFile, format,
+                                           numChannels, settings.sampleRate);
     if (writer == nullptr)
         return false;
 
@@ -55,8 +49,11 @@ bool BounceProcessor::bounce (juce::AudioProcessorGraph& graph,
                                 blockSize);
     graph.prepareToPlay (settings.sampleRate, blockSize);
 
-    juce::AudioBuffer<float> buffer (numChannels, blockSize);
-    juce::MidiBuffer midiBuffer;
+    // Allocate channel data — dc::AudioBlock is the primary representation
+    std::vector<float> channelStorage (static_cast<size_t> (numChannels * blockSize), 0.0f);
+    std::vector<float*> channelPtrs (static_cast<size_t> (numChannels));
+    for (int ch = 0; ch < numChannels; ++ch)
+        channelPtrs[static_cast<size_t> (ch)] = channelStorage.data() + ch * blockSize;
 
     int64_t samplesRemaining = settings.lengthInSamples;
     int64_t samplesProcessed = 0;
@@ -66,13 +63,19 @@ bool BounceProcessor::bounce (juce::AudioProcessorGraph& graph,
         const int samplesToProcess = static_cast<int> (
             std::min (static_cast<int64_t> (blockSize), samplesRemaining));
 
-        buffer.clear();
-        midiBuffer.clear();
+        dc::AudioBlock block (channelPtrs.data(), numChannels, blockSize);
+        block.clear();
 
-        graph.processBlock (buffer, midiBuffer);
+        dc::MidiBuffer dcMidi;
 
-        // Write only the samples we need (handles the final partial block)
-        writer->writeFromAudioSampleBuffer (buffer, 0, samplesToProcess);
+        // Wrap to juce types at the graph.processBlock() boundary (Phase 3)
+        juce::AudioBuffer<float> juceBuffer (channelPtrs.data(), numChannels, blockSize);
+        juce::MidiBuffer juceMidi;
+        graph.processBlock (juceBuffer, juceMidi);
+
+        // Write using dc::AudioBlock
+        dc::AudioBlock outBlock (channelPtrs.data(), numChannels, samplesToProcess);
+        writer->write (outBlock, samplesToProcess);
 
         samplesProcessed += samplesToProcess;
         samplesRemaining -= samplesToProcess;
@@ -84,6 +87,8 @@ bool BounceProcessor::bounce (juce::AudioProcessorGraph& graph,
             progressCallback (progress);
         }
     }
+
+    writer->close();
 
     // Clean up the graph
     graph.releaseResources();
