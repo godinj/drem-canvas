@@ -881,6 +881,13 @@ void PluginInstance::setState (const std::vector<uint8_t>& data)
     if (component_ == nullptr || data.size() < 4)
         return;
 
+    // VST3 spec requires IComponent::setState to be called while the plugin
+    // is NOT active/processing.  Deactivate before restoring state, and
+    // always reactivate afterwards — even if setState fails.
+    if (processor_ != nullptr)
+        processor_->setProcessing (false);
+    component_->setActive (false);
+
     // Parse: [4 bytes componentSize][componentData][controllerData]
     uint32_t componentSize = 0;
     std::memcpy (&componentSize, data.data(), 4);
@@ -899,13 +906,15 @@ void PluginInstance::setState (const std::vector<uint8_t>& data)
         stream->release();
 
         if (result == Steinberg::kResultOk)
-        {
             dc_log ("PluginInstance::setState: raw pass-through succeeded");
-            return;
-        }
+        else
+            dc_log ("PluginInstance::setState: raw pass-through also failed — "
+                    "state will not be restored (likely legacy JUCE format)");
 
-        dc_log ("PluginInstance::setState: raw pass-through also failed — "
-                "state will not be restored (likely legacy JUCE format)");
+        // Reactivate regardless of success or failure
+        component_->setActive (true);
+        if (processor_ != nullptr)
+            processor_->setProcessing (true);
         return;
     }
 
@@ -937,6 +946,11 @@ void PluginInstance::setState (const std::vector<uint8_t>& data)
         controller_->setState (controllerStream);
         controllerStream->release();
     }
+
+    // Reactivate after state restoration
+    component_->setActive (true);
+    if (processor_ != nullptr)
+        processor_->setProcessing (true);
 }
 
 // ─── Editor ──────────────────────────────────────────────────────────────

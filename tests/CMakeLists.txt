@@ -39,6 +39,7 @@ add_executable(dc_unit_tests
     regression/issue_001_uid_from_file_path.cpp
     regression/issue_001_multi_yabridge_load.cpp
     regression/issue_002_juce_state_format.cpp
+    regression/issue_003_set_state_deactivation.cpp
 
     # Phase 8: higher-level model tests (JUCE-free classes only)
     unit/model_layer/test_tempo_map.cpp
