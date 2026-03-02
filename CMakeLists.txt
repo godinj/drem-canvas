@@ -24,6 +24,19 @@ set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(yaml-cpp)
 
+# ─── VST3 SDK (plugin hosting) ───────────────────────────────
+FetchContent_Declare(
+    vst3sdk
+    GIT_REPOSITORY https://github.com/steinbergmedia/vst3sdk.git
+    GIT_TAG v3.7.11_build_10
+    GIT_SHALLOW TRUE
+)
+FetchContent_GetProperties(vst3sdk)
+if(NOT vst3sdk_POPULATED)
+    FetchContent_Populate(vst3sdk)
+endif()
+set(VST3_SDK_DIR "${vst3sdk_SOURCE_DIR}")
+
 # ─── Skia ─────────────────────────────────────────────────────
 set(SKIA_DIR "${CMAKE_SOURCE_DIR}/libs/skia")
 find_library(SKIA_LIB skia PATHS "${SKIA_DIR}/lib" NO_DEFAULT_PATH)
@@ -186,6 +199,12 @@ add_executable(DremCanvas
     src/dc/plugins/PluginEditor.cpp
     src/dc/plugins/VST3Host.cpp
 
+    # VST3 SDK base (IID definitions)
+    "${VST3_SDK_DIR}/pluginterfaces/base/coreiids.cpp"
+    "${VST3_SDK_DIR}/pluginterfaces/base/funknown.cpp"
+    "${VST3_SDK_DIR}/public.sdk/source/vst/vstinitiids.cpp"
+    "${VST3_SDK_DIR}/public.sdk/source/common/commoniids.cpp"
+
     # Application entry point
     src/Main.cpp
 
@@ -220,6 +239,9 @@ add_executable(DremCanvas
     src/plugins/ParameterFinderScanner.cpp
     src/plugins/PluginEditorBridge.cpp
     src/plugins/SyntheticInputProbe.cpp
+    src/plugins/SpatialScanCache.cpp
+    src/plugins/SyntheticMouseDrag.cpp
+    src/plugins/MouseEventForwarder.cpp
 
     # Vim
     src/vim/VimContext.cpp
@@ -340,6 +362,8 @@ elseif(UNIX AND NOT APPLE)
         src/platform/linux/X11MouseProbe.cpp
         src/platform/linux/X11PluginEditorBridge.cpp
         src/platform/linux/X11SyntheticInputProbe.cpp
+        src/platform/linux/X11SyntheticMouseDrag.cpp
+        src/platform/linux/X11MouseEventForwarder.cpp
     )
 endif()
 
@@ -369,6 +393,7 @@ target_include_directories(DremCanvas PRIVATE
     src
     "${SKIA_DIR}/include"
     "${SKIA_DIR}"
+    "${VST3_SDK_DIR}"
 )
 
 # ─── Platform-specific include directories ────────────────────
