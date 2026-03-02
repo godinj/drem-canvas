@@ -288,6 +288,7 @@ add_executable(DremCanvas
     src/graphics/widgets/ScrollViewWidget.cpp
     src/graphics/widgets/ListBoxWidget.cpp
     src/graphics/widgets/LayoutWidget.cpp
+    src/graphics/widgets/ProgressBarWidget.cpp
 
     # UI - App
     src/ui/AppController.cpp

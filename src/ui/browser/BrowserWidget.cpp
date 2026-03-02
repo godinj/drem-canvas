@@ -18,12 +18,51 @@ BrowserWidget::BrowserWidget (PluginManager& pm)
 {
     setFocusable (true);
     addChild (&scanButton);
+    addChild (&progressBar);
+    addChild (&scanStatusLabel);
     addChild (&pluginList);
+
+    progressBar.setVisible (false);
+    scanStatusLabel.setVisible (false);
+    scanStatusLabel.setFontSize (11.0f);
 
     scanButton.onClick = [this]()
     {
-        pluginManager.scanForPlugins();
-        refreshPluginList();
+        if (pluginManager.isScanning())
+            return;  // already in progress
+
+        scanning_ = true;
+        scanButton.setEnabled (false);
+        progressBar.setProgress (0.0);
+        progressBar.setStatusText ("Starting scan...");
+        progressBar.setVisible (true);
+        scanStatusLabel.setVisible (true);
+        scanStatusLabel.setText ("Starting scan...");
+        resized();  // re-layout to show progress bar
+
+        pluginManager.scanForPluginsAsync (
+            // onProgress (message thread)
+            [this] (const std::string& pluginName, int current, int total)
+            {
+                double pct = (total > 0) ? static_cast<double> (current) / total : 0.0;
+                progressBar.setProgress (pct);
+
+                std::string status = pluginName + "  " + std::to_string (current)
+                                     + "/" + std::to_string (total);
+                progressBar.setStatusText (status);
+                scanStatusLabel.setText (status);
+            },
+            // onComplete (message thread)
+            [this]()
+            {
+                scanning_ = false;
+                scanButton.setEnabled (true);
+                progressBar.setVisible (false);
+                scanStatusLabel.setVisible (false);
+                refreshPluginList();
+                resized();  // re-layout to hide progress bar
+            }
+        );
     };
 
     pluginList.onDoubleClick = [this] (int index)
@@ -45,7 +84,7 @@ void BrowserWidget::paint (gfx::Canvas& canvas)
     canvas.fillRect (Rect (0, 0, getWidth(), getHeight()), theme.panelBackground);
 
     // ─── Search field ────────────────────────────────────────
-    float searchY = 36.0f;
+    float searchY = searchFieldY_;
     float w = getWidth();
     Rect searchRect (4.0f, searchY, w - 8.0f, searchFieldHeight);
     canvas.fillRoundedRect (searchRect, 4.0f, theme.widgetBackground);
@@ -83,10 +122,24 @@ void BrowserWidget::resized()
 {
     float w = getWidth();
     float h = getHeight();
+    float y = 4.0f;
 
-    scanButton.setBounds (4.0f, 4.0f, w - 8.0f, 28.0f);
-    // Search field is drawn in paint() at y=36, height=28
-    float listTop = 36.0f + searchFieldHeight + 4.0f;
+    // Scan button — always at top
+    scanButton.setBounds (4.0f, y, w - 8.0f, 28.0f);
+    y += 32.0f;
+
+    // Progress bar — only visible during scan
+    if (scanning_)
+    {
+        progressBar.setBounds (4.0f, y, w - 8.0f, 20.0f);
+        y += 24.0f;
+        scanStatusLabel.setBounds (4.0f, y, w - 8.0f, 16.0f);
+        y += 20.0f;
+    }
+
+    // Search field is drawn in paint() at searchFieldY_, height=searchFieldHeight
+    searchFieldY_ = y;
+    float listTop = y + searchFieldHeight + 4.0f;
     pluginList.setBounds (0, listTop, w, h - listTop);
 }
 

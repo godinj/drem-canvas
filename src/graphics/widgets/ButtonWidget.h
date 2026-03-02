@@ -31,6 +31,9 @@ public:
     void setToggleState (bool state);
     bool getToggleState() const { return toggled; }
 
+    void setEnabled (bool e);
+    bool isEnabled() const { return enabled; }
+
     std::function<void()> onClick;
 
 private:
@@ -39,6 +42,7 @@ private:
     bool pressed = false;
     bool toggleable = false;
     bool toggled = false;
+    bool enabled = true;
 };
 
 } // namespace gfx

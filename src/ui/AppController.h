@@ -136,11 +136,6 @@ private:
     void dismissCommandPalette();
     void refreshRecentProjectActions();
 
-    // ─── Plugin infrastructure ───────────────────────────
-    PluginManager pluginManager;
-    PluginHost pluginHost { pluginManager };
-    PluginWindowManager pluginWindowManager;
-
     // ─── Engine ──────────────────────────────────────────
     AudioEngine audioEngine;
     TransportController transportController;
@@ -157,6 +152,11 @@ private:
     NodeId sequencerNode = 0;
     dc::MessageQueue messageQueue;
     MidiEngine midiEngine { messageQueue };
+
+    // ─── Plugin infrastructure ───────────────────────────
+    PluginManager pluginManager { messageQueue };
+    PluginHost pluginHost { pluginManager };
+    PluginWindowManager pluginWindowManager;
 
     // ─── Model ───────────────────────────────────────────
     Project project;

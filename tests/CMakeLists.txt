@@ -59,6 +59,11 @@ add_executable(dc_unit_tests
     ${CMAKE_SOURCE_DIR}/src/dc/plugins/VST3Module.cpp
     "${VST3_SDK_DIR}/pluginterfaces/base/coreiids.cpp"
     "${VST3_SDK_DIR}/pluginterfaces/base/funknown.cpp"
+
+    # Note: test_ProgressBarWidget.cpp and test_PluginManager_async.cpp
+    # require the graphics/plugin stacks (Skia, VST3Host) and are validated
+    # via the release build. They will be added to a dedicated integration
+    # target when Skia is available to the test infrastructure.
 )
 
 target_link_libraries(dc_unit_tests PRIVATE
@@ -77,6 +82,8 @@ target_include_directories(dc_unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${SNDFILE_INCLUDE_DIRS}
     "${VST3_SDK_DIR}"
+    "${SKIA_DIR}/include"
+    "${SKIA_DIR}"
 )
 
 # Ensure test-results directory exists for XML output

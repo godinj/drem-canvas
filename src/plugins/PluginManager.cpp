@@ -4,8 +4,14 @@
 namespace dc
 {
 
-PluginManager::PluginManager()
+PluginManager::PluginManager (MessageQueue& mq)
+    : messageQueue_ (mq)
 {
+}
+
+PluginManager::~PluginManager()
+{
+    scanThread_.stop();
 }
 
 void PluginManager::scanForPlugins()
@@ -22,6 +28,45 @@ const std::vector<dc::PluginDescription>& PluginManager::getKnownPlugins() const
 dc::VST3Host& PluginManager::getVST3Host()
 {
     return vst3Host_;
+}
+
+void PluginManager::scanForPluginsAsync (ScanProgressCallback onProgress,
+                                          ScanCompleteCallback onComplete)
+{
+    if (scanning_.load())
+        return;
+
+    scanning_.store (true);
+
+    scanThread_.submit ([this, onProgress = std::move (onProgress),
+                         onComplete = std::move (onComplete)]()
+    {
+        vst3Host_.scanPlugins ([this, &onProgress] (const std::string& name,
+                                                     int current, int total)
+        {
+            if (onProgress)
+            {
+                messageQueue_.post ([onProgress, name, current, total]()
+                {
+                    onProgress (name, current, total);
+                });
+            }
+        });
+
+        savePluginList (getDefaultPluginListFile());
+
+        messageQueue_.post ([this, onComplete]()
+        {
+            scanning_.store (false);
+            if (onComplete)
+                onComplete();
+        });
+    });
+}
+
+bool PluginManager::isScanning() const
+{
+    return scanning_.load();
 }
 
 void PluginManager::savePluginList (const std::filesystem::path& file) const

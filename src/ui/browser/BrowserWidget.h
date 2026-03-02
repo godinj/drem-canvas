@@ -3,6 +3,8 @@
 #include "graphics/core/Widget.h"
 #include "graphics/widgets/ListBoxWidget.h"
 #include "graphics/widgets/ButtonWidget.h"
+#include "graphics/widgets/ProgressBarWidget.h"
+#include "graphics/widgets/LabelWidget.h"
 #include "plugins/PluginManager.h"
 #include "dc/plugins/PluginDescription.h"
 #include <functional>
@@ -44,10 +46,14 @@ private:
 
     PluginManager& pluginManager;
     gfx::ButtonWidget scanButton;
+    gfx::ProgressBarWidget progressBar;
+    gfx::LabelWidget scanStatusLabel { "", gfx::LabelWidget::Centre };
     gfx::ListBoxWidget pluginList;
     std::vector<dc::PluginDescription> displayedPlugins;
     std::string searchBuffer;
     bool searchActive = false;
+    bool scanning_ = false;
+    float searchFieldY_ = 36.0f;
 
     static constexpr float searchFieldHeight = 28.0f;
 };

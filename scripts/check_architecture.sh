@@ -108,6 +108,16 @@ if should_run 2; then
             RTMIDI_FLAGS=$(pkg-config --cflags rtmidi 2>/dev/null || true)
         fi
 
+        # VST3 SDK (fetched by CMake into build/_deps/vst3sdk-src/)
+        VST3_SDK_DIR=""
+        for build_dir in build build-debug build-coverage; do
+            candidate="$build_dir/_deps/vst3sdk-src"
+            if [ -d "$candidate/pluginterfaces" ]; then
+                VST3_SDK_DIR="$candidate"
+                break
+            fi
+        done
+
         for header in $HEADERS; do
             # Determine extra flags needed for external dependencies
             EXTRA_FLAGS=""
@@ -121,6 +131,14 @@ if should_run 2; then
                 *MidiDeviceManager*)
                     EXTRA_FLAGS="$RTMIDI_FLAGS"
                     NEEDS_SYSTEM_LIB="rtmidi"
+                    ;;
+                *dc/plugins/ComponentHandler* | *dc/plugins/PluginEditor* | \
+                *dc/plugins/PluginInstance* | *dc/plugins/VST3Host*)
+                    if [ -n "$VST3_SDK_DIR" ]; then
+                        EXTRA_FLAGS="-I $VST3_SDK_DIR"
+                    else
+                        NEEDS_SYSTEM_LIB="vst3sdk (run cmake --preset release first)"
+                    fi
                     ;;
             esac
 

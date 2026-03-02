@@ -18,7 +18,9 @@ void ButtonWidget::paint (Canvas& canvas)
     Rect r (0, 0, getWidth(), getHeight());
 
     Color bg;
-    if (toggled)
+    if (! enabled)
+        bg = theme.buttonDefault;
+    else if (toggled)
         bg = theme.buttonToggled;
     else if (pressed)
         bg = theme.buttonPressed;
@@ -31,19 +33,21 @@ void ButtonWidget::paint (Canvas& canvas)
 
     if (!text.empty())
     {
-        Color textColor = toggled ? theme.brightText : theme.defaultText;
+        Color textColor = enabled ? (toggled ? theme.brightText : theme.defaultText) : theme.dimText;
         canvas.drawTextCentred (text, r, FontManager::getInstance().getDefaultFont(), textColor);
     }
 }
 
 void ButtonWidget::mouseDown (const MouseEvent& e)
 {
+    if (! enabled) return;
     pressed = true;
     repaint();
 }
 
 void ButtonWidget::mouseUp (const MouseEvent& e)
 {
+    if (! enabled) return;
     if (pressed)
     {
         pressed = false;
@@ -85,6 +89,15 @@ void ButtonWidget::setToggleState (bool state)
     if (toggled != state)
     {
         toggled = state;
+        repaint();
+    }
+}
+
+void ButtonWidget::setEnabled (bool e)
+{
+    if (enabled != e)
+    {
+        enabled = e;
         repaint();
     }
 }
