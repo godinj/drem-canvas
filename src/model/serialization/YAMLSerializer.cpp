@@ -6,8 +6,8 @@ namespace dc
 
 namespace
 {
-    const juce::Identifier masterVolumeId ("masterVolume");
-    const juce::Identifier midiDataId ("midiData");
+    const dc::PropertyId masterVolumeId ("masterVolume");
+    const dc::PropertyId midiDataId ("midiData");
 }
 
 // --- Helpers ---
@@ -34,21 +34,21 @@ std::filesystem::path YAMLSerializer::resolveRelativePath (const std::string& re
 
 // --- Emit ---
 
-YAML::Node YAMLSerializer::emitSessionMeta (const juce::ValueTree& projectState, int trackCount)
+YAML::Node YAMLSerializer::emitSessionMeta (const PropertyTree& projectState, int trackCount)
 {
     YAML::Node root;
     root["drem_canvas_version"] = "0.1.0";
 
     YAML::Node proj;
-    proj["tempo"] = static_cast<double> (projectState.getProperty (IDs::tempo, 120.0));
+    proj["tempo"] = projectState.getProperty (IDs::tempo, Variant (120.0)).toDouble();
 
     YAML::Node timeSig;
-    timeSig["numerator"] = static_cast<int> (projectState.getProperty (IDs::timeSigNumerator, 4));
-    timeSig["denominator"] = static_cast<int> (projectState.getProperty (IDs::timeSigDenominator, 4));
+    timeSig["numerator"] = static_cast<int> (projectState.getProperty (IDs::timeSigNumerator, Variant (4)).toInt());
+    timeSig["denominator"] = static_cast<int> (projectState.getProperty (IDs::timeSigDenominator, Variant (4)).toInt());
     proj["time_signature"] = timeSig;
 
-    proj["sample_rate"] = static_cast<double> (projectState.getProperty (IDs::sampleRate, 44100.0));
-    proj["master_volume"] = static_cast<double> (static_cast<float> (projectState.getProperty (masterVolumeId, 1.0f)));
+    proj["sample_rate"] = projectState.getProperty (IDs::sampleRate, Variant (44100.0)).toDouble();
+    proj["master_volume"] = projectState.getProperty (masterVolumeId, Variant (1.0)).toDouble();
 
     root["project"] = proj;
     root["track_count"] = trackCount;
@@ -56,31 +56,31 @@ YAML::Node YAMLSerializer::emitSessionMeta (const juce::ValueTree& projectState,
     return root;
 }
 
-YAML::Node YAMLSerializer::emitTrack (const juce::ValueTree& trackState, const std::filesystem::path& sessionDir)
+YAML::Node YAMLSerializer::emitTrack (const PropertyTree& trackState, const std::filesystem::path& sessionDir)
 {
     YAML::Node root;
     YAML::Node track;
 
-    track["name"] = trackState.getProperty (IDs::name, "").toString().toStdString();
+    track["name"] = trackState.getProperty (IDs::name, Variant ("")).toString();
 
-    auto colour = dc::Colour (static_cast<uint32_t> (static_cast<int> (trackState.getProperty (IDs::colour, 0))));
+    auto colour = dc::Colour (static_cast<uint32_t> (trackState.getProperty (IDs::colour, Variant (0)).toInt()));
     track["colour"] = colourToHex (colour);
 
     YAML::Node mixer;
-    mixer["volume"] = static_cast<double> (static_cast<float> (trackState.getProperty (IDs::volume, 1.0f)));
-    mixer["pan"] = static_cast<double> (static_cast<float> (trackState.getProperty (IDs::pan, 0.0f)));
-    mixer["mute"] = static_cast<bool> (trackState.getProperty (IDs::mute, false));
-    mixer["solo"] = static_cast<bool> (trackState.getProperty (IDs::solo, false));
-    mixer["armed"] = static_cast<bool> (trackState.getProperty (IDs::armed, false));
+    mixer["volume"] = trackState.getProperty (IDs::volume, Variant (1.0)).toDouble();
+    mixer["pan"] = trackState.getProperty (IDs::pan, Variant (0.0)).toDouble();
+    mixer["mute"] = trackState.getProperty (IDs::mute, Variant (false)).toBool();
+    mixer["solo"] = trackState.getProperty (IDs::solo, Variant (false)).toBool();
+    mixer["armed"] = trackState.getProperty (IDs::armed, Variant (false)).toBool();
     track["mixer"] = mixer;
 
     YAML::Node clips;
     for (int i = 0; i < trackState.getNumChildren(); ++i)
     {
         auto child = trackState.getChild (i);
-        if (child.hasType (IDs::AUDIO_CLIP))
+        if (child.getType() == IDs::AUDIO_CLIP)
             clips.push_back (emitAudioClip (child, sessionDir));
-        else if (child.hasType (IDs::MIDI_CLIP))
+        else if (child.getType() == IDs::MIDI_CLIP)
             clips.push_back (emitMidiClip (child));
     }
     track["clips"] = clips;
@@ -94,33 +94,33 @@ YAML::Node YAMLSerializer::emitTrack (const juce::ValueTree& trackState, const s
     return root;
 }
 
-YAML::Node YAMLSerializer::emitAudioClip (const juce::ValueTree& clipState, const std::filesystem::path& sessionDir)
+YAML::Node YAMLSerializer::emitAudioClip (const PropertyTree& clipState, const std::filesystem::path& sessionDir)
 {
     YAML::Node clip;
     clip["type"] = "audio";
 
-    std::filesystem::path sourceFile (clipState.getProperty (IDs::sourceFile, "").toString().toStdString());
+    std::filesystem::path sourceFile (clipState.getProperty (IDs::sourceFile, Variant ("")).toString());
     clip["source_file"] = makeRelativePath (sourceFile, sessionDir);
 
-    clip["start_position"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
-    clip["length"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
-    clip["trim_start"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::trimStart, 0)));
-    clip["trim_end"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::trimEnd, 0)));
-    clip["fade_in_length"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::fadeInLength, 0)));
-    clip["fade_out_length"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::fadeOutLength, 0)));
+    clip["start_position"] = clipState.getProperty (IDs::startPosition, Variant (0)).toInt();
+    clip["length"] = clipState.getProperty (IDs::length, Variant (0)).toInt();
+    clip["trim_start"] = clipState.getProperty (IDs::trimStart, Variant (0)).toInt();
+    clip["trim_end"] = clipState.getProperty (IDs::trimEnd, Variant (0)).toInt();
+    clip["fade_in_length"] = clipState.getProperty (IDs::fadeInLength, Variant (0)).toInt();
+    clip["fade_out_length"] = clipState.getProperty (IDs::fadeOutLength, Variant (0)).toInt();
 
     return clip;
 }
 
-YAML::Node YAMLSerializer::emitMidiClip (const juce::ValueTree& clipState)
+YAML::Node YAMLSerializer::emitMidiClip (const PropertyTree& clipState)
 {
     YAML::Node clip;
     clip["type"] = "midi";
 
-    clip["start_position"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::startPosition, 0)));
-    clip["length"] = static_cast<int64_t> (static_cast<juce::int64> (clipState.getProperty (IDs::length, 0)));
+    clip["start_position"] = clipState.getProperty (IDs::startPosition, Variant (0)).toInt();
+    clip["length"] = clipState.getProperty (IDs::length, Variant (0)).toInt();
 
-    auto base64Data = clipState.getProperty (midiDataId, "").toString().toStdString();
+    auto base64Data = clipState.getProperty (midiDataId, Variant ("")).toString();
     clip["midi_data"] = base64Data;
 
     return clip;
@@ -128,60 +128,60 @@ YAML::Node YAMLSerializer::emitMidiClip (const juce::ValueTree& clipState)
 
 // --- Parse ---
 
-juce::ValueTree YAMLSerializer::parseSessionMeta (const YAML::Node& node)
+PropertyTree YAMLSerializer::parseSessionMeta (const YAML::Node& node)
 {
-    juce::ValueTree state (IDs::PROJECT);
-    state.appendChild (juce::ValueTree (IDs::TRACKS), nullptr);
+    PropertyTree state (IDs::PROJECT);
+    state.addChild (PropertyTree (IDs::TRACKS), -1);
 
     if (auto proj = node["project"])
     {
         if (proj["tempo"])
-            state.setProperty (IDs::tempo, proj["tempo"].as<double>(), nullptr);
+            state.setProperty (IDs::tempo, Variant (proj["tempo"].as<double>()));
 
         if (auto ts = proj["time_signature"])
         {
             if (ts["numerator"])
-                state.setProperty (IDs::timeSigNumerator, ts["numerator"].as<int>(), nullptr);
+                state.setProperty (IDs::timeSigNumerator, Variant (ts["numerator"].as<int>()));
             if (ts["denominator"])
-                state.setProperty (IDs::timeSigDenominator, ts["denominator"].as<int>(), nullptr);
+                state.setProperty (IDs::timeSigDenominator, Variant (ts["denominator"].as<int>()));
         }
 
         if (proj["sample_rate"])
-            state.setProperty (IDs::sampleRate, proj["sample_rate"].as<double>(), nullptr);
+            state.setProperty (IDs::sampleRate, Variant (proj["sample_rate"].as<double>()));
 
         if (proj["master_volume"])
-            state.setProperty (masterVolumeId, static_cast<float> (proj["master_volume"].as<double>()), nullptr);
+            state.setProperty (masterVolumeId, Variant (proj["master_volume"].as<double>()));
     }
 
     return state;
 }
 
-juce::ValueTree YAMLSerializer::parseTrack (const YAML::Node& node, const std::filesystem::path& sessionDir)
+PropertyTree YAMLSerializer::parseTrack (const YAML::Node& node, const std::filesystem::path& sessionDir)
 {
-    juce::ValueTree trackState (IDs::TRACK);
+    PropertyTree trackState (IDs::TRACK);
 
     auto track = node["track"];
     if (! track)
         return trackState;
 
     if (track["name"])
-        trackState.setProperty (IDs::name, track["name"].as<std::string>().c_str(), nullptr);
+        trackState.setProperty (IDs::name, Variant (track["name"].as<std::string>()));
 
     if (track["colour"])
-        trackState.setProperty (IDs::colour, static_cast<int> (hexToColour (track["colour"].as<std::string>()).argb), nullptr);
+        trackState.setProperty (IDs::colour, Variant (static_cast<int> (hexToColour (track["colour"].as<std::string>()).argb)));
 
     if (auto mixer = track["mixer"])
     {
         if (mixer["volume"])
-            trackState.setProperty (IDs::volume, static_cast<float> (mixer["volume"].as<double>()), nullptr);
+            trackState.setProperty (IDs::volume, Variant (mixer["volume"].as<double>()));
         if (mixer["pan"])
-            trackState.setProperty (IDs::pan, static_cast<float> (mixer["pan"].as<double>()), nullptr);
+            trackState.setProperty (IDs::pan, Variant (mixer["pan"].as<double>()));
         if (mixer["mute"])
-            trackState.setProperty (IDs::mute, mixer["mute"].as<bool>(), nullptr);
+            trackState.setProperty (IDs::mute, Variant (mixer["mute"].as<bool>()));
         if (mixer["solo"])
-            trackState.setProperty (IDs::solo, mixer["solo"].as<bool>(), nullptr);
+            trackState.setProperty (IDs::solo, Variant (mixer["solo"].as<bool>()));
         if (mixer["armed"])
-            trackState.setProperty (IDs::armed, mixer["armed"].as<bool>(), nullptr);
+            trackState.setProperty (IDs::armed, Variant (mixer["armed"].as<bool>()));
     }
 
     if (auto clips = track["clips"])
@@ -192,9 +192,9 @@ juce::ValueTree YAMLSerializer::parseTrack (const YAML::Node& node, const std::f
             auto type = clipNode["type"].as<std::string>();
 
             if (type == "audio")
-                trackState.appendChild (parseAudioClip (clipNode, sessionDir), nullptr);
+                trackState.addChild (parseAudioClip (clipNode, sessionDir), -1);
             else if (type == "midi")
-                trackState.appendChild (parseMidiClip (clipNode), nullptr);
+                trackState.addChild (parseMidiClip (clipNode), -1);
         }
     }
 
@@ -206,10 +206,10 @@ juce::ValueTree YAMLSerializer::parseTrack (const YAML::Node& node, const std::f
 
 // --- Plugin chain ---
 
-YAML::Node YAMLSerializer::emitPluginChain (const juce::ValueTree& trackState)
+YAML::Node YAMLSerializer::emitPluginChain (const PropertyTree& trackState)
 {
     YAML::Node plugins;
-    auto chain = trackState.getChildWithName (IDs::PLUGIN_CHAIN);
+    auto chain = trackState.getChildWithType (IDs::PLUGIN_CHAIN);
 
     if (! chain.isValid())
         return plugins;
@@ -217,17 +217,17 @@ YAML::Node YAMLSerializer::emitPluginChain (const juce::ValueTree& trackState)
     for (int i = 0; i < chain.getNumChildren(); ++i)
     {
         auto pluginState = chain.getChild (i);
-        if (! pluginState.hasType (IDs::PLUGIN))
+        if (pluginState.getType() != IDs::PLUGIN)
             continue;
 
         YAML::Node p;
-        p["name"]               = pluginState.getProperty (IDs::pluginName, "").toString().toStdString();
-        p["format"]             = pluginState.getProperty (IDs::pluginFormat, "").toString().toStdString();
-        p["manufacturer"]       = pluginState.getProperty (IDs::pluginManufacturer, "").toString().toStdString();
-        p["unique_id"]          = static_cast<int> (pluginState.getProperty (IDs::pluginUniqueId, 0));
-        p["file_or_identifier"] = pluginState.getProperty (IDs::pluginFileOrIdentifier, "").toString().toStdString();
-        p["state"]              = pluginState.getProperty (IDs::pluginState, "").toString().toStdString();
-        p["enabled"]            = static_cast<bool> (pluginState.getProperty (IDs::pluginEnabled, true));
+        p["name"]               = pluginState.getProperty (IDs::pluginName, Variant ("")).toString();
+        p["format"]             = pluginState.getProperty (IDs::pluginFormat, Variant ("")).toString();
+        p["manufacturer"]       = pluginState.getProperty (IDs::pluginManufacturer, Variant ("")).toString();
+        p["unique_id"]          = static_cast<int> (pluginState.getProperty (IDs::pluginUniqueId, Variant (0)).toInt());
+        p["file_or_identifier"] = pluginState.getProperty (IDs::pluginFileOrIdentifier, Variant ("")).toString();
+        p["state"]              = pluginState.getProperty (IDs::pluginState, Variant ("")).toString();
+        p["enabled"]            = pluginState.getProperty (IDs::pluginEnabled, Variant (true)).toBool();
 
         plugins.push_back (p);
     }
@@ -235,93 +235,93 @@ YAML::Node YAMLSerializer::emitPluginChain (const juce::ValueTree& trackState)
     return plugins;
 }
 
-void YAMLSerializer::parsePluginChain (const YAML::Node& pluginsNode, juce::ValueTree& trackState)
+void YAMLSerializer::parsePluginChain (const YAML::Node& pluginsNode, PropertyTree& trackState)
 {
-    juce::ValueTree chain (IDs::PLUGIN_CHAIN);
+    PropertyTree chain (IDs::PLUGIN_CHAIN);
 
     for (std::size_t i = 0; i < pluginsNode.size(); ++i)
     {
         auto p = pluginsNode[i];
-        juce::ValueTree plugin (IDs::PLUGIN);
+        PropertyTree plugin (IDs::PLUGIN);
 
         if (p["name"])
-            plugin.setProperty (IDs::pluginName, p["name"].as<std::string>().c_str(), nullptr);
+            plugin.setProperty (IDs::pluginName, Variant (p["name"].as<std::string>()));
         if (p["format"])
-            plugin.setProperty (IDs::pluginFormat, p["format"].as<std::string>().c_str(), nullptr);
+            plugin.setProperty (IDs::pluginFormat, Variant (p["format"].as<std::string>()));
         if (p["manufacturer"])
-            plugin.setProperty (IDs::pluginManufacturer, p["manufacturer"].as<std::string>().c_str(), nullptr);
+            plugin.setProperty (IDs::pluginManufacturer, Variant (p["manufacturer"].as<std::string>()));
         if (p["unique_id"])
-            plugin.setProperty (IDs::pluginUniqueId, p["unique_id"].as<int>(), nullptr);
+            plugin.setProperty (IDs::pluginUniqueId, Variant (p["unique_id"].as<int>()));
         if (p["file_or_identifier"])
-            plugin.setProperty (IDs::pluginFileOrIdentifier, p["file_or_identifier"].as<std::string>().c_str(), nullptr);
+            plugin.setProperty (IDs::pluginFileOrIdentifier, Variant (p["file_or_identifier"].as<std::string>()));
         if (p["state"])
-            plugin.setProperty (IDs::pluginState, p["state"].as<std::string>().c_str(), nullptr);
+            plugin.setProperty (IDs::pluginState, Variant (p["state"].as<std::string>()));
         if (p["enabled"])
-            plugin.setProperty (IDs::pluginEnabled, p["enabled"].as<bool>(), nullptr);
+            plugin.setProperty (IDs::pluginEnabled, Variant (p["enabled"].as<bool>()));
 
-        chain.appendChild (plugin, nullptr);
+        chain.addChild (plugin, -1);
     }
 
-    trackState.appendChild (chain, nullptr);
+    trackState.addChild (chain, -1);
 }
 
-juce::ValueTree YAMLSerializer::parseAudioClip (const YAML::Node& node, const std::filesystem::path& sessionDir)
+PropertyTree YAMLSerializer::parseAudioClip (const YAML::Node& node, const std::filesystem::path& sessionDir)
 {
-    juce::ValueTree clip (IDs::AUDIO_CLIP);
+    PropertyTree clip (IDs::AUDIO_CLIP);
 
     if (node["source_file"])
     {
         auto resolved = resolveRelativePath (node["source_file"].as<std::string>(), sessionDir);
-        clip.setProperty (IDs::sourceFile, resolved.string().c_str(), nullptr);
+        clip.setProperty (IDs::sourceFile, Variant (resolved.string()));
     }
 
     if (node["start_position"])
-        clip.setProperty (IDs::startPosition, static_cast<juce::int64> (node["start_position"].as<int64_t>()), nullptr);
+        clip.setProperty (IDs::startPosition, Variant (node["start_position"].as<int64_t>()));
     if (node["length"])
-        clip.setProperty (IDs::length, static_cast<juce::int64> (node["length"].as<int64_t>()), nullptr);
+        clip.setProperty (IDs::length, Variant (node["length"].as<int64_t>()));
     if (node["trim_start"])
-        clip.setProperty (IDs::trimStart, static_cast<juce::int64> (node["trim_start"].as<int64_t>()), nullptr);
+        clip.setProperty (IDs::trimStart, Variant (node["trim_start"].as<int64_t>()));
     if (node["trim_end"])
-        clip.setProperty (IDs::trimEnd, static_cast<juce::int64> (node["trim_end"].as<int64_t>()), nullptr);
+        clip.setProperty (IDs::trimEnd, Variant (node["trim_end"].as<int64_t>()));
     if (node["fade_in_length"])
-        clip.setProperty (IDs::fadeInLength, static_cast<juce::int64> (node["fade_in_length"].as<int64_t>()), nullptr);
+        clip.setProperty (IDs::fadeInLength, Variant (node["fade_in_length"].as<int64_t>()));
     if (node["fade_out_length"])
-        clip.setProperty (IDs::fadeOutLength, static_cast<juce::int64> (node["fade_out_length"].as<int64_t>()), nullptr);
+        clip.setProperty (IDs::fadeOutLength, Variant (node["fade_out_length"].as<int64_t>()));
 
     return clip;
 }
 
-juce::ValueTree YAMLSerializer::parseMidiClip (const YAML::Node& node)
+PropertyTree YAMLSerializer::parseMidiClip (const YAML::Node& node)
 {
-    juce::ValueTree clip (IDs::MIDI_CLIP);
+    PropertyTree clip (IDs::MIDI_CLIP);
 
     if (node["start_position"])
-        clip.setProperty (IDs::startPosition, static_cast<juce::int64> (node["start_position"].as<int64_t>()), nullptr);
+        clip.setProperty (IDs::startPosition, Variant (node["start_position"].as<int64_t>()));
     if (node["length"])
-        clip.setProperty (IDs::length, static_cast<juce::int64> (node["length"].as<int64_t>()), nullptr);
+        clip.setProperty (IDs::length, Variant (node["length"].as<int64_t>()));
     if (node["midi_data"])
-        clip.setProperty (midiDataId, node["midi_data"].as<std::string>().c_str(), nullptr);
+        clip.setProperty (midiDataId, Variant (node["midi_data"].as<std::string>()));
 
     return clip;
 }
 
 // --- Step Sequencer Emit ---
 
-YAML::Node YAMLSerializer::emitStepSequencer (const juce::ValueTree& sequencerState)
+YAML::Node YAMLSerializer::emitStepSequencer (const PropertyTree& sequencerState)
 {
     YAML::Node root;
     YAML::Node seq;
 
-    seq["num_steps"] = static_cast<int> (sequencerState.getProperty (IDs::numSteps, 16));
-    seq["swing"] = static_cast<double> (sequencerState.getProperty (IDs::swing, 0.0));
-    seq["active_pattern_bank"] = static_cast<int> (sequencerState.getProperty (IDs::activePatternBank, 0));
-    seq["active_pattern_slot"] = static_cast<int> (sequencerState.getProperty (IDs::activePatternSlot, 0));
+    seq["num_steps"] = static_cast<int> (sequencerState.getProperty (IDs::numSteps, Variant (16)).toInt());
+    seq["swing"] = sequencerState.getProperty (IDs::swing, Variant (0.0)).toDouble();
+    seq["active_pattern_bank"] = static_cast<int> (sequencerState.getProperty (IDs::activePatternBank, Variant (0)).toInt());
+    seq["active_pattern_slot"] = static_cast<int> (sequencerState.getProperty (IDs::activePatternSlot, Variant (0)).toInt());
 
     YAML::Node patterns;
     for (int i = 0; i < sequencerState.getNumChildren(); ++i)
     {
         auto child = sequencerState.getChild (i);
-        if (child.hasType (IDs::STEP_PATTERN))
+        if (child.getType() == IDs::STEP_PATTERN)
             patterns.push_back (emitStepPattern (child));
     }
     seq["patterns"] = patterns;
@@ -330,20 +330,20 @@ YAML::Node YAMLSerializer::emitStepSequencer (const juce::ValueTree& sequencerSt
     return root;
 }
 
-YAML::Node YAMLSerializer::emitStepPattern (const juce::ValueTree& patternState)
+YAML::Node YAMLSerializer::emitStepPattern (const PropertyTree& patternState)
 {
     YAML::Node pattern;
-    pattern["bank"] = static_cast<int> (patternState.getProperty (IDs::bank, 0));
-    pattern["slot"] = static_cast<int> (patternState.getProperty (IDs::slot, 0));
-    pattern["name"] = patternState.getProperty (IDs::name, "?").toString().toStdString();
-    pattern["num_steps"] = static_cast<int> (patternState.getProperty (IDs::numSteps, 16));
-    pattern["step_division"] = static_cast<int> (patternState.getProperty (IDs::stepDivision, 4));
+    pattern["bank"] = static_cast<int> (patternState.getProperty (IDs::bank, Variant (0)).toInt());
+    pattern["slot"] = static_cast<int> (patternState.getProperty (IDs::slot, Variant (0)).toInt());
+    pattern["name"] = patternState.getProperty (IDs::name, Variant ("?")).toString();
+    pattern["num_steps"] = static_cast<int> (patternState.getProperty (IDs::numSteps, Variant (16)).toInt());
+    pattern["step_division"] = static_cast<int> (patternState.getProperty (IDs::stepDivision, Variant (4)).toInt());
 
     YAML::Node rows;
     for (int i = 0; i < patternState.getNumChildren(); ++i)
     {
         auto child = patternState.getChild (i);
-        if (child.hasType (IDs::STEP_ROW))
+        if (child.getType() == IDs::STEP_ROW)
             rows.push_back (emitStepRow (child));
     }
     pattern["rows"] = rows;
@@ -351,26 +351,26 @@ YAML::Node YAMLSerializer::emitStepPattern (const juce::ValueTree& patternState)
     return pattern;
 }
 
-YAML::Node YAMLSerializer::emitStepRow (const juce::ValueTree& rowState)
+YAML::Node YAMLSerializer::emitStepRow (const PropertyTree& rowState)
 {
     YAML::Node row;
-    row["note_number"] = static_cast<int> (rowState.getProperty (IDs::noteNumber, 36));
-    row["name"] = rowState.getProperty (IDs::name, "---").toString().toStdString();
-    row["mute"] = static_cast<bool> (rowState.getProperty (IDs::mute, false));
-    row["solo"] = static_cast<bool> (rowState.getProperty (IDs::solo, false));
+    row["note_number"] = static_cast<int> (rowState.getProperty (IDs::noteNumber, Variant (36)).toInt());
+    row["name"] = rowState.getProperty (IDs::name, Variant ("---")).toString();
+    row["mute"] = rowState.getProperty (IDs::mute, Variant (false)).toBool();
+    row["solo"] = rowState.getProperty (IDs::solo, Variant (false)).toBool();
 
     YAML::Node steps;
     for (int i = 0; i < rowState.getNumChildren(); ++i)
     {
         auto child = rowState.getChild (i);
-        if (child.hasType (IDs::STEP))
+        if (child.getType() == IDs::STEP)
         {
             YAML::Node step;
-            step["index"] = static_cast<int> (child.getProperty (IDs::index, 0));
-            step["active"] = static_cast<bool> (child.getProperty (IDs::active, false));
-            step["velocity"] = static_cast<int> (child.getProperty (IDs::velocity, 100));
-            step["probability"] = static_cast<double> (child.getProperty (IDs::probability, 1.0));
-            step["note_length"] = static_cast<double> (child.getProperty (IDs::noteLength, 1.0));
+            step["index"] = static_cast<int> (child.getProperty (IDs::index, Variant (0)).toInt());
+            step["active"] = child.getProperty (IDs::active, Variant (false)).toBool();
+            step["velocity"] = static_cast<int> (child.getProperty (IDs::velocity, Variant (100)).toInt());
+            step["probability"] = child.getProperty (IDs::probability, Variant (1.0)).toDouble();
+            step["note_length"] = child.getProperty (IDs::noteLength, Variant (1.0)).toDouble();
             steps.push_back (step);
         }
     }
@@ -381,88 +381,88 @@ YAML::Node YAMLSerializer::emitStepRow (const juce::ValueTree& rowState)
 
 // --- Step Sequencer Parse ---
 
-juce::ValueTree YAMLSerializer::parseStepSequencer (const YAML::Node& node)
+PropertyTree YAMLSerializer::parseStepSequencer (const YAML::Node& node)
 {
-    juce::ValueTree state (IDs::STEP_SEQUENCER);
+    PropertyTree state (IDs::STEP_SEQUENCER);
 
     auto seq = node["step_sequencer"];
     if (! seq)
         return state;
 
     if (seq["num_steps"])
-        state.setProperty (IDs::numSteps, seq["num_steps"].as<int>(), nullptr);
+        state.setProperty (IDs::numSteps, Variant (seq["num_steps"].as<int>()));
     if (seq["swing"])
-        state.setProperty (IDs::swing, seq["swing"].as<double>(), nullptr);
+        state.setProperty (IDs::swing, Variant (seq["swing"].as<double>()));
     if (seq["active_pattern_bank"])
-        state.setProperty (IDs::activePatternBank, seq["active_pattern_bank"].as<int>(), nullptr);
+        state.setProperty (IDs::activePatternBank, Variant (seq["active_pattern_bank"].as<int>()));
     if (seq["active_pattern_slot"])
-        state.setProperty (IDs::activePatternSlot, seq["active_pattern_slot"].as<int>(), nullptr);
+        state.setProperty (IDs::activePatternSlot, Variant (seq["active_pattern_slot"].as<int>()));
 
     if (auto patterns = seq["patterns"])
     {
         for (std::size_t i = 0; i < patterns.size(); ++i)
-            state.appendChild (parseStepPattern (patterns[i]), nullptr);
+            state.addChild (parseStepPattern (patterns[i]), -1);
     }
 
     return state;
 }
 
-juce::ValueTree YAMLSerializer::parseStepPattern (const YAML::Node& node)
+PropertyTree YAMLSerializer::parseStepPattern (const YAML::Node& node)
 {
-    juce::ValueTree pattern (IDs::STEP_PATTERN);
+    PropertyTree pattern (IDs::STEP_PATTERN);
 
     if (node["bank"])
-        pattern.setProperty (IDs::bank, node["bank"].as<int>(), nullptr);
+        pattern.setProperty (IDs::bank, Variant (node["bank"].as<int>()));
     if (node["slot"])
-        pattern.setProperty (IDs::slot, node["slot"].as<int>(), nullptr);
+        pattern.setProperty (IDs::slot, Variant (node["slot"].as<int>()));
     if (node["name"])
-        pattern.setProperty (IDs::name, node["name"].as<std::string>().c_str(), nullptr);
+        pattern.setProperty (IDs::name, Variant (node["name"].as<std::string>()));
     if (node["num_steps"])
-        pattern.setProperty (IDs::numSteps, node["num_steps"].as<int>(), nullptr);
+        pattern.setProperty (IDs::numSteps, Variant (node["num_steps"].as<int>()));
     if (node["step_division"])
-        pattern.setProperty (IDs::stepDivision, node["step_division"].as<int>(), nullptr);
+        pattern.setProperty (IDs::stepDivision, Variant (node["step_division"].as<int>()));
 
     if (auto rows = node["rows"])
     {
         for (std::size_t i = 0; i < rows.size(); ++i)
-            pattern.appendChild (parseStepRow (rows[i]), nullptr);
+            pattern.addChild (parseStepRow (rows[i]), -1);
     }
 
     return pattern;
 }
 
-juce::ValueTree YAMLSerializer::parseStepRow (const YAML::Node& node)
+PropertyTree YAMLSerializer::parseStepRow (const YAML::Node& node)
 {
-    juce::ValueTree row (IDs::STEP_ROW);
+    PropertyTree row (IDs::STEP_ROW);
 
     if (node["note_number"])
-        row.setProperty (IDs::noteNumber, node["note_number"].as<int>(), nullptr);
+        row.setProperty (IDs::noteNumber, Variant (node["note_number"].as<int>()));
     if (node["name"])
-        row.setProperty (IDs::name, node["name"].as<std::string>().c_str(), nullptr);
+        row.setProperty (IDs::name, Variant (node["name"].as<std::string>()));
     if (node["mute"])
-        row.setProperty (IDs::mute, node["mute"].as<bool>(), nullptr);
+        row.setProperty (IDs::mute, Variant (node["mute"].as<bool>()));
     if (node["solo"])
-        row.setProperty (IDs::solo, node["solo"].as<bool>(), nullptr);
+        row.setProperty (IDs::solo, Variant (node["solo"].as<bool>()));
 
     if (auto steps = node["steps"])
     {
         for (std::size_t i = 0; i < steps.size(); ++i)
         {
             auto stepNode = steps[i];
-            juce::ValueTree step (IDs::STEP);
+            PropertyTree step (IDs::STEP);
 
             if (stepNode["index"])
-                step.setProperty (IDs::index, stepNode["index"].as<int>(), nullptr);
+                step.setProperty (IDs::index, Variant (stepNode["index"].as<int>()));
             if (stepNode["active"])
-                step.setProperty (IDs::active, stepNode["active"].as<bool>(), nullptr);
+                step.setProperty (IDs::active, Variant (stepNode["active"].as<bool>()));
             if (stepNode["velocity"])
-                step.setProperty (IDs::velocity, stepNode["velocity"].as<int>(), nullptr);
+                step.setProperty (IDs::velocity, Variant (stepNode["velocity"].as<int>()));
             if (stepNode["probability"])
-                step.setProperty (IDs::probability, stepNode["probability"].as<double>(), nullptr);
+                step.setProperty (IDs::probability, Variant (stepNode["probability"].as<double>()));
             if (stepNode["note_length"])
-                step.setProperty (IDs::noteLength, stepNode["note_length"].as<double>(), nullptr);
+                step.setProperty (IDs::noteLength, Variant (stepNode["note_length"].as<double>()));
 
-            row.appendChild (step, nullptr);
+            row.addChild (step, -1);
         }
     }
 

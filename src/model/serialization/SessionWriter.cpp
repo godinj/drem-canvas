@@ -7,14 +7,14 @@
 namespace dc
 {
 
-bool SessionWriter::writeSession (const juce::ValueTree& projectState, const std::filesystem::path& sessionDir)
+bool SessionWriter::writeSession (const PropertyTree& projectState, const std::filesystem::path& sessionDir)
 {
     std::error_code ec;
     std::filesystem::create_directories (sessionDir, ec);
     if (ec)
         return false;
 
-    auto tracks = projectState.getChildWithName (IDs::TRACKS);
+    auto tracks = projectState.getChildWithType (IDs::TRACKS);
     int trackCount = tracks.getNumChildren();
 
     // Write session.yaml
@@ -44,7 +44,7 @@ bool SessionWriter::writeSession (const juce::ValueTree& projectState, const std
     cleanupStaleTrackFiles (sessionDir, trackCount);
 
     // Write sequencer.yaml if STEP_SEQUENCER child exists
-    auto sequencerState = projectState.getChildWithName (IDs::STEP_SEQUENCER);
+    auto sequencerState = projectState.getChildWithType (IDs::STEP_SEQUENCER);
     if (sequencerState.isValid())
     {
         auto seqNode = YAMLSerializer::emitStepSequencer (sequencerState);

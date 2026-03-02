@@ -11,7 +11,7 @@ bool SessionReader::isValidSessionDirectory (const std::filesystem::path& dir)
     return std::filesystem::is_directory (dir) && std::filesystem::exists (dir / "session.yaml");
 }
 
-juce::ValueTree SessionReader::readSession (const std::filesystem::path& sessionDir)
+PropertyTree SessionReader::readSession (const std::filesystem::path& sessionDir)
 {
     if (! isValidSessionDirectory (sessionDir))
         return {};
@@ -28,7 +28,7 @@ juce::ValueTree SessionReader::readSession (const std::filesystem::path& session
         int trackCount = sessionNode["track_count"] ? sessionNode["track_count"].as<int>() : 0;
 
         // Parse each track-N.yaml
-        auto tracks = projectState.getChildWithName (IDs::TRACKS);
+        auto tracks = projectState.getChildWithType (IDs::TRACKS);
 
         for (int i = 0; i < trackCount; ++i)
         {
@@ -41,7 +41,7 @@ juce::ValueTree SessionReader::readSession (const std::filesystem::path& session
             auto trackState = YAMLSerializer::parseTrack (trackNode, sessionDir);
 
             if (trackState.isValid())
-                tracks.appendChild (trackState, nullptr);
+                tracks.addChild (trackState, -1);
         }
 
         // Parse sequencer.yaml if it exists
@@ -51,7 +51,7 @@ juce::ValueTree SessionReader::readSession (const std::filesystem::path& session
             auto seqNode = YAML::LoadFile (sequencerFile.string());
             auto seqState = YAMLSerializer::parseStepSequencer (seqNode);
             if (seqState.isValid())
-                projectState.appendChild (seqState, nullptr);
+                projectState.addChild (seqState, -1);
         }
 
         return projectState;
