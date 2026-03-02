@@ -1,5 +1,7 @@
 #pragma once
-#include <JuceHeader.h>
+#include "dc/model/PropertyTree.h"
+#include "dc/model/PropertyId.h"
+#include "dc/model/Variant.h"
 #include <string>
 #include <filesystem>
 #include "utils/UndoSystem.h"
@@ -10,7 +12,7 @@ namespace dc
 
 namespace IDs
 {
-    #define DECLARE_ID(name) const juce::Identifier name (#name);
+    #define DECLARE_ID(name) const dc::PropertyId name (#name);
 
     DECLARE_ID (PROJECT)
     DECLARE_ID (TRACKS)
@@ -84,21 +86,21 @@ public:
     bool loadSessionFromDirectory (const std::filesystem::path& sessionDir);
 
     // Track management
-    juce::ValueTree addTrack (const std::string& name);
+    PropertyTree addTrack (const std::string& name);
     void removeTrack (int index);
     int getNumTracks() const;
-    juce::ValueTree getTrack (int index) const;
+    PropertyTree getTrack (int index) const;
 
-    juce::ValueTree& getState() { return state; }
-    const juce::ValueTree& getState() const { return state; }
+    PropertyTree& getState() { return state; }
+    const PropertyTree& getState() const { return state; }
 
-    juce::UndoManager& getUndoManager() { return undoManager; }
+    UndoManager& getUndoManager() { return undoSystem.getUndoManager(); }
     UndoSystem& getUndoSystem() { return undoSystem; }
 
     Clipboard& getClipboard() { return clipboard; }
 
     // Master bus state (persistent, holds volume + plugin chain)
-    juce::ValueTree getMasterBusState();
+    PropertyTree getMasterBusState();
 
     // Project properties
     double getTempo() const;
@@ -111,14 +113,14 @@ public:
     void setTimeSigDenominator (int den);
 
 private:
-    juce::ValueTree state;
-    juce::UndoManager undoManager;
+    PropertyTree state;
     UndoSystem undoSystem;
     Clipboard clipboard;
 
     void createDefaultState();
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Project)
+    Project (const Project&) = delete;
+    Project& operator= (const Project&) = delete;
 };
 
 } // namespace dc

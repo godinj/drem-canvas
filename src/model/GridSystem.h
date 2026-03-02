@@ -1,6 +1,6 @@
 #pragma once
-#include <JuceHeader.h>
 #include <string>
+#include <cstdint>
 #include "TempoMap.h"
 
 namespace dc

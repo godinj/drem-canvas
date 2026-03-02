@@ -1,5 +1,4 @@
 #pragma once
-#include <JuceHeader.h>
 #include "Project.h"
 #include "Track.h"
 
@@ -16,7 +15,7 @@ public:
 
     // Master volume
     float getMasterVolume() const;
-    void setMasterVolume (float vol, juce::UndoManager* um = nullptr);
+    void setMasterVolume (float vol, UndoManager* um = nullptr);
 
 private:
     Project& project;

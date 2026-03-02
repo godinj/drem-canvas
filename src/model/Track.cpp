@@ -4,99 +4,99 @@
 namespace dc
 {
 
-Track::Track (const juce::ValueTree& s)
+Track::Track (const PropertyTree& s)
     : state (s)
 {
-    dc_assert (state.hasType (IDs::TRACK));
+    dc_assert (state.getType() == IDs::TRACK);
 }
 
 std::string Track::getName() const
 {
-    return state.getProperty (IDs::name, "").toString().toStdString();
+    return state.getProperty (IDs::name).getStringOr ("");
 }
 
-void Track::setName (const std::string& n, juce::UndoManager* um)
+void Track::setName (const std::string& n, UndoManager* um)
 {
-    state.setProperty (IDs::name, n.c_str(), um);
+    state.setProperty (IDs::name, Variant (n), um);
 }
 
 float Track::getVolume() const
 {
-    return state.getProperty (IDs::volume, 1.0f);
+    return static_cast<float> (state.getProperty (IDs::volume).getDoubleOr (1.0));
 }
 
-void Track::setVolume (float vol, juce::UndoManager* um)
+void Track::setVolume (float vol, UndoManager* um)
 {
-    state.setProperty (IDs::volume, vol, um);
+    state.setProperty (IDs::volume, Variant (static_cast<double> (vol)), um);
 }
 
 float Track::getPan() const
 {
-    return state.getProperty (IDs::pan, 0.0f);
+    return static_cast<float> (state.getProperty (IDs::pan).getDoubleOr (0.0));
 }
 
-void Track::setPan (float p, juce::UndoManager* um)
+void Track::setPan (float p, UndoManager* um)
 {
-    state.setProperty (IDs::pan, p, um);
+    state.setProperty (IDs::pan, Variant (static_cast<double> (p)), um);
 }
 
 bool Track::isMuted() const
 {
-    return state.getProperty (IDs::mute, false);
+    return state.getProperty (IDs::mute).getBoolOr (false);
 }
 
-void Track::setMuted (bool m, juce::UndoManager* um)
+void Track::setMuted (bool m, UndoManager* um)
 {
-    state.setProperty (IDs::mute, m, um);
+    state.setProperty (IDs::mute, Variant (m), um);
 }
 
 bool Track::isSolo() const
 {
-    return state.getProperty (IDs::solo, false);
+    return state.getProperty (IDs::solo).getBoolOr (false);
 }
 
-void Track::setSolo (bool s, juce::UndoManager* um)
+void Track::setSolo (bool s, UndoManager* um)
 {
-    state.setProperty (IDs::solo, s, um);
+    state.setProperty (IDs::solo, Variant (s), um);
 }
 
 bool Track::isArmed() const
 {
-    return state.getProperty (IDs::armed, false);
+    return state.getProperty (IDs::armed).getBoolOr (false);
 }
 
-void Track::setArmed (bool a, juce::UndoManager* um)
+void Track::setArmed (bool a, UndoManager* um)
 {
-    state.setProperty (IDs::armed, a, um);
+    state.setProperty (IDs::armed, Variant (a), um);
 }
 
 dc::Colour Track::getColour() const
 {
-    return dc::Colour (static_cast<uint32_t> (static_cast<int> (state.getProperty (IDs::colour, 0))));
+    return dc::Colour (static_cast<uint32_t> (state.getProperty (IDs::colour).getIntOr (0)));
 }
 
-juce::ValueTree Track::addAudioClip (const std::filesystem::path& sourceFile, int64_t startPosition, int64_t length)
+PropertyTree Track::addAudioClip (const std::filesystem::path& sourceFile, int64_t startPosition, int64_t length)
 {
-    juce::ValueTree clip (IDs::AUDIO_CLIP);
-    clip.setProperty (IDs::sourceFile, sourceFile.string().c_str(), nullptr);
-    clip.setProperty (IDs::startPosition, static_cast<juce::int64> (startPosition), nullptr);
-    clip.setProperty (IDs::length, static_cast<juce::int64> (length), nullptr);
-    clip.setProperty (IDs::trimStart, static_cast<juce::int64> (0), nullptr);
-    clip.setProperty (IDs::trimEnd, static_cast<juce::int64> (length), nullptr);
-    clip.setProperty (IDs::fadeInLength, static_cast<juce::int64> (0), nullptr);
-    clip.setProperty (IDs::fadeOutLength, static_cast<juce::int64> (0), nullptr);
+    PropertyTree clip (IDs::AUDIO_CLIP);
+    clip.setProperty (IDs::sourceFile, Variant (sourceFile.string()), nullptr);
+    clip.setProperty (IDs::startPosition, Variant (startPosition), nullptr);
+    clip.setProperty (IDs::length, Variant (length), nullptr);
+    clip.setProperty (IDs::trimStart, Variant (int64_t (0)), nullptr);
+    clip.setProperty (IDs::trimEnd, Variant (length), nullptr);
+    clip.setProperty (IDs::fadeInLength, Variant (int64_t (0)), nullptr);
+    clip.setProperty (IDs::fadeOutLength, Variant (int64_t (0)), nullptr);
 
-    state.appendChild (clip, nullptr);
+    state.addChild (clip, -1, nullptr);
     return clip;
 }
 
-juce::ValueTree Track::addMidiClip (int64_t startPosition, int64_t length)
+PropertyTree Track::addMidiClip (int64_t startPosition, int64_t length)
 {
-    juce::ValueTree clip (IDs::MIDI_CLIP);
-    clip.setProperty (IDs::startPosition, static_cast<juce::int64> (startPosition), nullptr);
-    clip.setProperty (IDs::length, static_cast<juce::int64> (length), nullptr);
+    PropertyTree clip (IDs::MIDI_CLIP);
+    clip.setProperty (IDs::startPosition, Variant (startPosition), nullptr);
+    clip.setProperty (IDs::length, Variant (length), nullptr);
 
-    state.appendChild (clip, nullptr);
+    state.addChild (clip, -1, nullptr);
     return clip;
 }
 
@@ -106,19 +106,19 @@ int Track::getNumClips() const
     for (int i = 0; i < state.getNumChildren(); ++i)
     {
         auto child = state.getChild (i);
-        if (child.hasType (IDs::AUDIO_CLIP) || child.hasType (IDs::MIDI_CLIP))
+        if (child.getType() == IDs::AUDIO_CLIP || child.getType() == IDs::MIDI_CLIP)
             ++count;
     }
     return count;
 }
 
-juce::ValueTree Track::getClip (int index) const
+PropertyTree Track::getClip (int index) const
 {
     int count = 0;
     for (int i = 0; i < state.getNumChildren(); ++i)
     {
         auto child = state.getChild (i);
-        if (child.hasType (IDs::AUDIO_CLIP) || child.hasType (IDs::MIDI_CLIP))
+        if (child.getType() == IDs::AUDIO_CLIP || child.getType() == IDs::MIDI_CLIP)
         {
             if (count == index)
                 return child;
@@ -128,13 +128,13 @@ juce::ValueTree Track::getClip (int index) const
     return {};
 }
 
-void Track::removeClip (int index, juce::UndoManager* um)
+void Track::removeClip (int index, UndoManager* um)
 {
     int count = 0;
     for (int i = 0; i < state.getNumChildren(); ++i)
     {
         auto child = state.getChild (i);
-        if (child.hasType (IDs::AUDIO_CLIP) || child.hasType (IDs::MIDI_CLIP))
+        if (child.getType() == IDs::AUDIO_CLIP || child.getType() == IDs::MIDI_CLIP)
         {
             if (count == index)
             {
@@ -148,43 +148,43 @@ void Track::removeClip (int index, juce::UndoManager* um)
 
 // ── Plugin chain management ─────────────────────────────────────────────────
 
-juce::ValueTree Track::getPluginChain()
+PropertyTree Track::getPluginChain()
 {
-    auto chain = state.getChildWithName (IDs::PLUGIN_CHAIN);
+    auto chain = state.getChildWithType (IDs::PLUGIN_CHAIN);
     if (! chain.isValid())
     {
-        chain = juce::ValueTree (IDs::PLUGIN_CHAIN);
-        state.appendChild (chain, nullptr);
+        chain = PropertyTree (IDs::PLUGIN_CHAIN);
+        state.addChild (chain, -1, nullptr);
     }
     return chain;
 }
 
-juce::ValueTree Track::addPlugin (const std::string& name, const std::string& format,
-                                   const std::string& manufacturer, int uniqueId,
-                                   const std::string& fileOrIdentifier,
-                                   juce::UndoManager* um)
+PropertyTree Track::addPlugin (const std::string& name, const std::string& format,
+                               const std::string& manufacturer, int uniqueId,
+                               const std::string& fileOrIdentifier,
+                               UndoManager* um)
 {
-    juce::ValueTree plugin (IDs::PLUGIN);
-    plugin.setProperty (IDs::pluginName, name.c_str(), nullptr);
-    plugin.setProperty (IDs::pluginFormat, format.c_str(), nullptr);
-    plugin.setProperty (IDs::pluginManufacturer, manufacturer.c_str(), nullptr);
-    plugin.setProperty (IDs::pluginUniqueId, uniqueId, nullptr);
-    plugin.setProperty (IDs::pluginFileOrIdentifier, fileOrIdentifier.c_str(), nullptr);
-    plugin.setProperty (IDs::pluginState, "", nullptr);
-    plugin.setProperty (IDs::pluginEnabled, true, nullptr);
+    PropertyTree plugin (IDs::PLUGIN);
+    plugin.setProperty (IDs::pluginName, Variant (name), nullptr);
+    plugin.setProperty (IDs::pluginFormat, Variant (format), nullptr);
+    plugin.setProperty (IDs::pluginManufacturer, Variant (manufacturer), nullptr);
+    plugin.setProperty (IDs::pluginUniqueId, Variant (uniqueId), nullptr);
+    plugin.setProperty (IDs::pluginFileOrIdentifier, Variant (fileOrIdentifier), nullptr);
+    plugin.setProperty (IDs::pluginState, Variant (std::string ("")), nullptr);
+    plugin.setProperty (IDs::pluginEnabled, Variant (true), nullptr);
 
-    getPluginChain().appendChild (plugin, um);
+    getPluginChain().addChild (plugin, -1, um);
     return plugin;
 }
 
-void Track::removePlugin (int index, juce::UndoManager* um)
+void Track::removePlugin (int index, UndoManager* um)
 {
     auto chain = getPluginChain();
     if (index >= 0 && index < chain.getNumChildren())
         chain.removeChild (index, um);
 }
 
-void Track::movePlugin (int fromIndex, int toIndex, juce::UndoManager* um)
+void Track::movePlugin (int fromIndex, int toIndex, UndoManager* um)
 {
     auto chain = getPluginChain();
     if (fromIndex >= 0 && fromIndex < chain.getNumChildren()
@@ -197,34 +197,34 @@ void Track::movePlugin (int fromIndex, int toIndex, juce::UndoManager* um)
 
 int Track::getNumPlugins() const
 {
-    auto chain = state.getChildWithName (IDs::PLUGIN_CHAIN);
+    auto chain = state.getChildWithType (IDs::PLUGIN_CHAIN);
     return chain.isValid() ? chain.getNumChildren() : 0;
 }
 
-juce::ValueTree Track::getPlugin (int index) const
+PropertyTree Track::getPlugin (int index) const
 {
-    auto chain = state.getChildWithName (IDs::PLUGIN_CHAIN);
-    return chain.isValid() ? chain.getChild (index) : juce::ValueTree();
+    auto chain = state.getChildWithType (IDs::PLUGIN_CHAIN);
+    return chain.isValid() ? chain.getChild (index) : PropertyTree();
 }
 
-void Track::setPluginEnabled (int index, bool enabled, juce::UndoManager* um)
+void Track::setPluginEnabled (int index, bool enabled, UndoManager* um)
 {
     auto plugin = getPlugin (index);
     if (plugin.isValid())
-        plugin.setProperty (IDs::pluginEnabled, enabled, um);
+        plugin.setProperty (IDs::pluginEnabled, Variant (enabled), um);
 }
 
 bool Track::isPluginEnabled (int index) const
 {
     auto plugin = getPlugin (index);
-    return plugin.isValid() ? static_cast<bool> (plugin.getProperty (IDs::pluginEnabled, true)) : false;
+    return plugin.isValid() ? plugin.getProperty (IDs::pluginEnabled).getBoolOr (true) : false;
 }
 
-void Track::setPluginState (int index, const std::string& base64State, juce::UndoManager* um)
+void Track::setPluginState (int index, const std::string& base64State, UndoManager* um)
 {
     auto plugin = getPlugin (index);
     if (plugin.isValid())
-        plugin.setProperty (IDs::pluginState, base64State.c_str(), um);
+        plugin.setProperty (IDs::pluginState, Variant (base64State), um);
 }
 
 } // namespace dc

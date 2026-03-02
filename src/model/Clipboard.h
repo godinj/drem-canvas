@@ -1,5 +1,5 @@
 #pragma once
-#include <JuceHeader.h>
+#include "dc/model/PropertyTree.h"
 #include <vector>
 
 namespace dc
@@ -10,14 +10,14 @@ class Clipboard
 public:
     struct ClipEntry
     {
-        juce::ValueTree clipData;
+        PropertyTree clipData;
         int trackOffset = 0;       // relative to topmost yanked track
         int64_t timeOffset = 0;    // samples from earliest clip's startPosition
     };
 
     struct NoteEntry
     {
-        juce::ValueTree noteData;
+        PropertyTree noteData;
         double beatOffset = 0.0;   // beats from earliest note's startBeat
     };
 

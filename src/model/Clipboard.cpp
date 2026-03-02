@@ -63,7 +63,7 @@ void Clipboard::setRegister (RegisterEntry& reg,
     reg.noteEntries.clear();
 
     for (auto& e : entries)
-        reg.clipEntries.push_back ({ e.clipData.createCopy(), e.trackOffset, e.timeOffset });
+        reg.clipEntries.push_back ({ e.clipData.createDeepCopy(), e.trackOffset, e.timeOffset });
 
     reg.linewise = isLinewise;
     reg.type = reg.clipEntries.empty() ? RegisterEntry::Empty
@@ -77,7 +77,7 @@ void Clipboard::setRegister (RegisterEntry& reg,
     reg.noteEntries.clear();
 
     for (auto& e : entries)
-        reg.noteEntries.push_back ({ e.noteData.createCopy(), e.beatOffset });
+        reg.noteEntries.push_back ({ e.noteData.createDeepCopy(), e.beatOffset });
 
     reg.linewise = false;
     reg.type = reg.noteEntries.empty() ? RegisterEntry::Empty
@@ -88,7 +88,7 @@ void Clipboard::appendRegister (RegisterEntry& reg,
                                 const std::vector<ClipEntry>& entries)
 {
     for (auto& e : entries)
-        reg.clipEntries.push_back ({ e.clipData.createCopy(), e.trackOffset, e.timeOffset });
+        reg.clipEntries.push_back ({ e.clipData.createDeepCopy(), e.trackOffset, e.timeOffset });
 
     if (! reg.clipEntries.empty())
         reg.type = RegisterEntry::ClipContent;
@@ -98,7 +98,7 @@ void Clipboard::appendRegister (RegisterEntry& reg,
                                 const std::vector<NoteEntry>& entries)
 {
     for (auto& e : entries)
-        reg.noteEntries.push_back ({ e.noteData.createCopy(), e.beatOffset });
+        reg.noteEntries.push_back ({ e.noteData.createDeepCopy(), e.beatOffset });
 
     if (! reg.noteEntries.empty())
         reg.type = RegisterEntry::NoteContent;

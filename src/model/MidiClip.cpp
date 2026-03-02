@@ -6,40 +6,49 @@ namespace dc
 
 namespace
 {
-    const juce::Identifier midiDataId ("midiData");
+    const dc::PropertyId midiDataId ("midiData");
+    const dc::PropertyId noteTypeId ("NOTE");
+    const dc::PropertyId ccPointTypeId ("CC_POINT");
+    const dc::PropertyId noteNumberPropId ("noteNumber");
+    const dc::PropertyId startBeatPropId ("startBeat");
+    const dc::PropertyId lengthBeatsPropId ("lengthBeats");
+    const dc::PropertyId velocityPropId ("velocity");
+    const dc::PropertyId ccNumberPropId ("ccNumber");
+    const dc::PropertyId beatPropId ("beat");
+    const dc::PropertyId valuePropId ("value");
 }
 
-MidiClip::MidiClip (const juce::ValueTree& s)
+MidiClip::MidiClip (const PropertyTree& s)
     : state (s)
 {
-    dc_assert (state.hasType (IDs::MIDI_CLIP));
+    dc_assert (state.getType() == IDs::MIDI_CLIP);
 }
 
 int64_t MidiClip::getStartPosition() const
 {
-    return static_cast<int64_t> (static_cast<juce::int64> (state.getProperty (IDs::startPosition, 0)));
+    return state.getProperty (IDs::startPosition).getIntOr (0);
 }
 
-void MidiClip::setStartPosition (int64_t pos, juce::UndoManager* um)
+void MidiClip::setStartPosition (int64_t pos, UndoManager* um)
 {
-    state.setProperty (IDs::startPosition, static_cast<juce::int64> (pos), um);
+    state.setProperty (IDs::startPosition, Variant (pos), um);
 }
 
 int64_t MidiClip::getLength() const
 {
-    return static_cast<int64_t> (static_cast<juce::int64> (state.getProperty (IDs::length, 0)));
+    return state.getProperty (IDs::length).getIntOr (0);
 }
 
-void MidiClip::setLength (int64_t len, juce::UndoManager* um)
+void MidiClip::setLength (int64_t len, UndoManager* um)
 {
-    state.setProperty (IDs::length, static_cast<juce::int64> (len), um);
+    state.setProperty (IDs::length, Variant (len), um);
 }
 
 juce::MidiMessageSequence MidiClip::getMidiSequence() const
 {
     juce::MidiMessageSequence result;
 
-    std::string base64Data = state.getProperty (midiDataId, "").toString().toStdString();
+    std::string base64Data = state.getProperty (midiDataId).getStringOr ("");
     if (base64Data.empty())
         return result;
 
@@ -69,7 +78,7 @@ juce::MidiMessageSequence MidiClip::getMidiSequence() const
     return result;
 }
 
-void MidiClip::setMidiSequence (const juce::MidiMessageSequence& seq, juce::UndoManager* um)
+void MidiClip::setMidiSequence (const juce::MidiMessageSequence& seq, UndoManager* um)
 {
     juce::MemoryOutputStream stream;
 
@@ -86,7 +95,7 @@ void MidiClip::setMidiSequence (const juce::MidiMessageSequence& seq, juce::Undo
     juce::MemoryBlock block (stream.getData(), stream.getDataSize());
     auto base64Data = block.toBase64Encoding();
 
-    state.setProperty (midiDataId, base64Data, um);
+    state.setProperty (midiDataId, Variant (std::string (base64Data.toStdString())), um);
 }
 
 void MidiClip::expandNotesToChildren()
@@ -95,8 +104,8 @@ void MidiClip::expandNotesToChildren()
     for (int i = state.getNumChildren() - 1; i >= 0; --i)
     {
         auto child = state.getChild (i);
-        if (child.hasType (juce::Identifier ("NOTE"))
-            || child.hasType (juce::Identifier ("CC_POINT")))
+        if (child.getType() == noteTypeId
+            || child.getType() == ccPointTypeId)
             state.removeChild (i, nullptr);
     }
 
@@ -120,27 +129,27 @@ void MidiClip::expandNotesToChildren()
             if (lengthBeats <= 0.0)
                 lengthBeats = 0.25;
 
-            juce::ValueTree noteChild ("NOTE");
-            noteChild.setProperty ("noteNumber", msg.getNoteNumber(), nullptr);
-            noteChild.setProperty ("startBeat", startBeat, nullptr);
-            noteChild.setProperty ("lengthBeats", lengthBeats, nullptr);
-            noteChild.setProperty ("velocity", msg.getVelocity(), nullptr);
+            PropertyTree noteChild (noteTypeId);
+            noteChild.setProperty (noteNumberPropId, Variant (msg.getNoteNumber()), nullptr);
+            noteChild.setProperty (startBeatPropId, Variant (startBeat), nullptr);
+            noteChild.setProperty (lengthBeatsPropId, Variant (lengthBeats), nullptr);
+            noteChild.setProperty (velocityPropId, Variant (msg.getVelocity()), nullptr);
 
-            state.appendChild (noteChild, nullptr);
+            state.addChild (noteChild, -1, nullptr);
         }
         else if (msg.isController())
         {
-            juce::ValueTree ccPoint ("CC_POINT");
-            ccPoint.setProperty ("ccNumber", msg.getControllerNumber(), nullptr);
-            ccPoint.setProperty ("beat", msg.getTimeStamp(), nullptr);
-            ccPoint.setProperty ("value", msg.getControllerValue(), nullptr);
+            PropertyTree ccPoint (ccPointTypeId);
+            ccPoint.setProperty (ccNumberPropId, Variant (msg.getControllerNumber()), nullptr);
+            ccPoint.setProperty (beatPropId, Variant (msg.getTimeStamp()), nullptr);
+            ccPoint.setProperty (valuePropId, Variant (msg.getControllerValue()), nullptr);
 
-            state.appendChild (ccPoint, nullptr);
+            state.addChild (ccPoint, -1, nullptr);
         }
     }
 }
 
-void MidiClip::collapseChildrenToMidiData (juce::UndoManager* um)
+void MidiClip::collapseChildrenToMidiData (UndoManager* um)
 {
     juce::MidiMessageSequence seq;
 
@@ -148,12 +157,12 @@ void MidiClip::collapseChildrenToMidiData (juce::UndoManager* um)
     {
         auto child = state.getChild (i);
 
-        if (child.hasType (juce::Identifier ("NOTE")))
+        if (child.getType() == noteTypeId)
         {
-            int noteNum = static_cast<int> (child.getProperty ("noteNumber", 60));
-            auto startBeat = static_cast<double> (child.getProperty ("startBeat", 0.0));
-            auto lengthBeats = static_cast<double> (child.getProperty ("lengthBeats", 0.25));
-            int vel = static_cast<int> (child.getProperty ("velocity", 100));
+            int noteNum = static_cast<int> (child.getProperty (noteNumberPropId).getIntOr (60));
+            auto startBeat = child.getProperty (startBeatPropId).getDoubleOr (0.0);
+            auto lengthBeats = child.getProperty (lengthBeatsPropId).getDoubleOr (0.25);
+            int vel = static_cast<int> (child.getProperty (velocityPropId).getIntOr (100));
 
             auto noteOn = juce::MidiMessage::noteOn (1, noteNum, (juce::uint8) vel);
             noteOn.setTimeStamp (startBeat);
@@ -163,11 +172,11 @@ void MidiClip::collapseChildrenToMidiData (juce::UndoManager* um)
             noteOff.setTimeStamp (startBeat + lengthBeats);
             seq.addEvent (noteOff);
         }
-        else if (child.hasType (juce::Identifier ("CC_POINT")))
+        else if (child.getType() == ccPointTypeId)
         {
-            int ccNum = static_cast<int> (child.getProperty ("ccNumber", 1));
-            auto beat = static_cast<double> (child.getProperty ("beat", 0.0));
-            int value = static_cast<int> (child.getProperty ("value", 0));
+            int ccNum = static_cast<int> (child.getProperty (ccNumberPropId).getIntOr (1));
+            auto beat = child.getProperty (beatPropId).getDoubleOr (0.0);
+            int value = static_cast<int> (child.getProperty (valuePropId).getIntOr (0));
 
             auto ccMsg = juce::MidiMessage::controllerEvent (1, ccNum, value);
             ccMsg.setTimeStamp (beat);
@@ -179,21 +188,21 @@ void MidiClip::collapseChildrenToMidiData (juce::UndoManager* um)
     setMidiSequence (seq, um);
 }
 
-juce::ValueTree MidiClip::addNote (int noteNumber, double startBeat, double lengthBeats,
-                                    int velocity, juce::UndoManager* um)
+PropertyTree MidiClip::addNote (int noteNumber, double startBeat, double lengthBeats,
+                                int velocity, UndoManager* um)
 {
-    juce::ValueTree noteChild ("NOTE");
-    noteChild.setProperty ("noteNumber", noteNumber, um);
-    noteChild.setProperty ("startBeat", startBeat, um);
-    noteChild.setProperty ("lengthBeats", lengthBeats, um);
-    noteChild.setProperty ("velocity", velocity, um);
+    PropertyTree noteChild (noteTypeId);
+    noteChild.setProperty (noteNumberPropId, Variant (noteNumber), um);
+    noteChild.setProperty (startBeatPropId, Variant (startBeat), um);
+    noteChild.setProperty (lengthBeatsPropId, Variant (lengthBeats), um);
+    noteChild.setProperty (velocityPropId, Variant (velocity), um);
 
-    state.appendChild (noteChild, um);
+    state.addChild (noteChild, -1, um);
     collapseChildrenToMidiData (um);
     return noteChild;
 }
 
-void MidiClip::removeNote (int childIndex, juce::UndoManager* um)
+void MidiClip::removeNote (int childIndex, UndoManager* um)
 {
     if (childIndex >= 0 && childIndex < state.getNumChildren())
     {

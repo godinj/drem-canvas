@@ -4,48 +4,48 @@
 namespace dc
 {
 
-StepSequencer::StepSequencer (juce::ValueTree sequencerState)
+StepSequencer::StepSequencer (PropertyTree sequencerState)
     : state (sequencerState)
 {
-    dc_assert (state.hasType (IDs::STEP_SEQUENCER));
+    dc_assert (state.getType() == IDs::STEP_SEQUENCER);
 }
 
 // --- Global properties ---
 
 int StepSequencer::getNumSteps() const
 {
-    return state.getProperty (IDs::numSteps, 16);
+    return static_cast<int> (state.getProperty (IDs::numSteps).getIntOr (16));
 }
 
-void StepSequencer::setNumSteps (int n, juce::UndoManager* um)
+void StepSequencer::setNumSteps (int n, UndoManager* um)
 {
-    state.setProperty (IDs::numSteps, n, um);
+    state.setProperty (IDs::numSteps, Variant (n), um);
 }
 
 double StepSequencer::getSwing() const
 {
-    return state.getProperty (IDs::swing, 0.0);
+    return state.getProperty (IDs::swing).getDoubleOr (0.0);
 }
 
-void StepSequencer::setSwing (double s, juce::UndoManager* um)
+void StepSequencer::setSwing (double s, UndoManager* um)
 {
-    state.setProperty (IDs::swing, s, um);
+    state.setProperty (IDs::swing, Variant (s), um);
 }
 
 int StepSequencer::getActivePatternBank() const
 {
-    return state.getProperty (IDs::activePatternBank, 0);
+    return static_cast<int> (state.getProperty (IDs::activePatternBank).getIntOr (0));
 }
 
 int StepSequencer::getActivePatternSlot() const
 {
-    return state.getProperty (IDs::activePatternSlot, 0);
+    return static_cast<int> (state.getProperty (IDs::activePatternSlot).getIntOr (0));
 }
 
-void StepSequencer::setActivePattern (int bank, int slotVal, juce::UndoManager* um)
+void StepSequencer::setActivePattern (int bank, int slotVal, UndoManager* um)
 {
-    state.setProperty (IDs::activePatternBank, bank, um);
-    state.setProperty (IDs::activePatternSlot, slotVal, um);
+    state.setProperty (IDs::activePatternBank, Variant (bank), um);
+    state.setProperty (IDs::activePatternSlot, Variant (slotVal), um);
 }
 
 // --- Pattern access ---
@@ -55,12 +55,12 @@ int StepSequencer::getNumPatterns() const
     return state.getNumChildren();
 }
 
-juce::ValueTree StepSequencer::getPattern (int index) const
+PropertyTree StepSequencer::getPattern (int index) const
 {
     return state.getChild (index);
 }
 
-juce::ValueTree StepSequencer::getActivePattern() const
+PropertyTree StepSequencer::getActivePattern() const
 {
     int b = getActivePatternBank();
     int s = getActivePatternSlot();
@@ -68,9 +68,9 @@ juce::ValueTree StepSequencer::getActivePattern() const
     for (int i = 0; i < state.getNumChildren(); ++i)
     {
         auto child = state.getChild (i);
-        if (child.hasType (IDs::STEP_PATTERN)
-            && static_cast<int> (child.getProperty (IDs::bank, -1)) == b
-            && static_cast<int> (child.getProperty (IDs::slot, -1)) == s)
+        if (child.getType() == IDs::STEP_PATTERN
+            && static_cast<int> (child.getProperty (IDs::bank).getIntOr (-1)) == b
+            && static_cast<int> (child.getProperty (IDs::slot).getIntOr (-1)) == s)
             return child;
     }
 
@@ -85,93 +85,93 @@ int StepSequencer::getNumRows() const
     return pattern.isValid() ? pattern.getNumChildren() : 0;
 }
 
-juce::ValueTree StepSequencer::getRow (int rowIndex) const
+PropertyTree StepSequencer::getRow (int rowIndex) const
 {
     auto pattern = getActivePattern();
-    return pattern.isValid() ? pattern.getChild (rowIndex) : juce::ValueTree();
+    return pattern.isValid() ? pattern.getChild (rowIndex) : PropertyTree();
 }
 
 // --- Step access ---
 
-int StepSequencer::getStepCount (const juce::ValueTree& row)
+int StepSequencer::getStepCount (const PropertyTree& row)
 {
     return row.getNumChildren();
 }
 
-juce::ValueTree StepSequencer::getStep (const juce::ValueTree& row, int stepIndex)
+PropertyTree StepSequencer::getStep (const PropertyTree& row, int stepIndex)
 {
     return row.getChild (stepIndex);
 }
 
 // --- Step properties ---
 
-bool StepSequencer::isStepActive (const juce::ValueTree& step)
+bool StepSequencer::isStepActive (const PropertyTree& step)
 {
-    return step.getProperty (IDs::active, false);
+    return step.getProperty (IDs::active).getBoolOr (false);
 }
 
-int StepSequencer::getStepVelocity (const juce::ValueTree& step)
+int StepSequencer::getStepVelocity (const PropertyTree& step)
 {
-    return step.getProperty (IDs::velocity, 100);
+    return static_cast<int> (step.getProperty (IDs::velocity).getIntOr (100));
 }
 
-double StepSequencer::getStepProbability (const juce::ValueTree& step)
+double StepSequencer::getStepProbability (const PropertyTree& step)
 {
-    return step.getProperty (IDs::probability, 1.0);
+    return step.getProperty (IDs::probability).getDoubleOr (1.0);
 }
 
-double StepSequencer::getStepNoteLength (const juce::ValueTree& step)
+double StepSequencer::getStepNoteLength (const PropertyTree& step)
 {
-    return step.getProperty (IDs::noteLength, 1.0);
+    return step.getProperty (IDs::noteLength).getDoubleOr (1.0);
 }
 
 // --- Row properties ---
 
-int StepSequencer::getRowNoteNumber (const juce::ValueTree& row)
+int StepSequencer::getRowNoteNumber (const PropertyTree& row)
 {
-    return row.getProperty (IDs::noteNumber, 36);
+    return static_cast<int> (row.getProperty (IDs::noteNumber).getIntOr (36));
 }
 
-std::string StepSequencer::getRowName (const juce::ValueTree& row)
+std::string StepSequencer::getRowName (const PropertyTree& row)
 {
-    return row.getProperty (IDs::name, "---").toString().toStdString();
+    return row.getProperty (IDs::name).getStringOr ("---");
 }
 
-bool StepSequencer::isRowMuted (const juce::ValueTree& row)
+bool StepSequencer::isRowMuted (const PropertyTree& row)
 {
-    return row.getProperty (IDs::mute, false);
+    return row.getProperty (IDs::mute).getBoolOr (false);
 }
 
-bool StepSequencer::isRowSoloed (const juce::ValueTree& row)
+bool StepSequencer::isRowSoloed (const PropertyTree& row)
 {
-    return row.getProperty (IDs::solo, false);
+    return row.getProperty (IDs::solo).getBoolOr (false);
 }
 
 // --- Factory ---
 
-juce::ValueTree StepSequencer::createDefaultState()
+PropertyTree StepSequencer::createDefaultState()
 {
-    juce::ValueTree seq (IDs::STEP_SEQUENCER);
-    seq.setProperty (IDs::numSteps, 16, nullptr);
-    seq.setProperty (IDs::swing, 0.0, nullptr);
-    seq.setProperty (IDs::activePatternBank, 0, nullptr);
-    seq.setProperty (IDs::activePatternSlot, 0, nullptr);
+    PropertyTree seq (IDs::STEP_SEQUENCER);
+    seq.setProperty (IDs::numSteps, Variant (16), nullptr);
+    seq.setProperty (IDs::swing, Variant (0.0), nullptr);
+    seq.setProperty (IDs::activePatternBank, Variant (0), nullptr);
+    seq.setProperty (IDs::activePatternSlot, Variant (0), nullptr);
 
-    seq.appendChild (createDefaultPattern (0, 0, "A1", 16), nullptr);
+    seq.addChild (createDefaultPattern (0, 0, "A1", 16), -1, nullptr);
 
     return seq;
 }
 
-juce::ValueTree StepSequencer::createDefaultPattern (int bankVal, int slotVal,
-                                                      const std::string& patternName,
-                                                      int numStepsVal)
+PropertyTree StepSequencer::createDefaultPattern (int bankVal, int slotVal,
+                                                    const std::string& patternName,
+                                                    int numStepsVal)
 {
-    juce::ValueTree pattern (IDs::STEP_PATTERN);
-    pattern.setProperty (IDs::bank, bankVal, nullptr);
-    pattern.setProperty (IDs::slot, slotVal, nullptr);
-    pattern.setProperty (IDs::name, patternName.c_str(), nullptr);
-    pattern.setProperty (IDs::numSteps, numStepsVal, nullptr);
-    pattern.setProperty (IDs::stepDivision, 4, nullptr);
+    PropertyTree pattern (IDs::STEP_PATTERN);
+    pattern.setProperty (IDs::bank, Variant (bankVal), nullptr);
+    pattern.setProperty (IDs::slot, Variant (slotVal), nullptr);
+    pattern.setProperty (IDs::name, Variant (patternName), nullptr);
+    pattern.setProperty (IDs::numSteps, Variant (numStepsVal), nullptr);
+    pattern.setProperty (IDs::stepDivision, Variant (4), nullptr);
 
     // GM drum map: 8 rows
     struct DrumRow { int note; const char* name; };
@@ -188,24 +188,24 @@ juce::ValueTree StepSequencer::createDefaultPattern (int bankVal, int slotVal,
 
     for (auto& dr : rows)
     {
-        juce::ValueTree row (IDs::STEP_ROW);
-        row.setProperty (IDs::noteNumber, dr.note, nullptr);
-        row.setProperty (IDs::name, dr.name, nullptr);
-        row.setProperty (IDs::mute, false, nullptr);
-        row.setProperty (IDs::solo, false, nullptr);
+        PropertyTree row (IDs::STEP_ROW);
+        row.setProperty (IDs::noteNumber, Variant (dr.note), nullptr);
+        row.setProperty (IDs::name, Variant (std::string (dr.name)), nullptr);
+        row.setProperty (IDs::mute, Variant (false), nullptr);
+        row.setProperty (IDs::solo, Variant (false), nullptr);
 
         for (int s = 0; s < numStepsVal; ++s)
         {
-            juce::ValueTree step (IDs::STEP);
-            step.setProperty (IDs::index, s, nullptr);
-            step.setProperty (IDs::active, false, nullptr);
-            step.setProperty (IDs::velocity, 100, nullptr);
-            step.setProperty (IDs::probability, 1.0, nullptr);
-            step.setProperty (IDs::noteLength, 1.0, nullptr);
-            row.appendChild (step, nullptr);
+            PropertyTree step (IDs::STEP);
+            step.setProperty (IDs::index, Variant (s), nullptr);
+            step.setProperty (IDs::active, Variant (false), nullptr);
+            step.setProperty (IDs::velocity, Variant (100), nullptr);
+            step.setProperty (IDs::probability, Variant (1.0), nullptr);
+            step.setProperty (IDs::noteLength, Variant (1.0), nullptr);
+            row.addChild (step, -1, nullptr);
         }
 
-        pattern.appendChild (row, nullptr);
+        pattern.addChild (row, -1, nullptr);
     }
 
     return pattern;

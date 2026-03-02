@@ -1,5 +1,4 @@
 #pragma once
-#include <JuceHeader.h>
 #include <string>
 #include "Project.h"
 
@@ -9,51 +8,51 @@ namespace dc
 class StepSequencer
 {
 public:
-    explicit StepSequencer (juce::ValueTree sequencerState);
+    explicit StepSequencer (PropertyTree sequencerState);
 
-    juce::ValueTree& getState() { return state; }
-    const juce::ValueTree& getState() const { return state; }
+    PropertyTree& getState() { return state; }
+    const PropertyTree& getState() const { return state; }
 
     // Global properties
     int getNumSteps() const;
-    void setNumSteps (int n, juce::UndoManager* um = nullptr);
+    void setNumSteps (int n, UndoManager* um = nullptr);
     double getSwing() const;
-    void setSwing (double s, juce::UndoManager* um = nullptr);
+    void setSwing (double s, UndoManager* um = nullptr);
     int getActivePatternBank() const;
     int getActivePatternSlot() const;
-    void setActivePattern (int bank, int slot, juce::UndoManager* um = nullptr);
+    void setActivePattern (int bank, int slot, UndoManager* um = nullptr);
 
     // Pattern access
     int getNumPatterns() const;
-    juce::ValueTree getPattern (int index) const;
-    juce::ValueTree getActivePattern() const;
+    PropertyTree getPattern (int index) const;
+    PropertyTree getActivePattern() const;
 
     // Row access (within active pattern)
     int getNumRows() const;
-    juce::ValueTree getRow (int rowIndex) const;
+    PropertyTree getRow (int rowIndex) const;
 
     // Step access (within a row)
-    static int getStepCount (const juce::ValueTree& row);
-    static juce::ValueTree getStep (const juce::ValueTree& row, int stepIndex);
+    static int getStepCount (const PropertyTree& row);
+    static PropertyTree getStep (const PropertyTree& row, int stepIndex);
 
     // Step properties
-    static bool isStepActive (const juce::ValueTree& step);
-    static int getStepVelocity (const juce::ValueTree& step);
-    static double getStepProbability (const juce::ValueTree& step);
-    static double getStepNoteLength (const juce::ValueTree& step);
+    static bool isStepActive (const PropertyTree& step);
+    static int getStepVelocity (const PropertyTree& step);
+    static double getStepProbability (const PropertyTree& step);
+    static double getStepNoteLength (const PropertyTree& step);
 
     // Row properties
-    static int getRowNoteNumber (const juce::ValueTree& row);
-    static std::string getRowName (const juce::ValueTree& row);
-    static bool isRowMuted (const juce::ValueTree& row);
-    static bool isRowSoloed (const juce::ValueTree& row);
+    static int getRowNoteNumber (const PropertyTree& row);
+    static std::string getRowName (const PropertyTree& row);
+    static bool isRowMuted (const PropertyTree& row);
+    static bool isRowSoloed (const PropertyTree& row);
 
     // Factory
-    static juce::ValueTree createDefaultState();
-    static juce::ValueTree createDefaultPattern (int bank, int slot, const std::string& name, int numSteps);
+    static PropertyTree createDefaultState();
+    static PropertyTree createDefaultPattern (int bank, int slot, const std::string& name, int numSteps);
 
 private:
-    juce::ValueTree state;
+    PropertyTree state;
 };
 
 } // namespace dc

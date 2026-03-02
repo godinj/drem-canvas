@@ -5,7 +5,7 @@ namespace dc
 
 namespace
 {
-    const juce::Identifier masterVolumeId ("masterVolume");
+    const dc::PropertyId masterVolumeId ("masterVolume");
 }
 
 MixerState::MixerState (Project& p)
@@ -25,12 +25,12 @@ Track MixerState::getChannel (int index) const
 
 float MixerState::getMasterVolume() const
 {
-    return static_cast<float> (project.getState().getProperty (masterVolumeId, 1.0f));
+    return static_cast<float> (project.getState().getProperty (masterVolumeId).getDoubleOr (1.0));
 }
 
-void MixerState::setMasterVolume (float vol, juce::UndoManager* um)
+void MixerState::setMasterVolume (float vol, UndoManager* um)
 {
-    project.getState().setProperty (masterVolumeId, vol, um);
+    project.getState().setProperty (masterVolumeId, Variant (static_cast<double> (vol)), um);
 }
 
 } // namespace dc

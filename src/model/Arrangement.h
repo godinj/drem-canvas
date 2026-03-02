@@ -1,5 +1,4 @@
 #pragma once
-#include <JuceHeader.h>
 #include "Project.h"
 #include "Track.h"
 

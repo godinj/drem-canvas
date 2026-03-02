@@ -38,7 +38,7 @@ void Arrangement::removeTrack (int index)
 void Arrangement::moveTrack (int fromIndex, int toIndex)
 {
     auto& state = project.getState();
-    auto tracksNode = state.getChildWithName (IDs::TRACKS);
+    auto tracksNode = state.getChildWithType (IDs::TRACKS);
 
     if (! tracksNode.isValid())
         return;
