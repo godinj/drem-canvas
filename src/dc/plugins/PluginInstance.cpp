@@ -374,7 +374,7 @@ std::unique_ptr<PluginInstance> PluginInstance::create (
 
     // Fallback: if UID was invalid or createInstance failed, enumerate
     // factory classes and find the first audio effect (handles legacy
-    // projects that store integer UIDs from the old JUCE format).
+    // projects that store integer UIDs from the old format).
     if (component == nullptr)
     {
         auto numClasses = factory->countClasses();
@@ -893,7 +893,7 @@ void PluginInstance::setState (const std::vector<uint8_t>& data)
     std::memcpy (&componentSize, data.data(), 4);
 
     // Sanity check: if componentSize is unreasonably large or doesn't fit,
-    // this might be JUCE-format or other legacy data — try raw pass-through
+    // this might be legacy-format or other pre-migration data — try raw pass-through
     if (4 + componentSize > data.size())
     {
         dc_log ("PluginInstance::setState: format mismatch (size=%zu, declared=%u) — "
@@ -909,7 +909,7 @@ void PluginInstance::setState (const std::vector<uint8_t>& data)
             dc_log ("PluginInstance::setState: raw pass-through succeeded");
         else
             dc_log ("PluginInstance::setState: raw pass-through also failed — "
-                    "state will not be restored (likely legacy JUCE format)");
+                    "state will not be restored (likely legacy format)");
 
         // Reactivate regardless of success or failure
         component_->setActive (true);

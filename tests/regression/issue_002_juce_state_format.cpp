@@ -1,14 +1,14 @@
 // tests/regression/issue_002_juce_state_format.cpp
 //
 // Bug: PluginInstance::setState crashed or silently failed when given
-//      JUCE-format plugin state data.  The dc:: format expects
+//      legacy-format plugin state data.  The dc:: format expects
 //      [4 bytes componentSize][componentData][controllerData], but old
-//      projects store state in JUCE's opaque binary format which has a
+//      projects store state in the old opaque binary format which has a
 //      different header structure.
 //
 // Cause: setState read the first 4 bytes as componentSize without
 //        checking whether 4 + componentSize fits in the data buffer.
-//        When the first 4 bytes of JUCE-format data decode to a large
+//        When the first 4 bytes of legacy-format data decode to a large
 //        value, the subsequent reads are out-of-bounds.
 //
 // Fix: Added a bounds check before parsing.  If componentSize doesn't
@@ -24,22 +24,22 @@
 // directly in a unit test.  Instead we test the bounds-check logic that
 // guards against the crash.
 
-TEST_CASE ("Regression #002: componentSize bounds check detects JUCE format",
+TEST_CASE ("Regression #002: componentSize bounds check detects legacy format",
            "[regression]")
 {
-    // Simulate JUCE-format state: first 4 bytes decode to a componentSize
+    // Simulate legacy-format state: first 4 bytes decode to a componentSize
     // that exceeds the total data length.
-    std::vector<uint8_t> juceFormatData = {
+    std::vector<uint8_t> legacyFormatData = {
         0xFF, 0xFF, 0x00, 0x00,  // componentSize = 65535 (LE), larger than data
         0x01, 0x02, 0x03, 0x04   // some payload (total = 8 bytes)
     };
 
     uint32_t componentSize = 0;
-    std::memcpy (&componentSize, juceFormatData.data(), 4);
+    std::memcpy (&componentSize, legacyFormatData.data(), 4);
 
     // The dc:: format requires 4 + componentSize <= data.size().
-    // JUCE-format data will fail this check.
-    bool formatValid = (4 + componentSize <= juceFormatData.size());
+    // Legacy-format data will fail this check.
+    bool formatValid = (4 + componentSize <= legacyFormatData.size());
     REQUIRE_FALSE (formatValid);
 }
 

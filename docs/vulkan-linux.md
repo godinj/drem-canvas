@@ -1,5 +1,9 @@
 # Vulkan/Linux Fixes (2026-02-24)
 
+> **Note**: This document was written during the JUCE-based architecture era.
+> The project has since migrated to a custom stack. References to JUCE below
+> are historical.
+
 ## Bug 1: JUCE Instance Detection on Wayland
 
 **Symptom**: App exits silently (exit code 0, no output) before `initialise()` is called.

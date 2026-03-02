@@ -32,13 +32,13 @@ void Project::createDefaultState()
 
 bool Project::saveToFile (const std::filesystem::path& /*file*/) const
 {
-    // TODO: XML serialization removed in sans-JUCE migration
+    // TODO: XML serialization removed in format migration
     return false;
 }
 
 bool Project::loadFromFile (const std::filesystem::path& /*file*/)
 {
-    // TODO: XML serialization removed in sans-JUCE migration
+    // TODO: XML serialization removed in format migration
     return false;
 }
 

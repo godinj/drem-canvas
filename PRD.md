@@ -1,5 +1,10 @@
 # Drem Canvas — Digital Audio Workstation
 
+> **Note**: This PRD was written for the original JUCE-based architecture.
+> The project has since migrated to a custom stack (Skia, PortAudio, RtMidi,
+> VST3 SDK). References to JUCE below are historical. See CLAUDE.md for the
+> current architecture.
+
 ## Context
 
 Build a full-featured DAW as a native macOS desktop application using **C++ (C++17)** and the **JUCE 7+ framework**. JUCE provides the audio engine primitives (`AudioProcessorGraph`, `AudioDeviceManager`), GUI framework, plugin hosting (`VST3PluginFormat`), file I/O, and `ValueTree` data model — making it the industry-standard foundation for audio software.

@@ -54,7 +54,7 @@ public:
     /// Serialize to binary (for base64 encoding in YAML)
     std::vector<uint8_t> toBinary() const;
 
-    /// Deserialize from binary (handles both new and legacy JUCE format)
+    /// Deserialize from binary (handles both new and legacy format)
     static MidiSequence fromBinary(const std::vector<uint8_t>& data);
 
     /// Direct access

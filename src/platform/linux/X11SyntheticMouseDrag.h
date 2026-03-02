@@ -14,7 +14,7 @@ namespace dc
  * event queue without moving the physical cursor. XSendEvent works regardless
  * of window position (no need to move editor on-screen for XWayland).
  *
- * Wine and JUCE both process XSendEvent-delivered mouse events — neither
+ * Wine and the host app both process XSendEvent-delivered mouse events — neither
  * filters the send_event flag.
  */
 class X11SyntheticMouseDrag : public SyntheticMouseDrag
@@ -29,7 +29,7 @@ public:
 
 private:
     void* xDisplay = nullptr;
-    unsigned long xWindow = 0;       // JUCE wrapper window (native coords reference)
+    unsigned long xWindow = 0;       // Host wrapper window (native coords reference)
     bool active = false;
 
     // Root-relative coordinates at drag origin (for delta computation)

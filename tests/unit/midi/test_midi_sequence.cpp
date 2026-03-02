@@ -312,9 +312,9 @@ TEST_CASE("MidiSequence fromBinary with truncated data returns partial sequence"
     REQUIRE(seq.getNumEvents() == 0);
 }
 
-// ─── Legacy JUCE format deserialization ─────────────────────────
+// ─── Legacy format deserialization ──────────────────────────────
 
-TEST_CASE("MidiSequence legacy JUCE format deserialization", "[midi][sequence]")
+TEST_CASE("MidiSequence legacy format deserialization", "[midi][sequence]")
 {
     // Build a legacy-format binary blob:
     // Big-endian double (timestamp) + big-endian int32 (msg size) + raw MIDI bytes

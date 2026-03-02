@@ -2,7 +2,7 @@
 //
 // Bug: descriptionFromPropertyTree set desc.uid to the file path (e.g.
 //      "/usr/lib/vst3/Phase Plant.vst3") instead of the VST3 class UID hex
-//      string.  Old projects also store unique_id as a JUCE-format integer
+//      string.  Old projects also store unique_id as an old-format integer
 //      (e.g. -3838345), which is equally invalid.
 //
 // Cause: Both desc.uid and desc.path were read from IDs::pluginFileOrIdentifier.
@@ -27,7 +27,7 @@ TEST_CASE ("Regression #001: hexStringToUid rejects file paths", "[regression][p
     REQUIRE_FALSE (dc::PluginDescription::hexStringToUid (
         "C:\\Program Files\\VST3\\Serum.vst3", uid));
 
-    // JUCE integer UIDs are not valid hex UIDs
+    // Legacy integer UIDs are not valid hex UIDs
     REQUIRE_FALSE (dc::PluginDescription::hexStringToUid ("-3838345", uid));
 
     // Positive integer UID

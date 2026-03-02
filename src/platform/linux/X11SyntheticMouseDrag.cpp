@@ -1,6 +1,5 @@
-// This file deliberately does NOT include JuceHeader.h.
 // X11 defines Font, Time, Drawable, Bool, Status as typedefs/macros
-// which collide with identically-named JUCE classes.
+// which collide with identically-named GUI framework classes.
 
 #if defined(__linux__)
 

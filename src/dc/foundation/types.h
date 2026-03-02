@@ -1,10 +1,5 @@
 #pragma once
 
-#if defined(DC_LIBRARY_BUILD) && defined(JUCE_CORE_H_INCLUDED)
-  #error "dc::foundation must not depend on JUCE — Phase 0 boundary violation. " \
-         "See docs/sans-juce/04-foundation-types.md"
-#endif
-
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

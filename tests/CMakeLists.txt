@@ -1,4 +1,4 @@
-# ─── Unit Tests (NO JUCE) ─────────────────────────────────────
+# ─── Unit Tests ───────────────────────────────────────────────
 add_executable(dc_unit_tests
     # Phase 3: foundation tests
     unit/foundation/test_colour.cpp
@@ -41,12 +41,12 @@ add_executable(dc_unit_tests
     regression/issue_002_juce_state_format.cpp
     regression/issue_003_set_state_deactivation.cpp
 
-    # Phase 8: higher-level model tests (JUCE-free classes only)
+    # Phase 8: higher-level model tests
     unit/model_layer/test_tempo_map.cpp
     unit/model_layer/test_grid_system.cpp
     unit/model_layer/test_clipboard.cpp
 
-    # App-layer sources needed by model_layer unit tests (JUCE-free subset)
+    # App-layer sources needed by model_layer unit tests
     ${CMAKE_SOURCE_DIR}/src/model/TempoMap.cpp
     ${CMAKE_SOURCE_DIR}/src/model/GridSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/model/Clipboard.cpp
@@ -93,7 +93,7 @@ add_executable(dc_integration_tests
     integration/test_vim_commands.cpp
     integration/test_audio_graph.cpp
 
-    # Phase 8: higher-level model tests (require JUCE or app-layer sources)
+    # Phase 8: higher-level model tests (require app-layer sources)
     integration/test_project.cpp
     integration/test_track.cpp
     integration/test_arrangement.cpp

@@ -1,10 +1,5 @@
 #pragma once
 
-#if defined(DC_LIBRARY_BUILD) && defined(JUCE_AUDIO_BASICS_H_INCLUDED)
-  #error "dc::midi must not depend on JUCE audio basics — Phase 2 boundary violation. " \
-         "See docs/sans-juce/06-midi-subsystem.md"
-#endif
-
 #include <cstdint>
 #include <vector>
 

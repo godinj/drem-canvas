@@ -31,7 +31,7 @@ public:
     void setNumberBuffer (const std::string& buffer);
 
     /** Switch to spatial results mode — grid shows spatially-discovered controls
-        instead of the full JUCE parameter list. */
+        instead of the full VST3 parameter list. */
     void setSpatialResults (const std::vector<SpatialParamInfo>& results,
                             dc::PluginInstance* plugin);
     void clearSpatialResults();
@@ -47,7 +47,7 @@ private:
     bool numberEntry = false;
     std::string numberBuffer;
 
-    // Spatial mode: show spatially-discovered controls instead of JUCE params
+    // Spatial mode: show spatially-discovered controls instead of VST3 params
     std::vector<SpatialParamInfo> spatialResults;
     bool spatialMode = false;
     dc::PluginInstance* pluginForValues = nullptr;

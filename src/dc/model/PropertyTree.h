@@ -1,10 +1,5 @@
 #pragma once
 
-#if defined(DC_LIBRARY_BUILD) && defined(JUCE_DATA_STRUCTURES_H_INCLUDED)
-  #error "dc::model must not depend on JUCE data structures — Phase 1 boundary violation. " \
-         "See docs/sans-juce/01-observable-model.md"
-#endif
-
 #include "PropertyId.h"
 #include "Variant.h"
 #include "dc/foundation/listener_list.h"

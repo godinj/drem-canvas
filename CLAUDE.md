@@ -94,45 +94,28 @@ sudo apt-mark unhold winehq-staging wine-staging wine-staging-amd64 wine-staging
 
 ## Architecture
 
-- **C++17** with **JUCE 8** framework, **yaml-cpp** for serialization
+- **C++17** with **Skia** for rendering, **PortAudio** for audio I/O, **RtMidi** for MIDI, **VST3 SDK** for plugin hosting, **yaml-cpp** for serialization
 - **GPU rendering**: Skia + Metal (macOS) / Skia + Vulkan (Linux)
 - **Windowing**: Native Cocoa/MTKView (macOS) / GLFW 3 (Linux)
 - Namespace: `dc`
 - `src/engine/` — Real-time audio (never allocates or locks on audio thread)
-- `src/model/` — Data model using JUCE `ValueTree` (message thread only)
+- `src/model/` — Data model using `dc::PropertyTree` (message thread only)
 - `src/gui/` — Presentational components observing model state
-- `src/vim/` — Vim modal navigation (KeyListener intercepting before child widgets)
-- `src/plugins/` — VST3/AU plugin hosting (AU on macOS only)
+- `src/vim/` — Vim modal navigation (intercepts keys before child widgets)
+- `src/plugins/` — VST3 plugin hosting
 - `src/utils/` — Helpers (undo, audio file utils)
 - `src/platform/` — macOS native layer (`.mm` files)
 - `src/platform/linux/` — Linux platform layer (GLFW, Vulkan, zenity dialogs)
 - `src/graphics/rendering/GpuBackend.h` — Abstract GPU interface (MetalBackend / VulkanBackend)
 
-### JUCE Submodule Patches
-
-The JUCE submodule (`libs/JUCE`) has local patches on top of upstream commit `501c076`
-that add IParameterFinder spatial hints and performEdit snoop support for VST3 plugin
-parameter discovery. These patches are:
-
-- **Canonical source**: `scripts/juce-patches/*.patch`
-- **Applied by**: `scripts/bootstrap.sh` (automatic on new worktrees)
-- **Affected files**: `juce_VST3PluginFormat.cpp`, `juce_VST3PluginFormatImpl.h`
-
-Each worktree has its own JUCE submodule git directory (objects are NOT shared).
-`bootstrap.sh` handles this automatically — it fetches patch commits from sibling
-worktrees when possible, or applies the `.patch` files as a fallback.
-
-**If spatial hints stop working** (overlay shows 0 results for all plugins), the JUCE
-patches are likely missing. Run `scripts/bootstrap.sh` to re-apply them.
-
 ## Key Patterns
 
-- `ValueTree` is the single source of truth for all model state
-- GUI components observe ValueTree changes via `ValueTree::Listener`
+- `dc::PropertyTree` is the single source of truth for all model state
+- GUI components observe PropertyTree changes via `dc::PropertyTree::Listener`
 - Audio thread communicates with GUI via `std::atomic` and lock-free FIFOs
-- `VimEngine` is a `juce::KeyListener` attached to `MainComponent` — intercepts all keys in Normal mode, passes through in Insert mode
+- `VimEngine` intercepts all keys in Normal mode, passes through in Insert mode
 - Track selection lives in `Arrangement`, clip selection in `VimContext`
-- `Project::getUndoManager()` provides the shared `juce::UndoManager`
+- `Project::getUndoManager()` provides the shared `dc::UndoManager`
 
 ## Playhead & Timeline Coordinate System
 
@@ -177,13 +160,13 @@ double timeInSeconds = (double(mouseX - headerWidth) + scrollOffset) / pixelsPer
 - `TransportController` stores position as `std::atomic<int64_t>` samples — safe to read from any thread
 - Conversion to seconds/pixels happens only in GUI code at draw time
 - The playhead is drawn in `ArrangementView::paint()` as a red vertical line (not using the `Cursor` component)
-- `ArrangementView` repaints at 30Hz via `juce::Timer` to animate the playhead
+- `ArrangementView` repaints at 30Hz via `dc::Timer` to animate the playhead
 - When adding new timeline-aware components, always derive screen position using the full chain above — do not skip the scroll offset or header width
 
 ## Conventions
 
-- JUCE coding style: spaces around operators, braces on new line for classes/functions, `camelCase` methods, `PascalCase` classes
-- Header includes use `<JuceHeader.h>` plus project-relative paths (e.g., `"model/Project.h"`)
+- Coding style: spaces around operators, braces on new line for classes/functions, `camelCase` methods, `PascalCase` classes
+- Header includes use project-relative paths (e.g., `"model/Project.h"`)
 - All new `.cpp` files must be added to `target_sources` in `CMakeLists.txt`
 - Always verify with `cmake --build --preset release` after changes
 
@@ -243,7 +226,7 @@ See `tests/regression/README.md` for the full template.
 Two verification tiers run automatically via Claude Code hooks:
 
 - **Tier 1** (`scripts/quick-check.sh`): Runs after every Edit/Write. Checks
-  architecture boundaries and real-time safety on changed files. Budget: 2 seconds.
+  real-time safety on changed engine files. Budget: 2 seconds.
 - **Tier 2** (`scripts/verify.sh`): Runs when the agent session ends. Full build,
   architecture check, tests, golden file comparisons. Budget: 30 seconds.
 
@@ -255,9 +238,8 @@ Hook configuration lives in `.claude/settings.json`.
 2. Clean build: delete `build/`, run `cmake --preset release && cmake --build --preset release`
 3. `scripts/check_deps.sh` exits 0 with all `[OK]`
 4. In worktree context, `ls -la libs/skia` shows symlink to shared cache
-5. `libs/JUCE/CMakeLists.txt` exists
-6. macOS: App launches without crash: `open "build/DremCanvas_artefacts/Release/Drem Canvas.app"`
-7. Linux: App launches without crash: `./build/DremCanvas_artefacts/Release/DremCanvas`
+5. macOS: App launches without crash: `open "build/DremCanvas_artefacts/Release/Drem Canvas.app"`
+6. Linux: App launches without crash: `./build/DremCanvas_artefacts/Release/DremCanvas`
 
 ## Current State
 
@@ -266,7 +248,7 @@ Phases 1-4 and 8-10 implemented:
 - Arrangement view with waveform display
 - Mixer with channel strips and metering
 - MIDI engine and piano roll editor
-- VST3/AU plugin hosting
+- VST3 plugin hosting
 - Vim modal engine (Normal/Insert modes, hjkl, basic actions, visual cursor)
 - VimStatusBar with mode/context/cursor/playhead display
 - YAML session save/load

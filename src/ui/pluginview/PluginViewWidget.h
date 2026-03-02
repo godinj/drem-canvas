@@ -64,7 +64,7 @@ public:
 
     // Synthetic mouse drag for vim parameter adjustment (h/l/H/L)
     /** Apply a synthetic mouse drag for the given parameter.
-        In spatial mode, paramIndex is a spatial index; otherwise it's a JUCE param index.
+        In spatial mode, paramIndex is a spatial index; otherwise it's a VST3 parameter index.
         Returns true if the drag was sent (parameter has spatial data). */
     bool applyMouseDrag (int paramIndex, int pixelDelta);
 

@@ -1,5 +1,9 @@
 # IParameterFinder Spatial Hints — Research & Design
 
+> **Note**: This document was written during the JUCE-based architecture era.
+> The project has since migrated to a custom stack. References to JUCE below
+> are historical. See CLAUDE.md for the current architecture.
+
 ## Overview
 
 VST3's `IParameterFinder` interface allows a host to query which parameter

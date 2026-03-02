@@ -5,7 +5,7 @@
 
 namespace {
 
-// JUCE MemoryOutputStream writes doubles and ints in big-endian byte order.
+// The legacy format writes doubles and ints in big-endian byte order.
 // These helpers read big-endian values for legacy format detection.
 
 double readDoubleBE(const uint8_t* p)
@@ -227,7 +227,7 @@ MidiSequence MidiSequence::fromBinary(const std::vector<uint8_t>& data)
     }
     else
     {
-        // Legacy JUCE format: no version header. The first 8 bytes are a
+        // Legacy format (pre-migration): no version header. The first 8 bytes are a
         // big-endian double (timestamp), followed by a big-endian int32
         // (message size), then raw MIDI bytes. Repeated until EOF.
         // We re-read from the beginning since we already consumed 4 bytes

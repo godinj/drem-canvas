@@ -51,7 +51,7 @@ dc::PluginDescription PluginHost::descriptionFromPropertyTree (const PropertyTre
     desc.manufacturer = pluginNode.getProperty (IDs::pluginManufacturer).getStringOr ("");
     desc.path         = pluginNode.getProperty (IDs::pluginFileOrIdentifier).getStringOr ("");
 
-    // Try to get UID from pluginUniqueId (may be integer from old JUCE format)
+    // Try to get UID from pluginUniqueId (may be integer from old format)
     auto uidStr = pluginNode.getProperty (IDs::pluginUniqueId).getStringOr ("");
 
     // If it looks like a valid 32-char hex UID, use it directly
