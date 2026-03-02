@@ -22,27 +22,59 @@
 ### Issue 1: SIGSEGV loading two yabridge plugins back-to-back
 
 **Severity**: Critical
+**Status**: FIXED (serialized yabridge loads with settling delay)
+
 **Symptom**: Loading a project with two yabridge-bridged plugins (e.g. Phase Plant + kHs Gate)
 causes SIGSEGV during the second plugin's module loading (dlopen/ModuleEntry).
 **Context**: `AppController::rebuildAudioGraph()` loads plugins sequentially via
 `createPluginSync()` in a for loop (same thread, blocking). The first plugin loads
 successfully; the second crashes.
-**Root cause**: Unknown — likely yabridge global state conflict or Wine bridge
-race condition between two chainloaders.
-**Current mitigation**: Dead-man's-pedal catches the crash; on next startup the
-crashing module is marked blocked. But the crash itself is not prevented.
+
+**Root cause**: Yabridge chainloaders (identical copies of
+`libyabridge-chainloader-vst3.so`) each spawn a Wine host process and set up IPC
+sockets during their `ModuleEntry` call. When two chainloaders initialise
+back-to-back without a settling delay, the second Wine bridge's setup races with
+the first's async IPC thread startup. The crash manifests as a null function
+pointer dereference (PC=0x0) on a yabridge bridge background thread, with a
+completely corrupted stack (both stack frames at 0x0).
+
+**GDB backtrace**:
+```
+Thread 26 "DremCanvas" received signal SIGSEGV, Segmentation fault.
+[Switching to Thread 0x7fff8bfff6c0 (LWP 224480)]
+0x0000000000000000 in ?? ()
+#0  0x0000000000000000 in ??? ()
+#1  0x0000000000000000 in ??? ()
+```
+
+**Key findings**:
+- A standalone test program that dlopen's two yabridge chainloaders works fine,
+  because it does nothing else during loading (no audio engine, no MIDI init).
+- The crash only occurs in the full application context where other subsystems
+  (audio engine, MIDI engine) are initialised concurrently with plugin loads.
+- All yabridge chainloader .so files are byte-identical copies of
+  `libyabridge-chainloader-vst3.so` (same md5 hash: f5eb65e15ea418c0747cc4a30ffa60f0).
+- Each chainloader uses its own file path to determine which Windows plugin to bridge.
+- The chainloaders internally `dlopen` the shared `libyabridge-vst3.so` which manages
+  the Wine host process lifecycle.
+
+**Fix (Option A: serialization with delay)**:
+- Added `yabridgeLoadMutex_` to `VST3Host` that serialises all yabridge module loads.
+- Before loading a yabridge bundle (detected via `isYabridgeBundle`), the mutex is
+  acquired. It is held for the entire load + a 500ms settling delay.
+- The settling delay gives each Wine bridge time to complete its async IPC
+  initialisation before the next chainloader's `ModuleEntry` is called.
+- The `moduleMutex_` was changed from `lock_guard` to `unique_lock` to allow
+  unlocking during the settling delay (so the module cache is not held).
+- Applies to both the "cached safe" path and the "first-time unknown" path.
 
 **Key code paths**:
-- `AppController::rebuildAudioGraph()` (`src/ui/AppController.cpp:1438-1456`) — sequential loop
-- `VST3Host::createInstanceSync()` (`src/dc/plugins/VST3Host.cpp:91-109`) — blocking create
-- `VST3Host::getOrLoadModule()` (`src/dc/plugins/VST3Host.cpp:142-233`) — yabridge path
-- `VST3Module::load()` (`src/dc/plugins/VST3Module.cpp:145-246`) — dlopen + ModuleEntry
+- `AppController::rebuildAudioGraph()` (`src/ui/AppController.cpp:1438-1456`) -- sequential loop
+- `VST3Host::createInstanceSync()` (`src/dc/plugins/VST3Host.cpp:91-109`) -- blocking create
+- `VST3Host::getOrLoadModule()` (`src/dc/plugins/VST3Host.cpp:142-250`) -- yabridge serialization
+- `VST3Module::load()` (`src/dc/plugins/VST3Module.cpp:145-246`) -- dlopen + ModuleEntry
 
-**Investigation needed**:
-- Run under GDB to get exact crash backtrace
-- Test whether adding a delay between yabridge loads helps
-- Test whether loading into separate processes (out-of-process hosting) avoids it
-- Check yabridge issue tracker for known multi-plugin loading bugs
+**Regression test**: `tests/regression/issue_001_multi_yabridge_load.cpp`
 
 ### Issue 2: Legacy JUCE-format plugin state fails to restore
 

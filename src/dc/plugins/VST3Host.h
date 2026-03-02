@@ -62,6 +62,14 @@ private:
     /// Mutex for module cache (async creates may access from different threads)
     std::mutex moduleMutex_;
 
+    /// Mutex serialising yabridge plugin loads.  Yabridge chainloaders
+    /// spawn Wine host processes whose IPC setup races if two loads
+    /// overlap, producing a SIGSEGV on a bridge thread.  We hold this
+    /// mutex for the entire duration of a yabridge load (including a
+    /// short settling delay) so that at most one Wine bridge is being
+    /// established at a time.
+    std::mutex yabridgeLoadMutex_;
+
     /// Get or load a module for a bundle path
     VST3Module* getOrLoadModule (const std::filesystem::path& bundlePath);
 

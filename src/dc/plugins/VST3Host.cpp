@@ -142,8 +142,20 @@ const PluginDescription* VST3Host::findByUid (const std::string& uid) const
 VST3Module* VST3Host::getOrLoadModule (const std::filesystem::path& bundlePath)
 {
     auto key = bundlePath.string();
+    bool isYabridge = VST3Module::isYabridgeBundle (bundlePath);
 
-    std::lock_guard<std::mutex> lock (moduleMutex_);
+    // ── Yabridge serialization ──────────────────────────────────
+    // Yabridge chainloaders spawn Wine host processes whose IPC
+    // setup races when two loads overlap, producing a SIGSEGV on a
+    // yabridge bridge thread.  Hold yabridgeLoadMutex_ for the full
+    // load+settle cycle so at most one Wine bridge is starting.
+    std::unique_lock<std::mutex> yabridgeLock (yabridgeLoadMutex_, std::defer_lock);
+
+    if (isYabridge)
+        yabridgeLock.lock();
+
+    // ── Module cache lookup ─────────────────────────────────────
+    std::unique_lock<std::mutex> lock (moduleMutex_);
 
     auto it = loadedModules_.find (key);
     if (it != loadedModules_.end())
@@ -171,6 +183,14 @@ VST3Module* VST3Host::getOrLoadModule (const std::filesystem::path& bundlePath)
         {
             auto* raw = module.get();
             loadedModules_.emplace (key, std::move (module));
+
+            // Let the yabridge Wine bridge settle before the next load.
+            if (isYabridge)
+            {
+                lock.unlock();
+                std::this_thread::sleep_for (std::chrono::milliseconds (500));
+            }
+
             return raw;
         }
 
@@ -183,7 +203,7 @@ VST3Module* VST3Host::getOrLoadModule (const std::filesystem::path& bundlePath)
     // Yabridge chainloaders can't be fork-probed: the forked child
     // can't set up the Wine bridge, so GetPluginFactory() always aborts.
     // Load them directly in-process with pedal protection.
-    if (VST3Module::isYabridgeBundle (bundlePath))
+    if (isYabridge)
     {
         dc_log ("VST3Host: yabridge detected, loading directly: %s", key.c_str());
         probeCache_.setPedal (bundlePath);
@@ -197,6 +217,11 @@ VST3Module* VST3Host::getOrLoadModule (const std::filesystem::path& bundlePath)
 
             auto* raw = module.get();
             loadedModules_.emplace (key, std::move (module));
+
+            // Let the yabridge Wine bridge settle before the next load.
+            lock.unlock();
+            std::this_thread::sleep_for (std::chrono::milliseconds (500));
+
             return raw;
         }
 

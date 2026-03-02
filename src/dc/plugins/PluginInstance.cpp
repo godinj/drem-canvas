@@ -885,9 +885,27 @@ void PluginInstance::setState (const std::vector<uint8_t>& data)
     uint32_t componentSize = 0;
     std::memcpy (&componentSize, data.data(), 4);
 
+    // Sanity check: if componentSize is unreasonably large or doesn't fit,
+    // this might be JUCE-format or other legacy data — try raw pass-through
     if (4 + componentSize > data.size())
     {
-        dc_log ("PluginInstance::setState: invalid data size");
+        dc_log ("PluginInstance::setState: format mismatch (size=%zu, declared=%u) — "
+                "attempting raw pass-through",
+                data.size(), componentSize);
+
+        // Try passing the entire blob as component state (some formats work this way)
+        auto* stream = new MemoryStream (data);
+        auto result = component_->setState (stream);
+        stream->release();
+
+        if (result == Steinberg::kResultOk)
+        {
+            dc_log ("PluginInstance::setState: raw pass-through succeeded");
+            return;
+        }
+
+        dc_log ("PluginInstance::setState: raw pass-through also failed — "
+                "state will not be restored (likely legacy JUCE format)");
         return;
     }
 

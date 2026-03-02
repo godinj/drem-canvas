@@ -30,6 +30,16 @@ add_executable(dc_unit_tests
     # Plugin scanner tests
     unit/test_plugin_scanner.cpp
 
+    # Plugin tests
+    unit/plugins/test_probe_cache.cpp
+    unit/plugins/test_plugin_description.cpp
+    unit/plugins/test_vst3_module.cpp
+
+    # Regression tests
+    regression/issue_001_uid_from_file_path.cpp
+    regression/issue_001_multi_yabridge_load.cpp
+    regression/issue_002_juce_state_format.cpp
+
     # Phase 8: higher-level model tests (JUCE-free classes only)
     unit/model_layer/test_tempo_map.cpp
     unit/model_layer/test_grid_system.cpp
@@ -39,6 +49,12 @@ add_executable(dc_unit_tests
     ${CMAKE_SOURCE_DIR}/src/model/TempoMap.cpp
     ${CMAKE_SOURCE_DIR}/src/model/GridSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/model/Clipboard.cpp
+
+    # Plugin sources needed by plugin unit tests
+    ${CMAKE_SOURCE_DIR}/src/dc/plugins/ProbeCache.cpp
+    ${CMAKE_SOURCE_DIR}/src/dc/plugins/VST3Module.cpp
+    "${VST3_SDK_DIR}/pluginterfaces/base/coreiids.cpp"
+    "${VST3_SDK_DIR}/pluginterfaces/base/funknown.cpp"
 )
 
 target_link_libraries(dc_unit_tests PRIVATE
@@ -48,12 +64,15 @@ target_link_libraries(dc_unit_tests PRIVATE
     dc_audio
     Catch2::Catch2WithMain
     trompeloeil::trompeloeil
+    yaml-cpp::yaml-cpp
+    ${CMAKE_DL_LIBS}
 )
 
 # Unit tests include model/ headers which live in src/
 target_include_directories(dc_unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${SNDFILE_INCLUDE_DIRS}
+    "${VST3_SDK_DIR}"
 )
 
 # Ensure test-results directory exists for XML output
