@@ -4,6 +4,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace dc {
 
@@ -32,6 +33,18 @@ public:
 
     /// Set the status for a bundle (uses current mtime).
     void setStatus (const std::filesystem::path& bundlePath, Status status);
+
+    // ── Unblock API ──
+
+    /// Reset a blocked module to unknown, allowing retry on next load.
+    /// Also clears any leftover pedal file for that path.
+    void resetStatus (const std::filesystem::path& bundlePath);
+
+    /// Return all paths currently marked as blocked.
+    std::vector<std::filesystem::path> getBlockedPlugins() const;
+
+    /// Reset ALL blocked entries to unknown.
+    void resetAllBlocked();
 
     // ── Dead-man's-pedal ──
 

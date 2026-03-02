@@ -51,6 +51,14 @@ public:
     /// Find a plugin description by UID
     const PluginDescription* findByUid (const std::string& uid) const;
 
+    /// Access the probe cache (for unblock UI / CLI).
+    ProbeCache& getProbeCache() { return probeCache_; }
+    const ProbeCache& getProbeCache() const { return probeCache_; }
+
+    /// Reset a blocked plugin and attempt to load it again.
+    /// Returns the loaded module, or nullptr if it still fails.
+    VST3Module* retryBlockedModule (const std::filesystem::path& bundlePath);
+
 private:
     PluginScanner scanner_;
     ProbeCache probeCache_;

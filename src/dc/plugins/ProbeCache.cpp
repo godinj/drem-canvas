@@ -108,6 +108,42 @@ void ProbeCache::setStatus (const std::filesystem::path& bundlePath, Status stat
     entries_[bundlePath.string()] = { getMtime (bundlePath), status };
 }
 
+void ProbeCache::resetStatus (const std::filesystem::path& bundlePath)
+{
+    setStatus (bundlePath, Status::unknown);
+
+    // Clear any leftover pedal for this path
+    if (auto pedal = checkPedal())
+    {
+        if (*pedal == bundlePath)
+            clearPedal();
+    }
+}
+
+std::vector<std::filesystem::path> ProbeCache::getBlockedPlugins() const
+{
+    std::vector<std::filesystem::path> result;
+
+    for (const auto& [path, entry] : entries_)
+    {
+        if (entry.status == Status::blocked)
+            result.emplace_back (path);
+    }
+
+    return result;
+}
+
+void ProbeCache::resetAllBlocked()
+{
+    for (auto& [path, entry] : entries_)
+    {
+        if (entry.status == Status::blocked)
+            entry.status = Status::unknown;
+    }
+
+    save();
+}
+
 void ProbeCache::setPedal (const std::filesystem::path& bundlePath)
 {
     std::filesystem::create_directories (pedalFile_.parent_path());

@@ -376,3 +376,101 @@ TEST_CASE ("ProbeCache clearPedal is safe when no pedal exists", "[probe_cache]"
     // Should not throw when clearing a non-existent pedal
     REQUIRE_NOTHROW (cache.clearPedal());
 }
+
+TEST_CASE ("ProbeCache unblock API", "[probe_cache]")
+{
+    auto tmp = createTempDir();
+    TempDirGuard guard (tmp);
+
+    auto cacheDir = tmp / "cache";
+    auto bundleDir = tmp / "bundles";
+
+    auto pluginA = createDummyBundle (bundleDir, "PlugA");
+    auto pluginB = createDummyBundle (bundleDir, "PlugB");
+    auto pluginC = createDummyBundle (bundleDir, "PlugC");
+
+    dc::ProbeCache cache (cacheDir);
+
+    SECTION ("resetStatus clears blocked entry")
+    {
+        cache.setStatus (pluginA, dc::ProbeCache::Status::blocked);
+        REQUIRE (cache.getStatus (pluginA) == dc::ProbeCache::Status::blocked);
+
+        cache.resetStatus (pluginA);
+        REQUIRE (cache.getStatus (pluginA) == dc::ProbeCache::Status::unknown);
+    }
+
+    SECTION ("getBlockedPlugins returns only blocked entries")
+    {
+        cache.setStatus (pluginA, dc::ProbeCache::Status::safe);
+        cache.setStatus (pluginB, dc::ProbeCache::Status::blocked);
+        cache.setStatus (pluginC, dc::ProbeCache::Status::blocked);
+
+        auto blocked = cache.getBlockedPlugins();
+        REQUIRE (blocked.size() == 2);
+
+        // Verify both pluginB and pluginC are in the list
+        bool hasB = false, hasC = false;
+        for (const auto& p : blocked)
+        {
+            if (p == pluginB) hasB = true;
+            if (p == pluginC) hasC = true;
+        }
+        REQUIRE (hasB);
+        REQUIRE (hasC);
+    }
+
+    SECTION ("resetAllBlocked clears all blocked entries")
+    {
+        cache.setStatus (pluginA, dc::ProbeCache::Status::blocked);
+        cache.setStatus (pluginB, dc::ProbeCache::Status::blocked);
+        cache.setStatus (pluginC, dc::ProbeCache::Status::safe);
+
+        cache.resetAllBlocked();
+
+        REQUIRE (cache.getStatus (pluginA) == dc::ProbeCache::Status::unknown);
+        REQUIRE (cache.getStatus (pluginB) == dc::ProbeCache::Status::unknown);
+        REQUIRE (cache.getStatus (pluginC) == dc::ProbeCache::Status::safe);  // safe is untouched
+    }
+
+    SECTION ("resetStatus also clears pedal for that path")
+    {
+        cache.setPedal (pluginA);
+        REQUIRE (cache.checkPedal().has_value());
+
+        cache.resetStatus (pluginA);
+        REQUIRE_FALSE (cache.checkPedal().has_value());
+    }
+
+    SECTION ("resetStatus does not clear pedal for a different path")
+    {
+        cache.setPedal (pluginB);
+        REQUIRE (cache.checkPedal().has_value());
+
+        cache.resetStatus (pluginA);
+        REQUIRE (cache.checkPedal().has_value());  // pedal for pluginB still exists
+    }
+
+    SECTION ("getBlockedPlugins returns empty when no blocked entries")
+    {
+        cache.setStatus (pluginA, dc::ProbeCache::Status::safe);
+        cache.setStatus (pluginB, dc::ProbeCache::Status::safe);
+
+        auto blocked = cache.getBlockedPlugins();
+        REQUIRE (blocked.empty());
+    }
+
+    SECTION ("resetAllBlocked persists via save")
+    {
+        cache.setStatus (pluginA, dc::ProbeCache::Status::blocked);
+        cache.setStatus (pluginB, dc::ProbeCache::Status::blocked);
+        cache.resetAllBlocked();  // calls save() internally
+
+        // Reload into a fresh instance and verify
+        dc::ProbeCache cache2 (cacheDir);
+        cache2.load();
+
+        REQUIRE (cache2.getStatus (pluginA) == dc::ProbeCache::Status::unknown);
+        REQUIRE (cache2.getStatus (pluginB) == dc::ProbeCache::Status::unknown);
+    }
+}

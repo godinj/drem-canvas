@@ -139,6 +139,13 @@ const PluginDescription* VST3Host::findByUid (const std::string& uid) const
     return nullptr;
 }
 
+VST3Module* VST3Host::retryBlockedModule (const std::filesystem::path& bundlePath)
+{
+    probeCache_.resetStatus (bundlePath);
+    probeCache_.save();
+    return getOrLoadModule (bundlePath);
+}
+
 VST3Module* VST3Host::getOrLoadModule (const std::filesystem::path& bundlePath)
 {
     auto key = bundlePath.string();
