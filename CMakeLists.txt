@@ -87,6 +87,10 @@ target_sources(DremCanvas PRIVATE
     src/dc/foundation/message_queue.cpp
     src/dc/foundation/worker_thread.cpp
 
+    # dc::model library
+    src/dc/model/PropertyId.cpp
+    src/dc/model/Variant.cpp
+
     # Application entry point
     src/Main.cpp
 
