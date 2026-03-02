@@ -10,7 +10,7 @@ namespace dc
 StepGrid::StepGrid (Project& p)
     : project (p)
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (seqState.isValid())
         seqState.addListener (this);
 
@@ -19,7 +19,7 @@ StepGrid::StepGrid (Project& p)
 
 StepGrid::~StepGrid()
 {
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (seqState.isValid())
         seqState.removeListener (this);
 }
@@ -29,7 +29,7 @@ void StepGrid::paint (juce::Graphics& g)
     g.fillAll (toJuce (0xff1a1a2au));
 
     // Draw row labels
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid()) return;
 
     StepSequencer seq (seqState);
@@ -84,7 +84,7 @@ void StepGrid::rebuild()
 {
     buttons.clear();
 
-    auto seqState = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+    auto seqState = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
     if (! seqState.isValid())
     {
         numRows = 0;
@@ -102,7 +102,7 @@ void StepGrid::rebuild()
     }
 
     numRows  = seq.getNumRows();
-    numSteps = static_cast<int> (pattern.getProperty (IDs::numSteps, 16));
+    numSteps = static_cast<int> (pattern.getProperty (IDs::numSteps, 16).toInt());
 
     for (int r = 0; r < numRows; ++r)
     {
@@ -121,7 +121,7 @@ void StepGrid::rebuild()
             // Click toggles the step
             btn->onClick = [this, r, s]
             {
-                auto seqSt = project.getState().getChildWithName (IDs::STEP_SEQUENCER);
+                auto seqSt = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
                 if (! seqSt.isValid()) return;
 
                 StepSequencer seqModel (seqSt);
@@ -191,9 +191,9 @@ StepButton* StepGrid::getButton (int row, int step)
     return buttons[idx];
 }
 
-void StepGrid::valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier&)
+void StepGrid::propertyChanged (PropertyTree& tree, PropertyId)
 {
-    if (tree.hasType (IDs::STEP))
+    if (tree.getType() == IDs::STEP)
     {
         // Find which step changed and update its button
         auto rowState = tree.getParent();
@@ -203,7 +203,7 @@ void StepGrid::valueTreePropertyChanged (juce::ValueTree& tree, const juce::Iden
         if (! patternState.isValid()) return;
 
         int r = patternState.indexOf (rowState);
-        int s = static_cast<int> (tree.getProperty (IDs::index, -1));
+        int s = static_cast<int> (tree.getProperty (IDs::index, -1).toInt());
 
         if (auto* btn = getButton (r, s))
         {
@@ -211,18 +211,18 @@ void StepGrid::valueTreePropertyChanged (juce::ValueTree& tree, const juce::Iden
             btn->setVelocity (StepSequencer::getStepVelocity (tree));
         }
     }
-    else if (tree.hasType (IDs::STEP_ROW))
+    else if (tree.getType() == IDs::STEP_ROW)
     {
         repaint(); // row label may have changed
     }
 }
 
-void StepGrid::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&)
+void StepGrid::childAdded (PropertyTree&, PropertyTree&)
 {
     rebuild();
 }
 
-void StepGrid::valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int)
+void StepGrid::childRemoved (PropertyTree&, PropertyTree&, int)
 {
     rebuild();
 }

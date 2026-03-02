@@ -8,10 +8,10 @@ namespace dc
 {
 
 class TrackLane : public juce::Component,
-                  private juce::ValueTree::Listener
+                  private PropertyTree::Listener
 {
 public:
-    explicit TrackLane (const juce::ValueTree& trackState);
+    explicit TrackLane (const PropertyTree& trackState);
     ~TrackLane() override;
 
     void paint (juce::Graphics& g) override;
@@ -30,12 +30,12 @@ public:
     void setVisualSelection (const VimContext::VisualSelection& sel, int trackIndex);
 
 private:
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
+    void propertyChanged (PropertyTree&, PropertyId) override;
+    void childAdded (PropertyTree&, PropertyTree&) override;
+    void childRemoved (PropertyTree&, PropertyTree&, int) override;
     void rebuildClipViews();
 
-    juce::ValueTree trackState;
+    PropertyTree trackState;
     juce::OwnedArray<WaveformView> clipViews;
 
     double pixelsPerSecond = 100.0;

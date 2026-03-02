@@ -10,10 +10,10 @@ namespace dc
 {
 
 class ChannelStrip : public juce::Component,
-                     private juce::ValueTree::Listener
+                     private PropertyTree::Listener
 {
 public:
-    explicit ChannelStrip (const juce::ValueTree& trackState, UndoSystem* undoSystem = nullptr);
+    explicit ChannelStrip (const PropertyTree& trackState, UndoSystem* undoSystem = nullptr);
     ~ChannelStrip() override;
 
     void paint (juce::Graphics& g) override;
@@ -40,9 +40,9 @@ public:
     std::function<void (int pluginIndex)> onPluginRemoveRequested;
 
 private:
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
+    void propertyChanged (PropertyTree&, PropertyId) override;
 
-    juce::ValueTree trackState;
+    PropertyTree trackState;
     UndoSystem* undoSystem = nullptr;
 
     juce::Slider fader;

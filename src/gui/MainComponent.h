@@ -30,7 +30,7 @@ namespace dc
 {
 
 class MainComponent : public juce::Component,
-                      private juce::ValueTree::Listener,
+                      private PropertyTree::Listener,
                       private VimEngine::Listener
 {
 public:
@@ -66,10 +66,10 @@ private:
     void insertPluginOnMaster (const juce::PluginDescription& desc);
     void openMasterPluginEditor (int pluginIndex);
 
-    // ValueTree listener
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
+    // PropertyTree listener
+    void propertyChanged (PropertyTree&, PropertyId) override;
+    void childAdded (PropertyTree&, PropertyTree&) override;
+    void childRemoved (PropertyTree&, PropertyTree&, int) override;
 
     // VimEngine::Listener
     void vimModeChanged (VimEngine::Mode newMode) override;

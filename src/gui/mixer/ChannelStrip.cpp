@@ -6,7 +6,7 @@ using dc::bridge::toJuce;
 namespace dc
 {
 
-ChannelStrip::ChannelStrip (const juce::ValueTree& state, UndoSystem* us)
+ChannelStrip::ChannelStrip (const PropertyTree& state, UndoSystem* us)
     : trackState (state),
       undoSystem (us),
       pluginSlotList (state)
@@ -17,17 +17,17 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state, UndoSystem* us)
     fader.setSliderStyle (juce::Slider::LinearVertical);
     fader.setRange (0.0, 1.5, 0.01);
     fader.setSkewFactorFromMidPoint (0.5);
-    fader.setValue (trackState.getProperty (IDs::volume, 1.0), juce::dontSendNotification);
+    fader.setValue (trackState.getProperty (IDs::volume, 1.0).toDouble(), juce::dontSendNotification);
     fader.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     fader.onValueChange = [this]
     {
-        juce::UndoManager* um = nullptr;
+        UndoManager* um = nullptr;
         if (undoSystem != nullptr)
         {
             undoSystem->beginCoalescedTransaction ("Adjust Volume");
             um = &undoSystem->getUndoManager();
         }
-        trackState.setProperty (IDs::volume, static_cast<float> (fader.getValue()), um);
+        trackState.setProperty (IDs::volume, fader.getValue(), um);
         if (onStateChanged)
             onStateChanged();
     };
@@ -36,17 +36,17 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state, UndoSystem* us)
     // Pan knob setup - rotary knob
     panKnob.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     panKnob.setRange (-1.0, 1.0, 0.01);
-    panKnob.setValue (trackState.getProperty (IDs::pan, 0.0), juce::dontSendNotification);
+    panKnob.setValue (trackState.getProperty (IDs::pan, 0.0).toDouble(), juce::dontSendNotification);
     panKnob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     panKnob.onValueChange = [this]
     {
-        juce::UndoManager* um = nullptr;
+        UndoManager* um = nullptr;
         if (undoSystem != nullptr)
         {
             undoSystem->beginCoalescedTransaction ("Adjust Pan");
             um = &undoSystem->getUndoManager();
         }
-        trackState.setProperty (IDs::pan, static_cast<float> (panKnob.getValue()), um);
+        trackState.setProperty (IDs::pan, panKnob.getValue(), um);
         if (onStateChanged)
             onStateChanged();
     };
@@ -55,10 +55,10 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state, UndoSystem* us)
     // Mute button
     muteButton.setClickingTogglesState (true);
     muteButton.setToggleable (true);
-    muteButton.setToggleState (trackState.getProperty (IDs::mute, false), juce::dontSendNotification);
+    muteButton.setToggleState (trackState.getProperty (IDs::mute, false).toBool(), juce::dontSendNotification);
     muteButton.onClick = [this]
     {
-        juce::UndoManager* um = nullptr;
+        UndoManager* um = nullptr;
         if (undoSystem != nullptr)
         {
             undoSystem->beginTransaction ("Toggle Mute");
@@ -73,10 +73,10 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state, UndoSystem* us)
     // Solo button
     soloButton.setClickingTogglesState (true);
     soloButton.setToggleable (true);
-    soloButton.setToggleState (trackState.getProperty (IDs::solo, false), juce::dontSendNotification);
+    soloButton.setToggleState (trackState.getProperty (IDs::solo, false).toBool(), juce::dontSendNotification);
     soloButton.onClick = [this]
     {
-        juce::UndoManager* um = nullptr;
+        UndoManager* um = nullptr;
         if (undoSystem != nullptr)
         {
             undoSystem->beginTransaction ("Toggle Solo");
@@ -89,7 +89,7 @@ ChannelStrip::ChannelStrip (const juce::ValueTree& state, UndoSystem* us)
     addAndMakeVisible (soloButton);
 
     // Name label
-    nameLabel.setText (trackState.getProperty (IDs::name, "Track").toString(),
+    nameLabel.setText (juce::String (trackState.getProperty (IDs::name, "Track").toString()),
                        juce::dontSendNotification);
     nameLabel.setJustificationType (juce::Justification::centred);
     nameLabel.setColour (juce::Label::textColourId, toJuce (0xffe0e0e0u));
@@ -138,8 +138,7 @@ void ChannelStrip::paint (juce::Graphics& g)
     g.fillAll (selected ? toJuce (0xff33334au) : toJuce (0xff2a2a3au));
 
     // Top colour bar from track colour
-    const auto colourValue = trackState.getProperty (IDs::colour, static_cast<int> (0xff4a9eff));
-    const auto trackColour = toJuce (static_cast<uint32_t> (static_cast<int> (colourValue)));
+    const auto trackColour = toJuce (static_cast<uint32_t> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4a9eff)).toInt()));
     g.setColour (trackColour);
     g.fillRect (0, 0, getWidth(), 4);
 
@@ -235,26 +234,26 @@ void ChannelStrip::resized()
     fader.setBounds (area.reduced (4, 2));
 }
 
-void ChannelStrip::valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier& property)
+void ChannelStrip::propertyChanged (PropertyTree& tree, PropertyId property)
 {
     if (tree != trackState)
         return;
 
     // Sync UI controls from model when properties change externally
     if (property == IDs::volume)
-        fader.setValue (static_cast<double> (tree.getProperty (IDs::volume)),
+        fader.setValue (tree.getProperty (IDs::volume).toDouble(),
                         juce::dontSendNotification);
     else if (property == IDs::pan)
-        panKnob.setValue (static_cast<double> (tree.getProperty (IDs::pan)),
+        panKnob.setValue (tree.getProperty (IDs::pan).toDouble(),
                           juce::dontSendNotification);
     else if (property == IDs::mute)
-        muteButton.setToggleState (tree.getProperty (IDs::mute),
+        muteButton.setToggleState (tree.getProperty (IDs::mute).toBool(),
                                     juce::dontSendNotification);
     else if (property == IDs::solo)
-        soloButton.setToggleState (tree.getProperty (IDs::solo),
+        soloButton.setToggleState (tree.getProperty (IDs::solo).toBool(),
                                     juce::dontSendNotification);
     else if (property == IDs::name)
-        nameLabel.setText (tree.getProperty (IDs::name).toString(),
+        nameLabel.setText (juce::String (tree.getProperty (IDs::name).toString()),
                            juce::dontSendNotification);
 }
 

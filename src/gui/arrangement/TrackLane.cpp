@@ -7,7 +7,7 @@ using dc::bridge::toJuce;
 namespace dc
 {
 
-TrackLane::TrackLane (const juce::ValueTree& state)
+TrackLane::TrackLane (const PropertyTree& state)
     : trackState (state)
 {
     trackState.addListener (this);
@@ -26,7 +26,7 @@ void TrackLane::paint (juce::Graphics& g)
     // Draw header area
     auto headerArea = bounds.removeFromLeft (headerWidth);
 
-    dc::Colour trackColour (static_cast<uint32_t> (static_cast<int> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4488aa)))));
+    dc::Colour trackColour (static_cast<uint32_t> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4488aa)).toInt()));
 
     if (selected || inVisualSelection)
     {
@@ -46,7 +46,7 @@ void TrackLane::paint (juce::Graphics& g)
 
     g.setColour (toJuce (dc::Colours::white));
     g.setFont (juce::Font (14.0f));
-    g.drawText (trackState.getProperty (IDs::name, "Untitled").toString(),
+    g.drawText (juce::String (trackState.getProperty (IDs::name, "Untitled").toString()),
                 headerArea.reduced (8, 0),
                 juce::Justification::centredLeft,
                 true);
@@ -126,12 +126,12 @@ void TrackLane::resized()
     {
         auto child = trackState.getChild (i);
 
-        if (child.hasType (IDs::AUDIO_CLIP))
+        if (child.getType() == IDs::AUDIO_CLIP)
         {
             if (clipIndex < clipViews.size())
             {
-                double startPos = static_cast<double> (child.getProperty (IDs::startPosition, 0));
-                double clipLength = static_cast<double> (child.getProperty (IDs::length, 0));
+                double startPos = static_cast<double> (child.getProperty (IDs::startPosition, 0).toInt());
+                double clipLength = static_cast<double> (child.getProperty (IDs::length, 0).toInt());
 
                 int x = juce::roundToInt ((startPos / sampleRate) * pixelsPerSecond) + headerWidth;
                 int w = juce::roundToInt ((clipLength / sampleRate) * pixelsPerSecond);
@@ -154,18 +154,18 @@ void TrackLane::rebuildClipViews()
 {
     clipViews.clear();
 
-    dc::Colour trackColour (static_cast<uint32_t> (static_cast<int> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4488aa)))));
+    dc::Colour trackColour (static_cast<uint32_t> (trackState.getProperty (IDs::colour, static_cast<int> (0xff4488aa)).toInt()));
 
     for (int i = 0; i < trackState.getNumChildren(); ++i)
     {
         auto child = trackState.getChild (i);
 
-        if (child.hasType (IDs::AUDIO_CLIP))
+        if (child.getType() == IDs::AUDIO_CLIP)
         {
             auto* clipView = clipViews.add (new WaveformView());
             clipView->setWaveformColour (trackColour);
 
-            std::string filePath = child.getProperty (IDs::sourceFile, "").toString().toStdString();
+            std::string filePath = child.getProperty (IDs::sourceFile, "").toString();
 
             if (! filePath.empty())
                 clipView->setFile (std::filesystem::path (filePath));
@@ -255,17 +255,17 @@ void TrackLane::setSelectedClipIndex (int index)
     }
 }
 
-void TrackLane::valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&)
+void TrackLane::propertyChanged (PropertyTree&, PropertyId)
 {
     repaint();
 }
 
-void TrackLane::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&)
+void TrackLane::childAdded (PropertyTree&, PropertyTree&)
 {
     rebuildClipViews();
 }
 
-void TrackLane::valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int)
+void TrackLane::childRemoved (PropertyTree&, PropertyTree&, int)
 {
     rebuildClipViews();
 }

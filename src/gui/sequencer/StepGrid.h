@@ -8,7 +8,7 @@ namespace dc
 {
 
 class StepGrid : public juce::Component,
-                 private juce::ValueTree::Listener
+                 private PropertyTree::Listener
 {
 public:
     StepGrid (Project& project);
@@ -36,9 +36,9 @@ public:
     static constexpr int rowHeight     = 32;
 
 private:
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
+    void propertyChanged (PropertyTree&, PropertyId) override;
+    void childAdded (PropertyTree&, PropertyTree&) override;
+    void childRemoved (PropertyTree&, PropertyTree&, int) override;
 
     Project& project;
     juce::OwnedArray<StepButton> buttons; // numRows * numSteps

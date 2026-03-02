@@ -28,7 +28,7 @@ MixerPanel::MixerPanel (Project& proj, MixBusProcessor& bus, UndoSystem* us)
     masterStrip->onStateChanged = [this]
     {
         // Sync master gain from the master strip fader to the audio engine
-        const float vol = static_cast<float> (masterState.getProperty (IDs::volume, 1.0));
+        const float vol = static_cast<float> (masterState.getProperty (IDs::volume, 1.0).toDouble());
         masterBus.setMasterGain (vol);
     };
     addAndMakeVisible (*masterStrip);
@@ -43,14 +43,14 @@ MixerPanel::MixerPanel (Project& proj, MixBusProcessor& bus, UndoSystem* us)
     masterStrip->getMeter().getRightLevel = [this] { return masterBus.getPeakLevelRight(); };
 
     // Listen to the TRACKS child of the project state for add/remove
-    project.getState().getChildWithName (IDs::TRACKS).addListener (this);
+    project.getState().getChildWithType (IDs::TRACKS).addListener (this);
 
     rebuildStrips();
 }
 
 MixerPanel::~MixerPanel()
 {
-    auto tracksTree = project.getState().getChildWithName (IDs::TRACKS);
+    auto tracksTree = project.getState().getChildWithType (IDs::TRACKS);
     if (tracksTree.isValid())
         tracksTree.removeListener (this);
 }
@@ -162,13 +162,13 @@ void MixerPanel::setSelectedPluginSlot (int slotIndex)
         masterStrip->setSelectedPluginSlot (selectedStripIndex == strips.size() ? slotIndex : -1);
 }
 
-void MixerPanel::valueTreeChildAdded (juce::ValueTree& parentTree, juce::ValueTree& /*childWhichHasBeenAdded*/)
+void MixerPanel::childAdded (PropertyTree& parentTree, PropertyTree&)
 {
     if (parentTree.getType() == IDs::TRACKS)
         rebuildStrips();
 }
 
-void MixerPanel::valueTreeChildRemoved (juce::ValueTree& parentTree, juce::ValueTree& /*childWhichHasBeenRemoved*/, int /*indexFromWhichChildWasRemoved*/)
+void MixerPanel::childRemoved (PropertyTree& parentTree, PropertyTree&, int)
 {
     if (parentTree.getType() == IDs::TRACKS)
         rebuildStrips();

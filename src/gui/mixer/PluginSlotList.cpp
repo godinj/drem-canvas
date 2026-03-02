@@ -6,7 +6,7 @@ using dc::bridge::toJuce;
 namespace dc
 {
 
-PluginSlotList::PluginSlotList (const juce::ValueTree& state)
+PluginSlotList::PluginSlotList (const PropertyTree& state)
     : trackState (state)
 {
     trackState.addListener (this);
@@ -57,8 +57,8 @@ void PluginSlotList::paint (juce::Graphics& g)
         if (i < numPlugins)
         {
             auto plugin = chain.getChild (i);
-            bool enabled = plugin.getProperty (IDs::pluginEnabled, true);
-            std::string name = plugin.getProperty (IDs::pluginName, "Plugin").toString().toStdString();
+            bool enabled = plugin.getProperty (IDs::pluginEnabled, true).toBool();
+            std::string name = plugin.getProperty (IDs::pluginName, "Plugin").toString();
 
             // Dim colour when bypassed
             g.setColour (enabled ? toJuce (0xffc0c0d0u) : toJuce (0xff606070u));
@@ -115,22 +115,22 @@ int PluginSlotList::getSlotIndexAt (int y) const
     return y / slotHeight;
 }
 
-juce::ValueTree PluginSlotList::getPluginChain() const
+PropertyTree PluginSlotList::getPluginChain() const
 {
-    return trackState.getChildWithName (IDs::PLUGIN_CHAIN);
+    return trackState.getChildWithType (IDs::PLUGIN_CHAIN);
 }
 
-void PluginSlotList::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&)
-{
-    repaint();
-}
-
-void PluginSlotList::valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int)
+void PluginSlotList::childAdded (PropertyTree&, PropertyTree&)
 {
     repaint();
 }
 
-void PluginSlotList::valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&)
+void PluginSlotList::childRemoved (PropertyTree&, PropertyTree&, int)
+{
+    repaint();
+}
+
+void PluginSlotList::propertyChanged (PropertyTree&, PropertyId)
 {
     repaint();
 }

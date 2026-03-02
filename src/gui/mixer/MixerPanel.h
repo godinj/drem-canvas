@@ -9,7 +9,7 @@ namespace dc
 {
 
 class MixerPanel : public juce::Component,
-                   private juce::ValueTree::Listener
+                   private PropertyTree::Listener
 {
 public:
     MixerPanel (Project& project, MixBusProcessor& masterBus, UndoSystem* undoSystem = nullptr);
@@ -37,9 +37,8 @@ public:
     std::function<void (int trackIndex, ChannelStrip& strip)> onWireMeter;
 
 private:
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override {}
+    void childAdded (PropertyTree&, PropertyTree&) override;
+    void childRemoved (PropertyTree&, PropertyTree&, int) override;
 
     Project& project;
     MixBusProcessor& masterBus;
@@ -47,7 +46,7 @@ private:
 
     juce::OwnedArray<ChannelStrip> strips;
     std::unique_ptr<ChannelStrip> masterStrip;
-    juce::ValueTree masterState;
+    PropertyTree masterState;
     MeterComponent masterMeter;
 
     int selectedStripIndex = -1;

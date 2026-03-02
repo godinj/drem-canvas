@@ -26,7 +26,7 @@ ArrangementView::ArrangementView (Project& proj, TransportController& transport,
     viewport.setScrollBarsShown (true, true);
 
     // Listen to the TRACKS subtree for child additions/removals
-    auto tracksTree = project.getState().getChildWithName (IDs::TRACKS);
+    auto tracksTree = project.getState().getChildWithType (IDs::TRACKS);
 
     if (tracksTree.isValid())
         tracksTree.addListener (this);
@@ -41,7 +41,7 @@ ArrangementView::~ArrangementView()
 {
     stopTimer();
 
-    auto tracksTree = project.getState().getChildWithName (IDs::TRACKS);
+    auto tracksTree = project.getState().getChildWithType (IDs::TRACKS);
 
     if (tracksTree.isValid())
         tracksTree.removeListener (this);
@@ -148,15 +148,15 @@ void ArrangementView::timerCallback()
     repaint();
 }
 
-void ArrangementView::valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree&)
+void ArrangementView::childAdded (PropertyTree& parent, PropertyTree&)
 {
-    if (parent.hasType (IDs::TRACKS))
+    if (parent.getType() == IDs::TRACKS)
         rebuildTrackLanes();
 }
 
-void ArrangementView::valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree&, int)
+void ArrangementView::childRemoved (PropertyTree& parent, PropertyTree&, int)
 {
-    if (parent.hasType (IDs::TRACKS))
+    if (parent.getType() == IDs::TRACKS)
         rebuildTrackLanes();
 }
 

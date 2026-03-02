@@ -6,10 +6,10 @@ namespace dc
 {
 
 class PluginSlotList : public juce::Component,
-                       private juce::ValueTree::Listener
+                       private PropertyTree::Listener
 {
 public:
-    explicit PluginSlotList (const juce::ValueTree& trackState);
+    explicit PluginSlotList (const PropertyTree& trackState);
     ~PluginSlotList() override;
 
     void paint (juce::Graphics& g) override;
@@ -28,14 +28,14 @@ public:
     std::function<void (int pluginIndex)> onPluginRemoveRequested;
 
 private:
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
+    void childAdded (PropertyTree&, PropertyTree&) override;
+    void childRemoved (PropertyTree&, PropertyTree&, int) override;
+    void propertyChanged (PropertyTree&, PropertyId) override;
 
     int getSlotIndexAt (int y) const;
-    juce::ValueTree getPluginChain() const;
+    PropertyTree getPluginChain() const;
 
-    juce::ValueTree trackState;
+    PropertyTree trackState;
     int selectedSlotIndex = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginSlotList)

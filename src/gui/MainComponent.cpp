@@ -932,8 +932,8 @@ void MainComponent::loadSession()
             // Save ref to old state so we can detach widget listeners after replacement
             auto oldState = project.getState();
             oldState.removeListener (this);
-            oldState.getChildWithName (IDs::TRACKS).removeListener (arrangementView.get());
-            oldState.getChildWithName (IDs::TRACKS).removeListener (mixerPanel.get());
+            oldState.getChildWithType (IDs::TRACKS).removeListener (arrangementView.get());
+            oldState.getChildWithType (IDs::TRACKS).removeListener (mixerPanel.get());
 
             if (project.loadSessionFromDirectory (dir.getFullPathName().toStdString()))
             {
@@ -941,8 +941,8 @@ void MainComponent::loadSession()
 
                 // Re-add listeners on the new state tree
                 project.getState().addListener (this);
-                project.getState().getChildWithName (IDs::TRACKS).addListener (arrangementView.get());
-                project.getState().getChildWithName (IDs::TRACKS).addListener (mixerPanel.get());
+                project.getState().getChildWithType (IDs::TRACKS).addListener (arrangementView.get());
+                project.getState().getChildWithType (IDs::TRACKS).addListener (mixerPanel.get());
                 rebuildAudioGraph();
                 syncSequencerFromModel();
             }
@@ -950,8 +950,8 @@ void MainComponent::loadSession()
             {
                 // Restore listeners on old (unchanged) state
                 oldState.addListener (this);
-                oldState.getChildWithName (IDs::TRACKS).addListener (arrangementView.get());
-                oldState.getChildWithName (IDs::TRACKS).addListener (mixerPanel.get());
+                oldState.getChildWithType (IDs::TRACKS).addListener (arrangementView.get());
+                oldState.getChildWithType (IDs::TRACKS).addListener (mixerPanel.get());
 
                 juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
                     "Load Error", "Failed to load session from:\n" + dir.getFullPathName());
@@ -959,16 +959,16 @@ void MainComponent::loadSession()
         });
 }
 
-void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier& property)
+void MainComponent::propertyChanged (PropertyTree& tree, PropertyId property)
 {
-    if (tree.hasType (IDs::TRACK))
+    if (tree.getType() == IDs::TRACK)
     {
         if (property == IDs::volume || property == IDs::pan || property == IDs::mute)
             syncTrackProcessorsFromModel();
     }
 
     // Tempo change — sync to sequencer, metronome, and MIDI clip processors
-    if (tree.hasType (IDs::PROJECT) && property == IDs::tempo)
+    if (tree.getType() == IDs::PROJECT && property == IDs::tempo)
     {
         if (sequencerProcessor != nullptr)
             sequencerProcessor->setTempo (project.getTempo());
@@ -990,7 +990,7 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
     }
 
     // Time signature change — sync to metronome and tempo map
-    if (tree.hasType (IDs::PROJECT) && (property == IDs::timeSigNumerator || property == IDs::timeSigDenominator))
+    if (tree.getType() == IDs::PROJECT && (property == IDs::timeSigNumerator || property == IDs::timeSigDenominator))
     {
         if (metronomeProcessor != nullptr)
             metronomeProcessor->setBeatsPerBar (project.getTimeSigNumerator());
@@ -999,12 +999,12 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
     }
 
     // MIDI clip property changed (e.g. midiData, startPosition, length, trimStart)
-    if (tree.hasType (IDs::MIDI_CLIP))
+    if (tree.getType() == IDs::MIDI_CLIP)
     {
         auto trackState = tree.getParent();
-        if (trackState.hasType (IDs::TRACK))
+        if (trackState.getType() == IDs::TRACK)
         {
-            auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+            auto tracksNode = project.getState().getChildWithType (IDs::TRACKS);
             int trackIndex = tracksNode.indexOf (trackState);
             if (trackIndex >= 0)
                 syncMidiClipFromModel (trackIndex);
@@ -1012,12 +1012,12 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
     }
 
     // Audio clip property changed (e.g. startPosition, length, trimStart)
-    if (tree.hasType (IDs::AUDIO_CLIP))
+    if (tree.getType() == IDs::AUDIO_CLIP)
     {
         auto trackState = tree.getParent();
-        if (trackState.hasType (IDs::TRACK))
+        if (trackState.getType() == IDs::TRACK)
         {
-            auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+            auto tracksNode = project.getState().getChildWithType (IDs::TRACKS);
             int trackIndex = tracksNode.indexOf (trackState);
             if (trackIndex >= 0)
                 syncAudioClipFromModel (trackIndex);
@@ -1025,66 +1025,66 @@ void MainComponent::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
     }
 
     // Any step sequencer property change
-    if (tree.hasType (IDs::STEP_SEQUENCER) || tree.hasType (IDs::STEP_PATTERN)
-        || tree.hasType (IDs::STEP_ROW) || tree.hasType (IDs::STEP))
+    if (tree.getType() == IDs::STEP_SEQUENCER || tree.getType() == IDs::STEP_PATTERN
+        || tree.getType() == IDs::STEP_ROW || tree.getType() == IDs::STEP)
     {
         syncSequencerFromModel();
     }
 }
 
-void MainComponent::valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree& child)
+void MainComponent::childAdded (PropertyTree& parent, PropertyTree& child)
 {
-    if (parent.hasType (IDs::TRACKS))
+    if (parent.getType() == IDs::TRACKS)
         rebuildAudioGraph();
 
     // MIDI clip added to a track
-    if (parent.hasType (IDs::TRACK) && child.hasType (IDs::MIDI_CLIP))
+    if (parent.getType() == IDs::TRACK && child.getType() == IDs::MIDI_CLIP)
     {
-        auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+        auto tracksNode = project.getState().getChildWithType (IDs::TRACKS);
         int trackIndex = tracksNode.indexOf (parent);
         if (trackIndex >= 0)
             syncMidiClipFromModel (trackIndex);
     }
 
     // Audio clip added to a track
-    if (parent.hasType (IDs::TRACK) && child.hasType (IDs::AUDIO_CLIP))
+    if (parent.getType() == IDs::TRACK && child.getType() == IDs::AUDIO_CLIP)
     {
-        auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+        auto tracksNode = project.getState().getChildWithType (IDs::TRACKS);
         int trackIndex = tracksNode.indexOf (parent);
         if (trackIndex >= 0)
             syncAudioClipFromModel (trackIndex);
     }
 
-    if (parent.hasType (IDs::STEP_SEQUENCER) || parent.hasType (IDs::STEP_PATTERN)
-        || parent.hasType (IDs::STEP_ROW))
+    if (parent.getType() == IDs::STEP_SEQUENCER || parent.getType() == IDs::STEP_PATTERN
+        || parent.getType() == IDs::STEP_ROW)
         syncSequencerFromModel();
 }
 
-void MainComponent::valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree& child, int)
+void MainComponent::childRemoved (PropertyTree& parent, PropertyTree& child, int)
 {
-    if (parent.hasType (IDs::TRACKS))
+    if (parent.getType() == IDs::TRACKS)
         rebuildAudioGraph();
 
     // MIDI clip removed from a track
-    if (parent.hasType (IDs::TRACK) && child.hasType (IDs::MIDI_CLIP))
+    if (parent.getType() == IDs::TRACK && child.getType() == IDs::MIDI_CLIP)
     {
-        auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+        auto tracksNode = project.getState().getChildWithType (IDs::TRACKS);
         int trackIndex = tracksNode.indexOf (parent);
         if (trackIndex >= 0)
             syncMidiClipFromModel (trackIndex);
     }
 
     // Audio clip removed from a track
-    if (parent.hasType (IDs::TRACK) && child.hasType (IDs::AUDIO_CLIP))
+    if (parent.getType() == IDs::TRACK && child.getType() == IDs::AUDIO_CLIP)
     {
-        auto tracksNode = project.getState().getChildWithName (IDs::TRACKS);
+        auto tracksNode = project.getState().getChildWithType (IDs::TRACKS);
         int trackIndex = tracksNode.indexOf (parent);
         if (trackIndex >= 0)
             syncAudioClipFromModel (trackIndex);
     }
 
-    if (parent.hasType (IDs::STEP_SEQUENCER) || parent.hasType (IDs::STEP_PATTERN)
-        || parent.hasType (IDs::STEP_ROW))
+    if (parent.getType() == IDs::STEP_SEQUENCER || parent.getType() == IDs::STEP_PATTERN
+        || parent.getType() == IDs::STEP_ROW)
         syncSequencerFromModel();
 }
 

@@ -14,7 +14,7 @@ namespace dc
 class ArrangementView : public juce::Component,
                         public VimEngine::Listener,
                         private juce::Timer,
-                        private juce::ValueTree::Listener
+                        private PropertyTree::Listener
 {
 public:
     ArrangementView (Project& project, TransportController& transport,
@@ -33,9 +33,8 @@ public:
 
 private:
     void timerCallback() override;
-    void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override;
-    void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override;
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override {}
+    void childAdded (PropertyTree&, PropertyTree&) override;
+    void childRemoved (PropertyTree&, PropertyTree&, int) override;
 
     void updateSelectionVisuals();
     void ensureSelectedTrackVisible();
