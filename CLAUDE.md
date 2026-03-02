@@ -266,6 +266,7 @@ Managed via `wt` (dotfiles worktree tool). Bare repo at `~/git/drem-canvas.git/`
 | `feature/advanced-editing/` | `feature/advanced-editing` | Phase 11: clip drag/trim/fades, crossfades, undo polish, tempo map |
 | `feature/git-integration/` | `feature/git-integration` | Phase 12: git commands, semantic diff, bounce/export, automation |
 | `feature/mixer-implementation/` | `feature/mixer-implementation` | Phase 6: vim mixer context, fader/pan modes, strip selection, master bus |
+| `feature/fix-scan-ui/` | `feature/fix-scan-ui` | Fix yabridge scan blocking + progress bar UI |
 
 Create new feature: `wt new feature/my-feature`
 Remove feature: `wt rm feature/my-feature`
