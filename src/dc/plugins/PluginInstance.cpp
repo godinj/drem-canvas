@@ -836,8 +836,7 @@ bool PluginInstance::hasEditor() const
 
 std::unique_ptr<PluginEditor> PluginInstance::createEditor()
 {
-    // PluginEditor is implemented by Agent 04. Return nullptr for now.
-    return nullptr;
+    return PluginEditor::create (*this);
 }
 
 // ─── IParameterFinder ────────────────────────────────────────────────────
