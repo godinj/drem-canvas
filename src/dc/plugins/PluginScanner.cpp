@@ -41,7 +41,7 @@ namespace
     {
         auto ext = p.extension().string();
 
-        if (ext.size() != 4)
+        if (ext.size() != 5)  // ".vst3" is 5 characters including the dot
             return false;
 
         // Convert to lowercase for comparison
@@ -168,19 +168,26 @@ std::vector<std::filesystem::path> PluginScanner::findBundles(
     const std::filesystem::path& searchDir)
 {
     std::vector<std::filesystem::path> bundles;
-
     std::error_code ec;
 
-    for (auto& entry : std::filesystem::directory_iterator(searchDir, ec))
-    {
-        if (hasVst3Extension(entry.path()))
-            bundles.push_back(entry.path());
-    }
+    auto options = std::filesystem::directory_options::follow_directory_symlink
+                 | std::filesystem::directory_options::skip_permission_denied;
 
-    if (ec)
+    for (auto it = std::filesystem::recursive_directory_iterator(searchDir, options, ec);
+         it != std::filesystem::recursive_directory_iterator(); it.increment(ec))
     {
-        dc_log("PluginScanner: error iterating directory: %s (%s)",
-               searchDir.string().c_str(), ec.message().c_str());
+        if (ec)
+        {
+            dc_log("PluginScanner: error iterating: %s", ec.message().c_str());
+            ec.clear();
+            continue;
+        }
+
+        if (it->is_directory() && hasVst3Extension(it->path()))
+        {
+            bundles.push_back(it->path());
+            it.disable_recursion_pending();  // don't descend into the .vst3 bundle
+        }
     }
 
     std::sort(bundles.begin(), bundles.end());

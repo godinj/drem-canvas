@@ -27,6 +27,9 @@ add_executable(dc_unit_tests
     unit/audio/test_disk_streamer.cpp
     unit/audio/test_threaded_recorder.cpp
 
+    # Plugin scanner tests
+    unit/test_plugin_scanner.cpp
+
     # Phase 8: higher-level model tests (JUCE-free classes only)
     unit/model_layer/test_tempo_map.cpp
     unit/model_layer/test_grid_system.cpp

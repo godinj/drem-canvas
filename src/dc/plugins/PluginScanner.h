@@ -25,6 +25,11 @@ public:
     /// Get standard VST3 search paths for the current platform.
     static std::vector<std::filesystem::path> getDefaultSearchPaths();
 
+    /// Recursively enumerate .vst3 bundles under a directory.
+    /// Does not descend into .vst3 bundle directories themselves.
+    static std::vector<std::filesystem::path> findBundles(
+        const std::filesystem::path& searchDir);
+
     /// Progress callback: (pluginName, current, total)
     using ProgressCallback = std::function<void(const std::string& pluginName,
                                                  int current, int total)>;
@@ -38,10 +43,6 @@ private:
     /// Returns nullopt if child crashes or times out.
     std::optional<PluginDescription> scanOneForked(
         const std::filesystem::path& bundlePath);
-
-    /// Enumerate .vst3 bundles in a directory (non-recursive into bundles).
-    static std::vector<std::filesystem::path> findBundles(
-        const std::filesystem::path& searchDir);
 };
 
 } // namespace dc
