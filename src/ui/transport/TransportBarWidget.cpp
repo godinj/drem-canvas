@@ -200,8 +200,8 @@ bool TransportBarWidget::keyDown (const gfx::KeyEvent& e)
         return true;
     }
 
-    // Backspace
-    if (e.keyCode == 8 || e.keyCode == 127)
+    // Backspace (ASCII 8/127 or Mac virtual key 0x33)
+    if (e.keyCode == 8 || e.keyCode == 127 || e.keyCode == 0x33)
     {
         if (! tempoEditBuffer.empty())
             tempoEditBuffer.pop_back();
@@ -209,15 +209,15 @@ bool TransportBarWidget::keyDown (const gfx::KeyEvent& e)
         return true;
     }
 
-    // Enter — commit
-    if (e.keyCode == 13 || ch == '\r' || ch == '\n')
+    // Enter — commit (ASCII 13 or Mac virtual key 0x24)
+    if (e.keyCode == 13 || e.keyCode == 0x24 || ch == '\r' || ch == '\n')
     {
         commitTempoEdit();
         return true;
     }
 
-    // Escape — cancel
-    if (e.keyCode == 27)
+    // Escape — cancel (ASCII 27 or Mac virtual key 0x35)
+    if (e.keyCode == 27 || e.keyCode == 0x35)
     {
         cancelTempoEdit();
         return true;
