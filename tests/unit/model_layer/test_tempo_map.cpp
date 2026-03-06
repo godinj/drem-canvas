@@ -190,3 +190,98 @@ TEST_CASE ("TempoMap setTempo changes conversions", "[model_layer][tempo_map]")
     double beats = tm.samplesToBeats (44100, sampleRate);
     CHECK_THAT (beats, WithinAbs (4.0, 1e-9));
 }
+
+TEST_CASE ("TempoMap setTempo changes all conversion results", "[model_layer][tempo_map]")
+{
+    dc::TempoMap tm;
+    const double sampleRate = 44100.0;
+
+    // Record conversions at default 120 BPM
+    double beats120 = tm.samplesToBeats (44100, sampleRate);
+    int64_t samples120 = tm.beatsToSamples (4.0, sampleRate);
+    auto barBeat120 = tm.samplesToBarBeat (88200, sampleRate);
+
+    // Change to 60 BPM (half speed)
+    tm.setTempo (60.0);
+
+    // samplesToBeats: 1 sec at 60 BPM = 1 beat (was 2 beats at 120)
+    double beats60 = tm.samplesToBeats (44100, sampleRate);
+    CHECK_THAT (beats60, WithinAbs (1.0, 1e-9));
+    CHECK (beats60 != beats120);
+
+    // beatsToSamples: 4 beats at 60 BPM = 4 sec = 176400 samples (was 88200)
+    int64_t samples60 = tm.beatsToSamples (4.0, sampleRate);
+    CHECK (samples60 == 176400);
+    CHECK (samples60 != samples120);
+
+    // samplesToBarBeat: 88200 samples at 60 BPM = 2 beats = bar 1, beat 3
+    // (was bar 2, beat 1 at 120 BPM since 88200 = 4 beats)
+    auto barBeat60 = tm.samplesToBarBeat (88200, sampleRate);
+    CHECK (barBeat60.bar == 1);
+    CHECK (barBeat60.beat == 3);
+    CHECK (barBeat60.bar != barBeat120.bar);
+}
+
+TEST_CASE ("TempoMap tempo clamping at boundaries", "[model_layer][tempo_map]")
+{
+    dc::TempoMap tm;
+
+    SECTION ("minimum boundary 20 BPM")
+    {
+        tm.setTempo (20.0);
+        CHECK_THAT (tm.getTempo(), WithinAbs (20.0, 1e-9));
+    }
+
+    SECTION ("maximum boundary 300 BPM")
+    {
+        tm.setTempo (300.0);
+        CHECK_THAT (tm.getTempo(), WithinAbs (300.0, 1e-9));
+    }
+
+    SECTION ("below minimum clamps to 20")
+    {
+        tm.setTempo (5.0);
+        CHECK_THAT (tm.getTempo(), WithinAbs (20.0, 1e-9));
+    }
+
+    SECTION ("above maximum clamps to 300")
+    {
+        tm.setTempo (500.0);
+        CHECK_THAT (tm.getTempo(), WithinAbs (300.0, 1e-9));
+    }
+
+    SECTION ("value within range is preserved")
+    {
+        tm.setTempo (140.0);
+        CHECK_THAT (tm.getTempo(), WithinAbs (140.0, 1e-9));
+    }
+}
+
+TEST_CASE ("TempoMap tempo change shifts MIDI note positions", "[model_layer][tempo_map]")
+{
+    dc::TempoMap tm;
+    const double sampleRate = 44100.0;
+
+    // Simulate a MIDI note at beat 4.0 (start of bar 2 in 4/4)
+    double noteBeat = 4.0;
+
+    // At 120 BPM: beat 4.0 = 2 seconds = 88200 samples
+    tm.setTempo (120.0);
+    int64_t pos120 = tm.beatsToSamples (noteBeat, sampleRate);
+    CHECK (pos120 == 88200);
+
+    // At 60 BPM: beat 4.0 = 4 seconds = 176400 samples
+    tm.setTempo (60.0);
+    int64_t pos60 = tm.beatsToSamples (noteBeat, sampleRate);
+    CHECK (pos60 == 176400);
+
+    // At 240 BPM: beat 4.0 = 1 second = 44100 samples
+    tm.setTempo (240.0);
+    int64_t pos240 = tm.beatsToSamples (noteBeat, sampleRate);
+    CHECK (pos240 == 44100);
+
+    // Doubling tempo halves the sample position
+    CHECK (pos120 == pos240 * 2);
+    // Halving tempo doubles the sample position
+    CHECK (pos60 == pos120 * 2);
+}

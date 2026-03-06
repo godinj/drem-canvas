@@ -11,6 +11,10 @@ TempoMap::TempoMap() {}
 void TempoMap::setTempo (double bpm)
 {
     dc_assert (bpm > 0.0);
+    if (bpm < 20.0)
+        bpm = 20.0;
+    else if (bpm > 300.0)
+        bpm = 300.0;
     tempo = bpm;
 }
 
