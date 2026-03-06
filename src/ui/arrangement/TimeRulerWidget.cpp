@@ -28,9 +28,7 @@ void TimeRulerWidget::paint (gfx::Canvas& canvas)
 
     double bpm = tempoMap.getTempo();
     int beatsPerBar = tempoMap.getTimeSigNumerator();
-    double secondsPerBeat = 60.0 / bpm;
-    double secondsPerBar = secondsPerBeat * beatsPerBar;
-    double pixelsPerBar = secondsPerBar * pixelsPerSecond;
+    double pixelsPerBar = beatsPerBar * pixelsPerBeat;
 
     // Determine bar interval based on zoom level (skip bars when zoomed out)
     int barInterval = 1;
@@ -39,16 +37,16 @@ void TimeRulerWidget::paint (gfx::Canvas& canvas)
     else if (pixelsPerBar < 80.0) barInterval = 4;
     else if (pixelsPerBar < 160.0) barInterval = 2;
 
-    double startTime = scrollOffset / pixelsPerSecond;
-    int startBar = std::max (1, static_cast<int> (std::floor (startTime / secondsPerBar)) + 1);
+    double startBeat = scrollOffset / pixelsPerBeat;
+    int startBar = std::max (1, static_cast<int> (std::floor (startBeat / beatsPerBar)) + 1);
 
     // Align to bar interval
     startBar = ((startBar - 1) / barInterval) * barInterval + 1;
 
     for (int bar = startBar; ; bar += barInterval)
     {
-        double barTime = (bar - 1) * secondsPerBar;
-        float x = static_cast<float> ((barTime - startTime) * pixelsPerSecond) + headerWidth;
+        double barBeat = (bar - 1) * beatsPerBar;
+        float x = static_cast<float> ((barBeat - startBeat) * pixelsPerBeat) + headerWidth;
         if (x > w) break;
 
         if (x >= headerWidth)
@@ -66,8 +64,8 @@ void TimeRulerWidget::paint (gfx::Canvas& canvas)
         {
             for (int beat = 1; beat < beatsPerBar; ++beat)
             {
-                double beatTime = barTime + beat * secondsPerBeat;
-                float bx = static_cast<float> ((beatTime - startTime) * pixelsPerSecond) + headerWidth;
+                double beatPos = barBeat + beat;
+                float bx = static_cast<float> ((beatPos - startBeat) * pixelsPerBeat) + headerWidth;
                 if (bx >= headerWidth && bx <= w)
                     canvas.drawLine (bx, h * 0.5f, bx, h, Color::fromARGB (0xff404050), 1.0f);
             }
@@ -82,9 +80,11 @@ void TimeRulerWidget::paint (gfx::Canvas& canvas)
         {
             double cycleStartSec = static_cast<double> (transportController.getLoopStartInSamples()) / sr;
             double cycleEndSec = static_cast<double> (transportController.getLoopEndInSamples()) / sr;
+            double cycleStartBeats = cycleStartSec * bpm / 60.0;
+            double cycleEndBeats = cycleEndSec * bpm / 60.0;
 
-            float cx1 = static_cast<float> ((cycleStartSec - startTime) * pixelsPerSecond) + headerWidth;
-            float cx2 = static_cast<float> ((cycleEndSec - startTime) * pixelsPerSecond) + headerWidth;
+            float cx1 = static_cast<float> ((cycleStartBeats - startBeat) * pixelsPerBeat) + headerWidth;
+            float cx2 = static_cast<float> ((cycleEndBeats - startBeat) * pixelsPerBeat) + headerWidth;
 
             cx1 = std::max (cx1, headerWidth);
             cx2 = std::min (cx2, w);
@@ -114,7 +114,8 @@ void TimeRulerWidget::mouseDrag (const gfx::MouseEvent& e)
 
 void TimeRulerWidget::seekFromX (float mouseX)
 {
-    double timeInSeconds = (static_cast<double> (mouseX - headerWidth) + scrollOffset) / pixelsPerSecond;
+    double beats = (static_cast<double> (mouseX - headerWidth) + scrollOffset) / pixelsPerBeat;
+    double timeInSeconds = beats * 60.0 / tempoMap.getTempo();
     if (timeInSeconds >= 0.0 && onSeek)
         onSeek (timeInSeconds);
 }

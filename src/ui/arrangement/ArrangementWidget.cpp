@@ -56,7 +56,7 @@ void ArrangementWidget::paintOverChildren (gfx::Canvas& canvas)
     int64_t posInSamples = transportController.getPositionInSamples();
     double posInSeconds = static_cast<double> (posInSamples) / sr;
 
-    float cursorX = static_cast<float> (posInSeconds * pixelsPerSecond)
+    float cursorX = static_cast<float> (posInSeconds * getPixelsPerSecond())
                   + theme.headerWidth - scrollView.getScrollOffsetX();
 
     if (cursorX >= theme.headerWidth && cursorX <= getWidth())
@@ -71,9 +71,9 @@ void ArrangementWidget::paintOverChildren (gfx::Canvas& canvas)
         double cycleStartSec = static_cast<double> (transportController.getLoopStartInSamples()) / sr;
         double cycleEndSec = static_cast<double> (transportController.getLoopEndInSamples()) / sr;
 
-        float cx1 = static_cast<float> (cycleStartSec * pixelsPerSecond)
+        float cx1 = static_cast<float> (cycleStartSec * getPixelsPerSecond())
                    + theme.headerWidth - scrollView.getScrollOffsetX();
-        float cx2 = static_cast<float> (cycleEndSec * pixelsPerSecond)
+        float cx2 = static_cast<float> (cycleEndSec * getPixelsPerSecond())
                    + theme.headerWidth - scrollView.getScrollOffsetX();
 
         cx1 = std::max (cx1, theme.headerWidth);
@@ -147,7 +147,7 @@ void ArrangementWidget::rebuildTrackLanes()
     {
         auto trackState = project.getTrack (i);
         auto lane = std::make_unique<TrackLaneWidget> (trackState);
-        lane->setPixelsPerSecond (pixelsPerSecond);
+        lane->setPixelsPerSecond (getPixelsPerSecond());
         lane->setSampleRate (sr);
         lane->setTempo (tempoMap.getTempo());
         trackContainer.addChild (lane.get());
@@ -195,21 +195,21 @@ void ArrangementWidget::updateSelectionVisuals()
     // Auto-scroll: keep grid cursor visible in viewport
     if (selectedTrack >= 0 && sr > 0.0)
     {
-        float cursorScreenX = static_cast<float> ((static_cast<double> (gridPos) / sr) * pixelsPerSecond)
+        float cursorScreenX = static_cast<float> ((static_cast<double> (gridPos) / sr) * getPixelsPerSecond())
                             + 150.0f - scrollView.getScrollOffsetX();
         float viewWidth = scrollView.getWidth();
 
         if (cursorScreenX < 150.0f + 50.0f)
         {
             // Cursor is off the left edge — scroll left
-            float targetScrollX = static_cast<float> ((static_cast<double> (gridPos) / sr) * pixelsPerSecond)
+            float targetScrollX = static_cast<float> ((static_cast<double> (gridPos) / sr) * getPixelsPerSecond())
                                 - 150.0f;
             scrollView.setScrollOffset (std::max (0.0f, targetScrollX), scrollView.getScrollOffsetY());
         }
         else if (cursorScreenX > viewWidth - 50.0f)
         {
             // Cursor is off the right edge — scroll right
-            float targetScrollX = static_cast<float> ((static_cast<double> (gridPos) / sr) * pixelsPerSecond)
+            float targetScrollX = static_cast<float> ((static_cast<double> (gridPos) / sr) * getPixelsPerSecond())
                                 + 150.0f - viewWidth + 150.0f;
             scrollView.setScrollOffset (std::max (0.0f, targetScrollX), scrollView.getScrollOffsetY());
         }
