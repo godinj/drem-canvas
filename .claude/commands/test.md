@@ -1,6 +1,7 @@
 Build and run unit and integration tests.
 
 Steps:
+0. If the current directory is a bare git repo root (i.e., `CMakeLists.txt` does not exist but `main/CMakeLists.txt` does), `cd main` first. All subsequent paths are relative to the worktree root.
 1. If `build-debug/CMakeCache.txt` doesn't exist, run `cmake --preset test`.
 2. Run `cmake --build --preset test`. If the build fails, report errors and stop.
 3. Run `ctest --test-dir build-debug --output-on-failure -j$(nproc) -L "unit|integration"` (this excludes e2e tests).
