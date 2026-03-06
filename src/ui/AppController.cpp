@@ -1477,6 +1477,12 @@ void AppController::rebuildAudioGraph()
                 auto pluginNode = audioEngine.addProcessor (std::move (wrapper));
                 pluginChain.push_back ({ pluginNode, pluginPtr });
             }
+            else
+            {
+                // Keep chain indices aligned with model — openPluginEditor()
+                // will attempt instantiation on demand.
+                pluginChain.push_back ({ 0, nullptr });
+            }
         }
 
         trackPluginChains.push_back (pluginChain);
@@ -1717,7 +1723,7 @@ void AppController::connectTrackPluginChain (int trackIndex)
     std::vector<NodeId> enabledNodes;
     for (int p = 0; p < static_cast<int> (chain.size()); ++p)
     {
-        if (track.isPluginEnabled (p))
+        if (chain[static_cast<size_t> (p)].node != 0 && track.isPluginEnabled (p))
             enabledNodes.push_back (chain[static_cast<size_t> (p)].node);
     }
 
@@ -1864,8 +1870,48 @@ void AppController::openPluginEditor (int trackIndex, int pluginIndex)
         return;
 
     auto& chain = trackPluginChains[static_cast<size_t> (trackIndex)];
-    if (pluginIndex < 0 || pluginIndex >= static_cast<int> (chain.size()))
+    if (pluginIndex < 0)
         return;
+
+    // Ensure the plugin is instantiated before opening its editor.
+    // The chain entry may be null if the plugin was not yet loaded (e.g.
+    // after session restore where the VST3 file was temporarily missing).
+    if (pluginIndex >= static_cast<int> (chain.size())
+        || chain[static_cast<size_t> (pluginIndex)].plugin == nullptr)
+    {
+        auto trackState = project.getTrack (trackIndex);
+        Track track (trackState);
+        if (pluginIndex >= track.getNumPlugins())
+            return;
+
+        auto pluginState = track.getPlugin (pluginIndex);
+        auto desc = PluginHost::descriptionFromPropertyTree (pluginState);
+
+        auto sampleRate = audioEngine.getSampleRate();
+        auto blockSize  = audioEngine.getBufferSize();
+        auto instance   = pluginHost.createPluginSync (desc, sampleRate, blockSize);
+
+        if (instance == nullptr)
+            return;
+
+        std::string base64State = pluginState.getProperty (IDs::pluginState).getStringOr ("");
+        if (! base64State.empty())
+            PluginHost::restorePluginState (*instance, base64State);
+
+        instance->setTransportController (&transportController);
+
+        auto* pluginPtr = instance.get();
+        auto wrapper    = std::make_unique<PluginProcessorNode> (std::move (instance));
+        auto pluginNode = audioEngine.addProcessor (std::move (wrapper));
+
+        // Pad chain with empty entries to keep indices aligned with model.
+        while (static_cast<int> (chain.size()) <= pluginIndex)
+            chain.push_back ({ 0, nullptr });
+
+        disconnectTrackPluginChain (trackIndex);
+        chain[static_cast<size_t> (pluginIndex)] = { pluginNode, pluginPtr };
+        connectTrackPluginChain (trackIndex);
+    }
 
     auto* plugin = chain[static_cast<size_t> (pluginIndex)].plugin;
     if (plugin == nullptr)
@@ -1924,28 +1970,24 @@ void AppController::insertPluginOnTrack (int trackIndex, const dc::PluginDescrip
     auto sampleRate = audioEngine.getSampleRate();
     auto blockSize = audioEngine.getBufferSize();
 
-    pluginHost.createPluginAsync (desc, sampleRate, blockSize,
-        [this, trackIndex] (std::unique_ptr<dc::PluginInstance> instance, const std::string& errorMessage)
-        {
-            (void) errorMessage;
-            if (instance == nullptr)
-                return;
+    auto instance = pluginHost.createPluginSync (desc, sampleRate, blockSize);
 
-            instance->setTransportController (&transportController);
+    if (instance == nullptr)
+        return;
 
-            auto* pluginPtr = instance.get();
+    instance->setTransportController (&transportController);
 
-            // TODO: add suspendProcessing to dc::AudioGraph for thread-safe topology mutations
-            disconnectTrackPluginChain (trackIndex);
+    auto* pluginPtr = instance.get();
 
-            auto wrapper = std::make_unique<PluginProcessorNode> (std::move (instance));
-            auto pluginNode = audioEngine.addProcessor (std::move (wrapper));
+    disconnectTrackPluginChain (trackIndex);
 
-            if (trackIndex < static_cast<int> (trackPluginChains.size()))
-                trackPluginChains[static_cast<size_t> (trackIndex)].push_back ({ pluginNode, pluginPtr });
+    auto wrapper = std::make_unique<PluginProcessorNode> (std::move (instance));
+    auto pluginNode = audioEngine.addProcessor (std::move (wrapper));
 
-            connectTrackPluginChain (trackIndex);
-        });
+    if (trackIndex < static_cast<int> (trackPluginChains.size()))
+        trackPluginChains[static_cast<size_t> (trackIndex)].push_back ({ pluginNode, pluginPtr });
+
+    connectTrackPluginChain (trackIndex);
 }
 
 // ─── Session management ──────────────────────────────────────
