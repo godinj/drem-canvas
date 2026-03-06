@@ -42,6 +42,7 @@ struct Compositor::Impl
     int height = 0;
     bool damaged = true;   // Start dirty so first capture always works
     bool active = false;
+    bool ownsRedirect = false; // True if we called XCompositeRedirectWindow (vs WM owning it)
     bool nudged = false;   // Whether we've sent wake-up events
 
     // After redirect starts, plugins (especially Wine/yabridge) may take
@@ -174,6 +175,18 @@ Compositor::~Compositor()
     stopRedirect();
 }
 
+// Thread-local flag set by our temporary X error handler when
+// XCompositeRedirectWindow triggers BadAccess (a compositing WM already
+// holds a manual redirect on the window via CompositeRedirectSubwindows).
+static thread_local bool s_gotBadAccess = false;
+
+static int compositeErrorHandler (Display* /*dpy*/, XErrorEvent* ev)
+{
+    if (ev->error_code == BadAccess)
+        s_gotBadAccess = true;
+    return 0;  // non-fatal
+}
+
 bool Compositor::startRedirect (void* display, unsigned long window)
 {
     if (impl->active)
@@ -210,8 +223,20 @@ bool Compositor::startRedirect (void* display, unsigned long window)
     impl->display = dpy;
     impl->window = static_cast<Window> (window);
 
-    // Redirect the window to an offscreen buffer
+    // Redirect the window to an offscreen buffer.
+    // A compositing WM (mutter, kwin, picom…) may already hold a manual
+    // redirect on all root children via CompositeRedirectSubwindows.  In
+    // that case our call gets BadAccess — catch it and carry on, since
+    // XCompositeNameWindowPixmap works regardless of who owns the redirect.
+    s_gotBadAccess = false;
+    auto* oldHandler = XSetErrorHandler (compositeErrorHandler);
     XCompositeRedirectWindow (dpy, impl->window, CompositeRedirectManual);
+    XSync (dpy, False);
+    XSetErrorHandler (oldHandler);
+    impl->ownsRedirect = ! s_gotBadAccess;
+
+    if (s_gotBadAccess)
+        std::cerr << "[Compositor] WM already redirects window — using existing redirect\n";
 
     // Create damage tracking
     impl->damage = XDamageCreate (dpy, impl->window, XDamageReportNonEmpty);
@@ -225,7 +250,9 @@ bool Compositor::startRedirect (void* display, unsigned long window)
             XDamageDestroy (dpy, impl->damage);
             impl->damage = 0;
         }
-        XCompositeUnredirectWindow (dpy, impl->window, CompositeRedirectManual);
+        if (impl->ownsRedirect)
+            XCompositeUnredirectWindow (dpy, impl->window, CompositeRedirectManual);
+        impl->ownsRedirect = false;
         impl->display = nullptr;
         impl->window = 0;
         return false;
@@ -257,11 +284,13 @@ void Compositor::stopRedirect()
         impl->pixmap = 0;
     }
 
-    XCompositeUnredirectWindow (impl->display, impl->window, CompositeRedirectManual);
+    if (impl->ownsRedirect)
+        XCompositeUnredirectWindow (impl->display, impl->window, CompositeRedirectManual);
     XFlush (impl->display);
 
     impl->cachedImage.reset();
     impl->active = false;
+    impl->ownsRedirect = false;
     impl->display = nullptr;
     impl->window = 0;
     impl->width = 0;
