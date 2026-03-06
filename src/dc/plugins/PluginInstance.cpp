@@ -1105,6 +1105,24 @@ int PluginInstance::findParameterAtPoint (int x, int y) const
     return getParameterIndex (resultId);
 }
 
+Steinberg::Vst::ParamID PluginInstance::findRawParameterAtPoint (int x, int y) const
+{
+    auto* finder = parameterFinder_ ? parameterFinder_ : viewParameterFinder_;
+    if (finder == nullptr)
+        return Steinberg::Vst::kNoParamId;
+
+    Steinberg::Vst::ParamID resultId = Steinberg::Vst::kNoParamId;
+    auto result = finder->findParameter (
+        static_cast<Steinberg::int32> (x),
+        static_cast<Steinberg::int32> (y),
+        resultId);
+
+    if (result != Steinberg::kResultOk)
+        return Steinberg::Vst::kNoParamId;
+
+    return resultId;
+}
+
 void PluginInstance::setViewParameterFinder (Steinberg::Vst::IParameterFinder* finder)
 {
     viewParameterFinder_ = finder;
