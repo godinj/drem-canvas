@@ -155,10 +155,74 @@ void TransportBarWidget::animationTick (double /*timestampMs*/)
     auto timeStr = tempoMap.formatBarBeat (pos);
     timeDisplay.setText (timeStr);
 
+    if (! editingTempo)
+        updateTempoDisplay();
+
     if (transportController.isPlaying())
         playButton.setText ("Pause");
     else
         playButton.setText ("Play");
+}
+
+void TransportBarWidget::mouseDown (const gfx::MouseEvent& e)
+{
+    auto tempoBounds = tempoDisplay.getBounds();
+    if (e.x >= tempoBounds.x && e.x < tempoBounds.x + tempoBounds.width
+        && e.y >= tempoBounds.y && e.y < tempoBounds.y + tempoBounds.height)
+    {
+        editingTempo = true;
+        tempoEditBuffer.clear();
+        tempoDisplay.setText ("_ BPM");
+        setFocusable (true);
+        grabFocus();
+    }
+    else if (editingTempo)
+    {
+        commitTempoEdit();
+    }
+}
+
+bool TransportBarWidget::keyDown (const gfx::KeyEvent& e)
+{
+    if (! editingTempo)
+        return false;
+
+    char ch = static_cast<char> (e.character);
+
+    if (ch >= '0' && ch <= '9')
+    {
+        if (tempoEditBuffer.size() < 3)
+        {
+            tempoEditBuffer += ch;
+            tempoDisplay.setText (tempoEditBuffer + "_ BPM");
+        }
+        return true;
+    }
+
+    // Backspace
+    if (e.keyCode == 8 || e.keyCode == 127)
+    {
+        if (! tempoEditBuffer.empty())
+            tempoEditBuffer.pop_back();
+        tempoDisplay.setText (tempoEditBuffer + "_ BPM");
+        return true;
+    }
+
+    // Enter — commit
+    if (e.keyCode == 13 || ch == '\r' || ch == '\n')
+    {
+        commitTempoEdit();
+        return true;
+    }
+
+    // Escape — cancel
+    if (e.keyCode == 27)
+    {
+        cancelTempoEdit();
+        return true;
+    }
+
+    return true; // consume all keys while editing
 }
 
 bool TransportBarWidget::mouseWheel (const gfx::WheelEvent& e)
@@ -171,11 +235,36 @@ bool TransportBarWidget::mouseWheel (const gfx::WheelEvent& e)
         float delta = e.deltaY > 0 ? 1.0f : -1.0f;
         double newTempo = tempoMap.getTempo() + delta;
         newTempo = std::max (20.0, std::min (300.0, newTempo));
-        tempoMap.setTempo (newTempo);
-        updateTempoDisplay();
+        if (onTempoChanged)
+            onTempoChanged (newTempo);
         return true;
     }
     return false;
+}
+
+void TransportBarWidget::commitTempoEdit()
+{
+    if (! tempoEditBuffer.empty())
+    {
+        double newTempo = std::stod (tempoEditBuffer);
+        newTempo = std::max (20.0, std::min (300.0, newTempo));
+        if (onTempoChanged)
+            onTempoChanged (newTempo);
+    }
+    editingTempo = false;
+    tempoEditBuffer.clear();
+    releaseFocus();
+    setFocusable (false);
+    updateTempoDisplay();
+}
+
+void TransportBarWidget::cancelTempoEdit()
+{
+    editingTempo = false;
+    tempoEditBuffer.clear();
+    releaseFocus();
+    setFocusable (false);
+    updateTempoDisplay();
 }
 
 void TransportBarWidget::updateTempoDisplay()

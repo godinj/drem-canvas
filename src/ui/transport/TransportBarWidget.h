@@ -21,6 +21,8 @@ public:
     void paint (gfx::Canvas& canvas) override;
     void resized() override;
     void animationTick (double timestampMs) override;
+    void mouseDown (const gfx::MouseEvent& e) override;
+    bool keyDown (const gfx::KeyEvent& e) override;
     bool mouseWheel (const gfx::WheelEvent& e) override;
 
     // Callbacks for session/utility actions (wired by AppController)
@@ -29,14 +31,20 @@ public:
     std::function<void()> onImportAudio;
     std::function<void()> onAudioSettings;
     std::function<void()> onToggleBrowser;
+    std::function<void (double)> onTempoChanged;
 
     CpuMeterWidget& getCpuMeter() { return cpuMeter; }
 
 private:
     void updateTempoDisplay();
+    void commitTempoEdit();
+    void cancelTempoEdit();
 
     TransportController& transportController;
     TempoMap& tempoMap;
+
+    bool editingTempo = false;
+    std::string tempoEditBuffer;
 
     gfx::ButtonWidget playButton;
     gfx::ButtonWidget stopButton;

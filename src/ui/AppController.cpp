@@ -709,6 +709,7 @@ void AppController::initialise()
     transportBar->onImportAudio   = [this]() { openFile(); };
     transportBar->onAudioSettings = [this]() { showAudioSettings(); };
     transportBar->onToggleBrowser = [this]() { toggleBrowser(); };
+    transportBar->onTempoChanged  = [this](double bpm) { project.setTempo (bpm); };
 
     // Vim status bar
     vimStatusBar = std::make_unique<VimStatusBarWidget> (*vimEngine, vimContext,
@@ -2305,9 +2306,11 @@ void AppController::propertyChanged (PropertyTree& tree, PropertyId property)
         }
     }
 
-    // Tempo change — sync to sequencer, transport, and MIDI clip processors
+    // Tempo change — sync to sequencer, transport, tempo map, and MIDI clip processors
     if (tree.getType() == IDs::PROJECT && property == IDs::tempo)
     {
+        tempoMap.setTempo (project.getTempo());
+
         if (sequencerProcessor != nullptr)
             sequencerProcessor->setTempo (project.getTempo());
 
