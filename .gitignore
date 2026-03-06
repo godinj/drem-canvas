@@ -15,3 +15,4 @@ cmake-build-*/
 # Skia build output
 libs/skia
 third_party/skia/
+.claude/worktrees/
