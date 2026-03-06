@@ -11,6 +11,10 @@ namespace platform
 namespace x11
 {
 
+/** Call XInitThreads() before any other X11 function.  Must be called
+    from main() before GLFW init or plugin loading. */
+void initThreads();
+
 /** Returns true if GLFW is running on X11 (false on Wayland). */
 bool isX11();
 

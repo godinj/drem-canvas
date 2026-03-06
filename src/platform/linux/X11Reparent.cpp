@@ -5,6 +5,7 @@
 // calls in this translation unit avoids the conflict entirely.
 
 #include <X11/Xlib.h>
+#include <cstdlib>
 
 #define GLFW_EXPOSE_NATIVE_X11
 #include <GLFW/glfw3.h>
@@ -18,6 +19,36 @@ namespace platform
 {
 namespace x11
 {
+
+// Pre-opened XWayland display, cached at startup before plugins load.
+static Display* cachedXWaylandDisplay = nullptr;
+
+void initThreads()
+{
+    XInitThreads();
+
+    // On Wayland, DISPLAY is typically unset even though XWayland is
+    // running.  We must (a) set DISPLAY so yabridge/Wine can create
+    // windows, and (b) pre-open the XWayland display before plugins
+    // load — XOpenDisplay can deadlock if called later when Wine
+    // threads are active.
+    const char* envDisplay = std::getenv ("DISPLAY");
+    if (envDisplay == nullptr || envDisplay[0] == '\0')
+    {
+        static const char* candidates[] = { ":0", ":1" };
+        for (auto name : candidates)
+        {
+            cachedXWaylandDisplay = XOpenDisplay (name);
+            if (cachedXWaylandDisplay != nullptr)
+            {
+                // Publish DISPLAY so yabridge/Wine child processes
+                // can connect to XWayland for plugin window creation.
+                setenv ("DISPLAY", name, 0);
+                break;
+            }
+        }
+    }
+}
 
 bool isX11()
 {
@@ -33,27 +64,22 @@ void* getDisplay()
 
 void* openDisplay()
 {
-    // Try the DISPLAY environment variable first
-    Display* d = XOpenDisplay (nullptr);
-    if (d != nullptr)
-        return static_cast<void*> (d);
+    // If DISPLAY is set, open normally.
+    const char* envDisplay = std::getenv ("DISPLAY");
+    if (envDisplay != nullptr && envDisplay[0] != '\0')
+        return static_cast<void*> (XOpenDisplay (nullptr));
 
-    // On Wayland, DISPLAY may be unset even though XWayland is running.
-    // Probe common XWayland display names (:0, :1).
-    static const char* candidates[] = { ":0", ":1" };
-    for (auto name : candidates)
-    {
-        d = XOpenDisplay (name);
-        if (d != nullptr)
-            return static_cast<void*> (d);
-    }
-
-    return nullptr;
+    // On Wayland, return the pre-opened XWayland display.
+    // We cache it at initThreads() time because XOpenDisplay can
+    // deadlock if called after yabridge/Wine threads are active.
+    return static_cast<void*> (cachedXWaylandDisplay);
 }
 
 void closeDisplay (void* display)
 {
-    if (display != nullptr)
+    // Don't close the cached XWayland display — it's shared across
+    // editor open/close cycles for the lifetime of the process.
+    if (display != nullptr && display != static_cast<void*> (cachedXWaylandDisplay))
         XCloseDisplay (static_cast<Display*> (display));
 }
 

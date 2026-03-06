@@ -16,6 +16,7 @@
 #include "platform/linux/GlfwWindow.h"
 #include "platform/linux/VulkanBackend.h"
 #include "platform/linux/LinuxRunLoop.h"
+#include "platform/linux/X11Reparent.h"
 #endif
 
 #include "graphics/rendering/GpuBackend.h"
@@ -552,6 +553,10 @@ int main (int argc, char* argv[])
 
 int main (int argc, char* argv[])
 {
+    // Enable thread-safe Xlib — required because yabridge plugins use
+    // X11 on Wine threads while we call XOpenDisplay on the message thread.
+    dc::platform::x11::initThreads();
+
     // Parse command-line flags
     bool smokeMode = false;
     std::string loadPath;
