@@ -68,8 +68,6 @@ public:
     // --- IParameterFinder (spatial hints) ---
     bool supportsParameterFinder() const;
     int findParameterAtPoint (int x, int y) const;
-    Steinberg::Vst::ParamID findRawParameterAtPoint (int x, int y) const;
-
     /** Return the raw ParamID from IParameterFinder without mapping to index.
         Returns kNoParamId if no parameter found at (x,y). */
     Steinberg::Vst::ParamID findRawParameterAtPoint (int x, int y) const;
