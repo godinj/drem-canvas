@@ -179,6 +179,13 @@ void PluginViewWidget::runSpatialScan()
         std::vector<SpatialParamInfo> cached;
         if (SpatialScanCache::load (pluginFileOrIdentifier, nativeW, nativeH, cached))
         {
+            // Filter cached results: old caches may contain noise entries
+            static constexpr int minHitCount = 3;
+            cached.erase (
+                std::remove_if (cached.begin(), cached.end(),
+                    [] (const SpatialParamInfo& info) { return info.hitCount < minHitCount; }),
+                cached.end());
+
             // Regenerate hint labels from position order
             int totalCount = static_cast<int> (cached.size());
             for (int i = 0; i < totalCount; ++i)

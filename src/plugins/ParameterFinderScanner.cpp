@@ -72,6 +72,16 @@ void ParameterFinderScanner::scan (dc::PluginInstance* plugin,
         results.push_back (info);
     }
 
+    // Filter: remove params with fewer than minHitCount grid cells.
+    // With gridStep=8, 3 cells ≈ a 24x24 pixel control — below this is
+    // noise from edge hits, invisible overlays, or hidden-tab parameters.
+    static constexpr int minHitCount = 3;
+    int preFilterCount = static_cast<int> (results.size());
+    results.erase (
+        std::remove_if (results.begin(), results.end(),
+            [] (const SpatialParamInfo& info) { return info.hitCount < minHitCount; }),
+        results.end());
+
     // Phase 2: performEdit snoop fallback for unmapped params.
     // Drain any stale events first.
     while (plugin->popLastEdit().has_value()) {}
@@ -112,8 +122,8 @@ void ParameterFinderScanner::scan (dc::PluginInstance* plugin,
             unmapped++;
     }
 
-    dc_log ("[SpatialScan] %d finder params, %d direct, %d snooped, %d unmapped",
-            static_cast<int> (accumulators.size()), mapped, snooped, unmapped);
+    dc_log ("[SpatialScan] %d finder hits, %d after filter (min %d), %d direct, %d snooped, %d unmapped",
+            preFilterCount, static_cast<int> (results.size()), minHitCount, mapped, snooped, unmapped);
 
     // Sort by position: top-to-bottom rows (20px tolerance), then left-to-right
     static constexpr int rowTolerance = 20;
