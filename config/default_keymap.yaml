@@ -20,6 +20,7 @@ normal:
     "[": grid.coarsen
     "]": grid.refine
     "Return": nav.open_focused
+    "Ctrl+L": transport.toggle_cycle
 
   editor:
     "v": mode.visual
@@ -55,6 +56,7 @@ normal:
     "G": seq.jump_last_row
     "Space": seq.toggle_step
     "+": seq.velocity_up
+    "=": seq.velocity_up
     "-": seq.velocity_down
     "v": seq.cycle_velocity
     "M": seq.toggle_row_mute
@@ -72,6 +74,7 @@ normal:
     "d": pr.tool_draw
     "3": pr.tool_erase
     "x": pr.delete
+    "Delete": pr.delete
     "y": pr.copy
     "p": pr.paste
     "D": pr.duplicate
@@ -151,6 +154,9 @@ visual:
     "gg": visual.extend_first
     "0": visual.extend_line_start
     "$": visual.extend_line_end
+    "[": grid.coarsen
+    "]": grid.refine
+    "Ctrl+L": visual.set_cycle
 
 visual_line:
   global:
@@ -166,4 +172,8 @@ visual_line:
     "j": visual.extend_down
     "k": visual.extend_up
     "G": visual.extend_last
+    "x": visual.delete
     "gg": visual.extend_first
+    "[": grid.coarsen
+    "]": grid.refine
+    "Ctrl+L": visual.set_cycle

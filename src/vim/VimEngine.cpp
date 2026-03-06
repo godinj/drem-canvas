@@ -2615,6 +2615,16 @@ bool VimEngine::handleSequencerNormalKey (const dc::KeyPress& key)
         return true;
     }
 
+    // Command mode
+    if (keyChar == ':')
+    {
+        mode = Command;
+        commandBuffer.clear();
+        listeners.call ([](Listener& l) { l.vimModeChanged (Command); });
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
+        return true;
+    }
+
     return false;
 }
 
