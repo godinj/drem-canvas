@@ -46,6 +46,13 @@ public:
     /// Called each frame to check for scan completion
     void tick();
 
+    /// Returns true if the progress bar was visible at any point during the
+    /// most recent async scan.  Resets on each new scan start.
+    bool wasProgressBarVisible() const { return progressBarWasVisible_; }
+
+    /// Returns true while an async scan is in progress.
+    bool isScanInProgress() const { return scanInProgress_.load(); }
+
     std::function<void (const dc::PluginDescription&)> onPluginSelected;
 
 private:
@@ -68,6 +75,7 @@ private:
     std::atomic<bool> scanResultReady_ { false };
     std::atomic<bool> scanNameDirty_ { false };
     std::string scanPluginName_;
+    bool progressBarWasVisible_ = false;
 
     static constexpr float searchFieldHeight = 28.0f;
 };

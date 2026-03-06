@@ -88,6 +88,9 @@ public:
     // Browser toggle (used by E2E --browser-scan flag)
     void toggleBrowser();
 
+    // Browser widget access (used by E2E --browser-async-scan flag)
+    BrowserWidget* getBrowserWidget() { return browserWidget.get(); }
+
     // Plugin chain info (used by E2E --capture-plugin-state flag)
     struct PluginNodeInfo
     {

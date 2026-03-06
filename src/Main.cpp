@@ -50,6 +50,7 @@ int main (int argc, char* argv[])
     bool noSpatialCache = false;
     int expectSpatialParamsGt = -1;
     bool browserScan = false;
+    bool browserAsyncScan = false;
     int expectKnownPluginsGt = -1;
     bool capturePluginState = false;
     int processFrames = 0;
@@ -78,6 +79,8 @@ int main (int argc, char* argv[])
             expectSpatialParamsGt = std::atoi (argv[++i]);
         else if (arg == "--browser-scan")
             browserScan = true;
+        else if (arg == "--browser-async-scan")
+            browserAsyncScan = true;
         else if (arg == "--expect-known-plugins-gt" && i + 1 < argc)
             expectKnownPluginsGt = std::atoi (argv[++i]);
         else if (arg == "--capture-plugin-state")
@@ -371,9 +374,83 @@ int main (int argc, char* argv[])
                     appController->tick();
                 }
 
+                // Async browser scan: exercises BrowserWidget::startAsyncScan() + tick() loop.
+                // This validates the progress bar visibility lifecycle that the sync
+                // --browser-scan flag cannot test.
+                if (browserAsyncScan)
+                {
+                    appController->toggleBrowser();
+                    appController->tick();
+
+                    auto* browser = appController->getBrowserWidget();
+                    if (browser == nullptr)
+                    {
+                        std::cerr << "FAIL: no BrowserWidget available\n";
+                        exitCode = 1;
+                    }
+                    else
+                    {
+                        browser->startAsyncScan();
+
+                        // Poll tick() until scan completes (up to ~120 seconds).
+                        // Each tick processes the message queue (delivers progress callbacks
+                        // from the scan thread) and BrowserWidget::tick() updates the
+                        // progress bar visibility — same flow as the real render loop.
+                        bool timedOut = true;
+                        for (int t = 0; t < 7500; ++t)  // 7500 * 16ms = 120s
+                        {
+                            appController->tick();
+                            if (! browser->isScanInProgress())
+                            {
+                                timedOut = false;
+                                break;
+                            }
+                            std::this_thread::sleep_for (std::chrono::milliseconds (16));
+                        }
+
+                        if (timedOut)
+                        {
+                            std::cerr << "FAIL: async scan timed out after 120s\n";
+                            exitCode = 1;
+                        }
+                        else
+                        {
+                            // Assert: progress bar was visible at some point during scan
+                            if (! browser->wasProgressBarVisible())
+                            {
+                                std::cerr << "FAIL: progress bar was never visible during async scan\n";
+                                exitCode = 1;
+                            }
+                            else
+                            {
+                                std::cerr << "INFO: progress bar was visible during scan (OK)\n";
+                            }
+
+                            // Drain a few more ticks to ensure completion handler ran
+                            for (int i = 0; i < 5; ++i)
+                                appController->tick();
+
+                            int knownCount = static_cast<int> (
+                                appController->getPluginManager().getKnownPlugins().size());
+                            std::cerr << "INFO: async scan found " << knownCount << " plugins\n";
+
+                            if (expectKnownPluginsGt >= 0 && knownCount <= expectKnownPluginsGt)
+                            {
+                                std::cerr << "FAIL: expected > " << expectKnownPluginsGt
+                                          << " known plugins, got " << knownCount << "\n";
+                                exitCode = 1;
+                            }
+                        }
+
+                        // Close browser
+                        appController->toggleBrowser();
+                        appController->tick();
+                    }
+                }
+
                 // Assert known plugins count (auto-scan verification)
                 // This checks what initialise() populated — independent of --browser-scan.
-                if (! browserScan && expectKnownPluginsGt >= 0)
+                if (! browserScan && ! browserAsyncScan && expectKnownPluginsGt >= 0)
                 {
                     int knownCount = static_cast<int> (
                         appController->getPluginManager().getKnownPlugins().size());
@@ -431,6 +508,7 @@ int main (int argc, char* argv[])
     bool noSpatialCache = false;
     int expectSpatialParamsGt = -1;
     bool browserScan = false;
+    bool browserAsyncScan = false;
     int expectKnownPluginsGt = -1;
     bool capturePluginState = false;
     int processFrames = 0;
@@ -459,6 +537,8 @@ int main (int argc, char* argv[])
             expectSpatialParamsGt = std::atoi (argv[++i]);
         else if (arg == "--browser-scan")
             browserScan = true;
+        else if (arg == "--browser-async-scan")
+            browserAsyncScan = true;
         else if (arg == "--expect-known-plugins-gt" && i + 1 < argc)
             expectKnownPluginsGt = std::atoi (argv[++i]);
         else if (arg == "--capture-plugin-state")
@@ -750,9 +830,83 @@ int main (int argc, char* argv[])
             appController->tick();
         }
 
+        // Async browser scan: exercises BrowserWidget::startAsyncScan() + tick() loop.
+        // This validates the progress bar visibility lifecycle that the sync
+        // --browser-scan flag cannot test.
+        if (browserAsyncScan)
+        {
+            appController->toggleBrowser();
+            appController->tick();
+
+            auto* browser = appController->getBrowserWidget();
+            if (browser == nullptr)
+            {
+                std::cerr << "FAIL: no BrowserWidget available\n";
+                exitCode = 1;
+            }
+            else
+            {
+                browser->startAsyncScan();
+
+                // Poll tick() until scan completes (up to ~120 seconds).
+                // Each tick processes the message queue (delivers progress callbacks
+                // from the scan thread) and BrowserWidget::tick() updates the
+                // progress bar visibility — same flow as the real render loop.
+                bool timedOut = true;
+                for (int t = 0; t < 7500; ++t)  // 7500 * 16ms = 120s
+                {
+                    appController->tick();
+                    if (! browser->isScanInProgress())
+                    {
+                        timedOut = false;
+                        break;
+                    }
+                    std::this_thread::sleep_for (std::chrono::milliseconds (16));
+                }
+
+                if (timedOut)
+                {
+                    std::cerr << "FAIL: async scan timed out after 120s\n";
+                    exitCode = 1;
+                }
+                else
+                {
+                    // Assert: progress bar was visible at some point during scan
+                    if (! browser->wasProgressBarVisible())
+                    {
+                        std::cerr << "FAIL: progress bar was never visible during async scan\n";
+                        exitCode = 1;
+                    }
+                    else
+                    {
+                        std::cerr << "INFO: progress bar was visible during scan (OK)\n";
+                    }
+
+                    // Drain a few more ticks to ensure completion handler ran
+                    for (int i = 0; i < 5; ++i)
+                        appController->tick();
+
+                    int knownCount = static_cast<int> (
+                        appController->getPluginManager().getKnownPlugins().size());
+                    std::cerr << "INFO: async scan found " << knownCount << " plugins\n";
+
+                    if (expectKnownPluginsGt >= 0 && knownCount <= expectKnownPluginsGt)
+                    {
+                        std::cerr << "FAIL: expected > " << expectKnownPluginsGt
+                                  << " known plugins, got " << knownCount << "\n";
+                        exitCode = 1;
+                    }
+                }
+
+                // Close browser
+                appController->toggleBrowser();
+                appController->tick();
+            }
+        }
+
         // Assert known plugins count (auto-scan verification)
         // This checks what initialise() populated — independent of --browser-scan.
-        if (! browserScan && expectKnownPluginsGt >= 0)
+        if (! browserScan && ! browserAsyncScan && expectKnownPluginsGt >= 0)
         {
             int knownCount = static_cast<int> (
                 appController->getPluginManager().getKnownPlugins().size());

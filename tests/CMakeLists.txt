@@ -208,6 +208,12 @@ if(BUILD_TESTING)
     set_tests_properties(e2e.browser_scan PROPERTIES
         LABELS "e2e" TIMEOUT 150)
 
+    add_test(NAME e2e.browser_async_scan
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_browser_async_scan.sh
+                $<TARGET_FILE:DremCanvas>)
+    set_tests_properties(e2e.browser_async_scan PROPERTIES
+        LABELS "e2e" TIMEOUT 180)
+
     add_test(NAME e2e.state_restore
         COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_state_restore.sh
                 $<TARGET_FILE:DremCanvas>

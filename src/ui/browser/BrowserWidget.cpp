@@ -223,6 +223,7 @@ void BrowserWidget::startAsyncScan()
         return;
 
     scanInProgress_ = true;
+    progressBarWasVisible_ = false;
     scanCurrent_ = 0;
     scanTotal_ = 0;
     scanResultReady_ = false;
@@ -265,6 +266,9 @@ void BrowserWidget::tick()
     }
     else if (scanInProgress_)
     {
+        if (progressBar.isVisible())
+            progressBarWasVisible_ = true;
+
         int cur = scanCurrent_;
         int tot = scanTotal_;
         if (tot > 0)
