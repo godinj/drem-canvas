@@ -118,137 +118,11 @@ void ParameterFinderScanner::scan (dc::PluginInstance* plugin,
         }
     }
 
-    // Phase 3: Wiggle detection for still-unmapped params.
-    // For plugins (e.g. Phase Plant under yabridge) whose IParameterFinder returns
-    // ParamIDs in a different space from the controller's enumerable parameters,
-    // we nudge the finder ParamID via setParamNormalized and detect which
-    // enumerable parameter value changes.
-    //
-    // yabridge's setParamNormalized is fully synchronous (request-response over
-    // Unix socket to Wine), so no delay is needed. If the controller doesn't
-    // recognize the ParamID, it will either return kInvalidArgument or silently
-    // ignore it (returning kResultOk but not changing any value).
-    auto* ctrl = plugin->getController();
-    int wiggled = 0;
-    int wiggleDbgCount = 0;       // gate verbose logging to first 3 unmapped entries
-    static constexpr int kMaxWiggleDbg = 3;
-
-    if (ctrl != nullptr)
-    {
-        // Snapshot baseline values for all enumerable parameters
-        std::vector<double> baseline (static_cast<size_t> (numParams));
-        for (int i = 0; i < numParams; ++i)
-            baseline[static_cast<size_t> (i)] =
-                ctrl->getParamNormalized (plugin->getParameterId (i));
-
-        static constexpr double kNudgeAmount = 0.002;
-        static constexpr double kDetectThreshold = 0.0005;
-
-        for (auto& info : results)
-        {
-            if (info.paramIndex >= 0)
-                continue;
-
-            bool verbose = (wiggleDbgCount < kMaxWiggleDbg);
-            wiggleDbgCount++;
-
-            auto finderParamId = static_cast<Steinberg::Vst::ParamID> (info.paramId);
-
-            // Read the current value of this finder ParamID
-            double original = ctrl->getParamNormalized (finderParamId);
-
-            // Compute nudge direction: nudge down if near 1.0, else up
-            double nudged = (original > 0.998) ? original - kNudgeAmount
-                                                : original + kNudgeAmount;
-
-            if (verbose)
-            {
-                dc_log ("[WiggleDbg] entry #%d: finderParamId=%u  original=%.6f  nudged=%.6f",
-                        wiggleDbgCount, static_cast<unsigned int> (finderParamId), original, nudged);
-            }
-
-            // Apply the nudge
-            auto setResult = ctrl->setParamNormalized (finderParamId, nudged);
-
-            if (setResult != Steinberg::kResultOk)
-            {
-                if (verbose)
-                    dc_log ("[WiggleDbg]   setParamNormalized failed: %d", static_cast<int> (setResult));
-                continue;
-            }
-
-            // Re-read the finder ParamID to confirm the set actually took effect
-            if (verbose)
-            {
-                double afterSet = ctrl->getParamNormalized (finderParamId);
-                dc_log ("[WiggleDbg]   after setParamNormalized: re-read finderParamId=%u => %.6f  (delta=%.6f)",
-                        static_cast<unsigned int> (finderParamId), afterSet, afterSet - original);
-            }
-
-            // Check which enumerable parameter changed
-            int matchIdx = -1;
-            int changesLogged = 0;
-
-            for (int i = 0; i < numParams; ++i)
-            {
-                double current = ctrl->getParamNormalized (plugin->getParameterId (i));
-                double delta = current - baseline[static_cast<size_t> (i)];
-
-                if (std::abs (delta) > 0.0)
-                {
-                    if (verbose && changesLogged < 5)
-                    {
-                        dc_log ("[WiggleDbg]   enum param[%d] id=%u changed: baseline=%.6f current=%.6f delta=%.6f %s",
-                                i, static_cast<unsigned int> (plugin->getParameterId (i)),
-                                baseline[static_cast<size_t> (i)], current, delta,
-                                (std::abs (delta) > kDetectThreshold) ? "ABOVE_THRESHOLD" : "below_threshold");
-                        changesLogged++;
-                    }
-
-                    if (matchIdx < 0 && std::abs (delta) > kDetectThreshold)
-                        matchIdx = i;
-                }
-            }
-
-            if (verbose)
-            {
-                if (changesLogged == 0)
-                    dc_log ("[WiggleDbg]   NO enumerable params changed at all (0 deltas)");
-
-                dc_log ("[WiggleDbg]   matchIdx=%d", matchIdx);
-            }
-
-            // Restore original value
-            ctrl->setParamNormalized (finderParamId, original);
-
-            // Verify restore took effect
-            if (verbose)
-            {
-                double afterRestore = ctrl->getParamNormalized (finderParamId);
-                dc_log ("[WiggleDbg]   after restore: re-read finderParamId=%u => %.6f  (expected %.6f)",
-                        static_cast<unsigned int> (finderParamId), afterRestore, original);
-            }
-
-            if (matchIdx >= 0)
-            {
-                info.paramIndex = matchIdx;
-                info.name = plugin->getParameterName (matchIdx);
-                wiggled++;
-
-                dc_log ("[WiggleDetect] finderParam=%u -> enumIndex=%d name=\"%s\"",
-                        info.paramId, matchIdx, info.name.c_str());
-
-                // Update baseline for the matched param (in case of rounding)
-                baseline[static_cast<size_t> (matchIdx)] =
-                    ctrl->getParamNormalized (plugin->getParameterId (matchIdx));
-            }
-        }
-    }
-    else
-    {
-        dc_log ("[WiggleDbg] ctrl is null — skipping wiggle phase");
-    }
-
+    // Remaining unmapped entries are deferred to mouse probe resolution
+    // in PluginViewWidget::runSpatialScan() Phase 4, which injects synthetic
+    // mouse events at centroid positions and catches performEdit callbacks.
+    // This is more reliable than setParamNormalized wiggle for plugins with
+    // disjoint finder ParamIDs (e.g. Phase Plant under yabridge).
     int unmapped = 0;
     for (auto& info : results)
     {
@@ -256,8 +130,8 @@ void ParameterFinderScanner::scan (dc::PluginInstance* plugin,
             unmapped++;
     }
 
-    dc_log ("[SpatialScan] %d finder hits, %d after filter (min %d), %d direct, %d snooped, %d wiggled, %d unmapped",
-            preFilterCount, static_cast<int> (results.size()), minHitCount, mapped, snooped, wiggled, unmapped);
+    dc_log ("[SpatialScan] %d finder hits, %d after filter (min %d), %d direct, %d snooped, %d unmapped (deferred to mouse probe)",
+            preFilterCount, static_cast<int> (results.size()), minHitCount, mapped, snooped, unmapped);
 
     // Sort by position: top-to-bottom rows (20px tolerance), then left-to-right
     static constexpr int rowTolerance = 20;
