@@ -8,6 +8,16 @@ namespace dc
 namespace ui
 {
 
+static std::string getBranchBadge()
+{
+#ifdef DC_GIT_BRANCH
+    std::string branch = DC_GIT_BRANCH;
+    if (! branch.empty() && branch != "master" && branch != "main")
+        return branch;
+#endif
+    return "";
+}
+
 TransportBarWidget::TransportBarWidget (TransportController& transport, TempoMap& tempo)
     : transportController (transport),
       tempoMap (tempo),
@@ -19,7 +29,8 @@ TransportBarWidget::TransportBarWidget (TransportController& transport, TempoMap
       loadButton ("Load"),
       importButton ("Import"),
       audioSettingsButton ("Audio"),
-      pluginsButton ("Plugins")
+      pluginsButton ("Plugins"),
+      branchLabel (getBranchBadge(), gfx::LabelWidget::Centre)
 {
     timeDisplay.setUseMonoFont (true);
     timeDisplay.setFontSize (16.0f);
@@ -36,6 +47,14 @@ TransportBarWidget::TransportBarWidget (TransportController& transport, TempoMap
     addChild (&importButton);
     addChild (&audioSettingsButton);
     addChild (&pluginsButton);
+
+    auto badge = getBranchBadge();
+    if (! badge.empty())
+    {
+        branchLabel.setFontSize (11.0f);
+        branchLabel.setTextColor (gfx::Color::fromARGB (0xff80e0a0));
+        addChild (&branchLabel);
+    }
 
     playButton.onClick = [this]()
     {
@@ -112,8 +131,14 @@ void TransportBarWidget::resized()
     rightX -= buttonWidth;
     saveButton.setBounds (rightX + margin, margin, bw, bh);
 
-    // Time display fills the middle (after tempo)
+    // Branch badge (if on a feature branch) and time display fill the middle
     float timeX = buttonWidth * 2.0f + tempoWidth;
+    if (branchLabel.getParent() != nullptr)
+    {
+        float branchW = 200.0f;
+        branchLabel.setBounds (timeX, 0, branchW, h);
+        timeX += branchW;
+    }
     float timeW = rightX - timeX;
     if (timeW < 0) timeW = 0;
     timeDisplay.setBounds (timeX, 0, timeW, h);

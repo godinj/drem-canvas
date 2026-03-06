@@ -45,6 +45,7 @@ private:
     gfx::ButtonWidget importButton;
     gfx::ButtonWidget audioSettingsButton;
     gfx::ButtonWidget pluginsButton;
+    gfx::LabelWidget branchLabel;
 };
 
 } // namespace ui

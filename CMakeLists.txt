@@ -425,11 +425,24 @@ if(APPLE)
     )
 endif()
 
+# ─── Git branch (for window title signature) ────────────────
+execute_process(
+    COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE DC_GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT DC_GIT_BRANCH)
+    set(DC_GIT_BRANCH "unknown")
+endif()
+
 # ─── Compile definitions ─────────────────────────────────────
 target_compile_definitions(DremCanvas PRIVATE
     SK_GANESH=1
     DC_APP_NAME="Drem Canvas"
     DC_APP_VERSION="${PROJECT_VERSION}"
+    DC_GIT_BRANCH="${DC_GIT_BRANCH}"
 )
 
 if(APPLE)

@@ -27,6 +27,18 @@
 #include "plugins/SpatialScanCache.h"
 #include "ui/AppController.h"
 
+// ─── Window title with branch signature ─────────────────────────
+static std::string getWindowTitle()
+{
+    std::string title = "Drem Canvas";
+#ifdef DC_GIT_BRANCH
+    std::string branch = DC_GIT_BRANCH;
+    if (! branch.empty() && branch != "master" && branch != "main")
+        title += " [" + branch + "]";
+#endif
+    return title;
+}
+
 // ─── macOS entry point ──────────────────────────────────────────
 
 #if defined(__APPLE__)
@@ -110,7 +122,7 @@ int main (int argc, char* argv[])
         [&]()
         {
             // Create native Metal window
-            nativeWindow = std::make_unique<dc::platform::NativeWindow> ("Drem Canvas", 1280, 800);
+            nativeWindow = std::make_unique<dc::platform::NativeWindow> (getWindowTitle(), 1280, 800);
 
             // Create Skia Metal backend
             gpuBackend = std::make_unique<dc::gfx::MetalBackend> (*nativeWindow->getMetalView());
@@ -597,7 +609,7 @@ int main (int argc, char* argv[])
     }
 
     // Create GLFW window
-    auto glfwWindow = std::make_unique<dc::platform::GlfwWindow> ("Drem Canvas", 1280, 800);
+    auto glfwWindow = std::make_unique<dc::platform::GlfwWindow> (getWindowTitle(), 1280, 800);
 
     // Set window icon for X11 (Wayland uses the .desktop file instead)
     auto exeDir = std::filesystem::canonical ("/proc/self/exe").parent_path();
