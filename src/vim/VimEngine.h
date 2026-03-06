@@ -71,6 +71,10 @@ public:
     // Command mode
     const std::string& getCommandBuffer() const { return commandBuffer; }
 
+    // Status message (shown briefly after ex-commands)
+    const std::string& getStatusMessage() const { return statusMessage; }
+    void clearStatusMessage() { statusMessage.clear(); }
+
     // ─── Adapter registration ───────────────────────────────
     void registerAdapter (std::unique_ptr<ContextAdapter> adapter);
     ContextAdapter* getActiveAdapter() const;
@@ -282,6 +286,7 @@ private:
 
     Mode mode = Normal;
     std::string commandBuffer;
+    std::string statusMessage;
 
     VimGrammar grammar;
 

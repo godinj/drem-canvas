@@ -37,6 +37,13 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
     // Background
     canvas.fillRect (Rect (0, 0, totalWidth, h), Color::fromARGB (0xff181825));
 
+    // ── Status message (shown briefly after ex-commands)
+    if (engine.getMode() != VimEngine::Command && ! engine.getStatusMessage().empty())
+    {
+        canvas.drawText (engine.getStatusMessage(), 6.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffcdd6f4));
+        return;
+    }
+
     // ── Command mode — full-width command line
     if (engine.getMode() == VimEngine::Command)
     {

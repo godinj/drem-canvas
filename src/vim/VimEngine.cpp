@@ -63,6 +63,7 @@ ContextAdapter* VimEngine::getAdapter (VimContext::Panel panel) const
 
 bool VimEngine::dispatch (const dc::KeyPress& key)
 {
+    statusMessage.clear();
     auto keyChar = key.getTextCharacter();
 
     // 1. Global keymap bindings (Ctrl+P, etc.) — check before mode dispatch
@@ -922,6 +923,25 @@ void VimEngine::executeCommand()
     {
         project.setCycleEnd (context.getGridCursorPosition());
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
+    }
+    else if (dc::startsWith (cmd, "tempo ") || dc::startsWith (cmd, "bpm "))
+    {
+        auto valStr = dc::trim (dc::afterFirst (cmd, " "));
+        if (! valStr.empty())
+        {
+            try
+            {
+                double bpm = std::stod (valStr);
+                bpm = std::max (20.0, std::min (300.0, bpm));
+                project.setTempo (bpm);
+                statusMessage = "Tempo: " + std::to_string (static_cast<int> (std::round (bpm))) + " BPM";
+                listeners.call ([](Listener& l) { l.vimContextChanged(); });
+            }
+            catch (...)
+            {
+                statusMessage = "Invalid tempo value";
+            }
+        }
     }
 }
 

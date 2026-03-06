@@ -6,6 +6,7 @@
 #include "engine/TransportController.h"
 #include "vim/VimContext.h"
 #include "vim/VimEngine.h"
+#include "graphics/core/Event.h"
 
 // Helper: set up a full Vim environment for testing
 struct VimTestFixture
@@ -299,4 +300,62 @@ TEST_CASE ("Vim jump to session start resets transport", "[integration][vim]")
 
     f.engine.jumpToSessionStart();
     CHECK (f.transport.getPositionInSamples() == 0);
+}
+
+// ─── :tempo and :bpm commands ────────────────────────────────────────────────
+
+static void simulateExCommand (dc::VimEngine& engine, const std::string& cmd)
+{
+    // Enter command mode by typing ':'
+    dc::gfx::KeyEvent colonKey {};
+    colonKey.character = ':';
+    colonKey.unmodifiedCharacter = ':';
+    engine.handleKeyEvent (colonKey);
+
+    // Type command characters
+    for (char c : cmd)
+    {
+        dc::gfx::KeyEvent charKey {};
+        charKey.character = static_cast<char32_t> (c);
+        charKey.unmodifiedCharacter = static_cast<char32_t> (c);
+        engine.handleKeyEvent (charKey);
+    }
+
+    // Press Return to execute (macOS keycode 0x24)
+    dc::gfx::KeyEvent returnKey {};
+    returnKey.keyCode = 0x24;
+    engine.handleKeyEvent (returnKey);
+}
+
+TEST_CASE ("Vim :tempo sets project tempo", "[integration][vim]")
+{
+    VimTestFixture f;
+
+    SECTION ("basic tempo set")
+    {
+        simulateExCommand (f.engine, "tempo 140");
+        CHECK (f.project.getTempo() == 140.0);
+        CHECK (f.engine.getStatusMessage() == "Tempo: 140 BPM");
+    }
+
+    SECTION ("clamps to minimum 20 BPM")
+    {
+        simulateExCommand (f.engine, "tempo 5");
+        CHECK (f.project.getTempo() == 20.0);
+    }
+
+    SECTION ("clamps to maximum 300 BPM")
+    {
+        simulateExCommand (f.engine, "tempo 999");
+        CHECK (f.project.getTempo() == 300.0);
+    }
+}
+
+TEST_CASE ("Vim :bpm sets project tempo", "[integration][vim]")
+{
+    VimTestFixture f;
+
+    simulateExCommand (f.engine, "bpm 90");
+    CHECK (f.project.getTempo() == 90.0);
+    CHECK (f.engine.getStatusMessage() == "Tempo: 90 BPM");
 }
