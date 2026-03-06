@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "vim/adapters/EditorAdapter.h"
 #include "engine/PluginProcessorNode.h"
 #include "dc/plugins/PluginDescription.h"
 #include "graphics/rendering/Canvas.h"
@@ -104,6 +105,42 @@ void AppController::initialise()
     // Create vim engine
     vimEngine = std::make_unique<VimEngine> (project, transportController, arrangement, vimContext, gridSystem);
     vimEngine->addListener (this);
+
+    // Create and register EditorAdapter
+    {
+        auto editorAdapter = std::make_unique<EditorAdapter> (
+            project, arrangement, transportController, gridSystem, vimContext);
+
+        editorAdapter->setContextChangedCallback ([this]()
+        {
+            // Notify VimEngine listeners about context changes
+            // This uses the same mechanism as vimContextChanged()
+            vimContextChanged();
+        });
+
+        editorAdapter->setModeChangedCallback ([this] (int newMode)
+        {
+            vimEngine->setMode (static_cast<VimEngine::Mode> (newMode));
+        });
+
+        editorAdapter->setToggleCycleCallback ([this]()
+        {
+            vimEngine->toggleCycle();
+        });
+
+        editorAdapter->setCycleToGridVisualCallback ([this]()
+        {
+            vimEngine->setCycleToGridVisual();
+        });
+
+        editorAdapter->onOpenPianoRoll = [this] (const PropertyTree& clipState)
+        {
+            if (pianoRollWidget)
+                pianoRollWidget->loadClip (clipState);
+        };
+
+        vimEngine->registerAdapter (std::move (editorAdapter));
+    }
 
     // Wire :plugin command
     vimEngine->onPluginCommand = [this] (const std::string& pluginName)

@@ -2,6 +2,7 @@
 #include "dc/foundation/keycode.h"
 #include "VimGrammar.h"
 #include "VimContext.h"
+#include "ContextAdapter.h"
 #include "model/Project.h"
 #include "model/Arrangement.h"
 #include "model/Track.h"
@@ -13,6 +14,8 @@
 #include "model/GridSystem.h"
 #include "dc/foundation/listener_list.h"
 #include <string>
+#include <unordered_map>
+#include <memory>
 
 namespace dc
 {
@@ -52,6 +55,7 @@ public:
     bool handleKeyUp (const gfx::KeyEvent& event);
 
     Mode getMode() const { return mode; }
+    void setMode (Mode m);
     bool hasPendingKey() const { return grammar.hasPendingKey(); }
 
     // Operator-pending queries (used by status bar)
@@ -64,6 +68,11 @@ public:
 
     // Command mode
     const std::string& getCommandBuffer() const { return commandBuffer; }
+
+    // ─── Adapter registration ───────────────────────────────
+    void registerAdapter (std::unique_ptr<ContextAdapter> adapter);
+    ContextAdapter* getActiveAdapter() const;
+    ContextAdapter* getAdapter (VimContext::Panel panel) const;
 
     // Plugin command callback (wired by MainComponent)
     std::function<void (const std::string&)> onPluginCommand;
@@ -152,32 +161,24 @@ public:
 
     // ─── Public action methods (for ActionRegistry) ──────────
 
-    // Navigation
+    // Editor panel actions (delegated to EditorAdapter)
     void moveSelectionUp();
     void moveSelectionDown();
     void moveSelectionLeft();
     void moveSelectionRight();
-
-    // Track jumps
     void jumpToFirstTrack();
     void jumpToLastTrack();
-
-    // Transport
     void jumpToSessionStart();
     void jumpToSessionEnd();
     void togglePlayStop();
     void toggleCycle();
     void setCycleToGridVisual();
-
-    // Clip operations
     void deleteSelectedRegions();
     void yankSelectedRegions();
     void pasteAfterPlayhead();
     void pasteBeforePlayhead();
     void splitRegionAtPlayhead();
     void duplicateSelectedClip();
-
-    // Track state
     void toggleMute();
     void toggleSolo();
     void toggleRecordArm();
@@ -245,11 +246,11 @@ private:
     void openFocusedItem();
     void closePianoRoll();
 
-    // Motion
+    // Motion (legacy, used by non-adapter code paths)
     MotionRange resolveMotion (char32_t key, int count) const;
     MotionRange resolveLinewiseMotion (int count) const;
 
-    // Operator execution
+    // Operator execution (legacy, used by non-adapter code paths)
     void executeOperator (Operator op, const MotionRange& range);
     void executeDelete (const MotionRange& range);
     void executeYank (const MotionRange& range);
@@ -293,6 +294,9 @@ private:
     int64_t visualAnchorGridPos = 0;
 
     dc::ListenerList<Listener> listeners;
+
+    // ─── Adapter storage ────────────────────────────────────
+    std::unordered_map<int, std::unique_ptr<ContextAdapter>> adapters;
 
     VimEngine (const VimEngine&) = delete;
     VimEngine& operator= (const VimEngine&) = delete;

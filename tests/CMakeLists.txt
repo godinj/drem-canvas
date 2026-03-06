@@ -161,6 +161,7 @@ add_executable(dc_integration_tests
     ${CMAKE_SOURCE_DIR}/src/vim/VimContext.cpp
     ${CMAKE_SOURCE_DIR}/src/vim/VimGrammar.cpp
     ${CMAKE_SOURCE_DIR}/src/vim/VimEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/vim/adapters/EditorAdapter.cpp
     ${CMAKE_SOURCE_DIR}/src/vim/ActionRegistry.cpp
 
     # Engine

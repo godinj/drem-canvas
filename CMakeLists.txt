@@ -258,6 +258,7 @@ add_executable(DremCanvas
     src/vim/VimContext.cpp
     src/vim/VimGrammar.cpp
     src/vim/VimEngine.cpp
+    src/vim/adapters/EditorAdapter.cpp
     src/vim/ActionRegistry.cpp
     src/vim/KeySequence.cpp
     src/vim/KeymapRegistry.cpp

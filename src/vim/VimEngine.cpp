@@ -36,6 +36,30 @@ VimEngine::VimEngine (Project& p, TransportController& t,
 
 // consumeRegister() now delegated to grammar.consumeRegister()
 
+void VimEngine::setMode (Mode m)
+{
+    mode = m;
+    listeners.call ([m](Listener& l) { l.vimModeChanged (m); });
+}
+
+void VimEngine::registerAdapter (std::unique_ptr<ContextAdapter> adapter)
+{
+    int panel = static_cast<int> (adapter->getPanel());
+    adapters[panel] = std::move (adapter);
+}
+
+ContextAdapter* VimEngine::getActiveAdapter() const
+{
+    auto it = adapters.find (static_cast<int> (context.getPanel()));
+    return (it != adapters.end()) ? it->second.get() : nullptr;
+}
+
+ContextAdapter* VimEngine::getAdapter (VimContext::Panel panel) const
+{
+    auto it = adapters.find (static_cast<int> (panel));
+    return (it != adapters.end()) ? it->second.get() : nullptr;
+}
+
 bool VimEngine::dispatch (const dc::KeyPress& key)
 {
     // Ctrl+P opens command palette from any mode
@@ -56,10 +80,21 @@ bool VimEngine::dispatch (const dc::KeyPress& key)
         return handleCommandKey (key);
 
     if (mode == Visual)
+    {
+        // Delegate to adapter if available for current panel
+        auto* adapter = getActiveAdapter();
+        if (adapter)
+            return adapter->handleVisualKey (key);
         return handleVisualKey (key);
+    }
 
     if (mode == VisualLine)
+    {
+        auto* adapter = getActiveAdapter();
+        if (adapter)
+            return adapter->handleVisualLineKey (key);
         return handleVisualLineKey (key);
+    }
 
     if (mode == Normal)
         return handleNormalKey (key);
@@ -160,6 +195,9 @@ bool VimEngine::handleNormalKey (const dc::KeyPress& key)
     // Phase: Grammar (replaces inline count/operator/motion handling)
     auto result = grammar.feed (keyChar, key.shift, key.control, key.alt, key.command);
 
+    // Check for EditorAdapter — if present, delegate grammar results to it
+    auto* editorAdapter = getActiveAdapter();
+
     switch (result.type)
     {
         case VimGrammar::ParseResult::Incomplete:
@@ -167,22 +205,42 @@ bool VimEngine::handleNormalKey (const dc::KeyPress& key)
             return true;
 
         case VimGrammar::ParseResult::Motion:
-            executeMotion (result.motionKey, result.count);
+            if (editorAdapter)
+                editorAdapter->executeMotion (result.motionKey, result.count);
+            else
+                executeMotion (result.motionKey, result.count);
             return true;
 
         case VimGrammar::ParseResult::OperatorMotion:
         {
-            auto range = resolveMotion (result.motionKey, result.count);
-            if (range.valid)
-                executeOperator (static_cast<Operator> (result.op), range);
+            if (editorAdapter)
+            {
+                auto aRange = editorAdapter->resolveMotion (result.motionKey, result.count);
+                if (aRange.valid)
+                    editorAdapter->executeOperator (result.op, aRange, result.reg);
+            }
+            else
+            {
+                auto range = resolveMotion (result.motionKey, result.count);
+                if (range.valid)
+                    executeOperator (static_cast<Operator> (result.op), range);
+            }
             listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
 
         case VimGrammar::ParseResult::LinewiseOperator:
         {
-            auto range = resolveLinewiseMotion (result.count);
-            executeOperator (static_cast<Operator> (result.op), range);
+            if (editorAdapter)
+            {
+                auto aRange = editorAdapter->resolveLinewiseMotion (result.count);
+                editorAdapter->executeOperator (result.op, aRange, result.reg);
+            }
+            else
+            {
+                auto range = resolveLinewiseMotion (result.count);
+                executeOperator (static_cast<Operator> (result.op), range);
+            }
             listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
