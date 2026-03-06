@@ -28,6 +28,7 @@ void TimeRulerWidget::paint (gfx::Canvas& canvas)
 
     double bpm = tempoMap.getTempo();
     int beatsPerBar = tempoMap.getTimeSigNumerator();
+    double pixelsPerBeat = pixelsPerSecond * 60.0 / bpm;
     double pixelsPerBar = beatsPerBar * pixelsPerBeat;
 
     // Determine bar interval based on zoom level (skip bars when zoomed out)
@@ -80,11 +81,10 @@ void TimeRulerWidget::paint (gfx::Canvas& canvas)
         {
             double cycleStartSec = static_cast<double> (transportController.getLoopStartInSamples()) / sr;
             double cycleEndSec = static_cast<double> (transportController.getLoopEndInSamples()) / sr;
-            double cycleStartBeats = cycleStartSec * bpm / 60.0;
-            double cycleEndBeats = cycleEndSec * bpm / 60.0;
+            double startTime = scrollOffset / pixelsPerSecond;
 
-            float cx1 = static_cast<float> ((cycleStartBeats - startBeat) * pixelsPerBeat) + headerWidth;
-            float cx2 = static_cast<float> ((cycleEndBeats - startBeat) * pixelsPerBeat) + headerWidth;
+            float cx1 = static_cast<float> ((cycleStartSec - startTime) * pixelsPerSecond) + headerWidth;
+            float cx2 = static_cast<float> ((cycleEndSec - startTime) * pixelsPerSecond) + headerWidth;
 
             cx1 = std::max (cx1, headerWidth);
             cx2 = std::min (cx2, w);
@@ -114,8 +114,7 @@ void TimeRulerWidget::mouseDrag (const gfx::MouseEvent& e)
 
 void TimeRulerWidget::seekFromX (float mouseX)
 {
-    double beats = (static_cast<double> (mouseX - headerWidth) + scrollOffset) / pixelsPerBeat;
-    double timeInSeconds = beats * 60.0 / tempoMap.getTempo();
+    double timeInSeconds = (static_cast<double> (mouseX - headerWidth) + scrollOffset) / pixelsPerSecond;
     if (timeInSeconds >= 0.0 && onSeek)
         onSeek (timeInSeconds);
 }

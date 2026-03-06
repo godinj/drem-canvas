@@ -20,10 +20,10 @@ public:
     void mouseDown (const gfx::MouseEvent& e) override;
     void mouseDrag (const gfx::MouseEvent& e) override;
 
-    void setPixelsPerBeat (double ppb) { pixelsPerBeat = ppb; repaint(); }
+    void setPixelsPerSecond (double pps) { pixelsPerSecond = pps; repaint(); }
     void setScrollOffset (double offset) { scrollOffset = offset; repaint(); }
 
-    double getPixelsPerBeat() const { return pixelsPerBeat; }
+    double getPixelsPerSecond() const { return pixelsPerSecond; }
     double getScrollOffset() const { return scrollOffset; }
 
     std::function<void (double)> onSeek;
@@ -33,7 +33,7 @@ private:
 
     const TempoMap& tempoMap;
     const TransportController& transportController;
-    double pixelsPerBeat = 50.0;
+    double pixelsPerSecond = 100.0;
     double scrollOffset = 0.0;
     static constexpr float headerWidth = 150.0f;
 };

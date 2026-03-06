@@ -61,8 +61,7 @@ private:
 
     std::vector<std::unique_ptr<TrackLaneWidget>> trackLanes;
 
-    double pixelsPerBeat = 50.0;
-    double getPixelsPerSecond() const { return pixelsPerBeat * tempoMap.getTempo() / 60.0; }
+    double pixelsPerSecond = 100.0;
     bool activeContext = true;
     bool needsRebuild = false;
     static constexpr float rulerHeight = 30.0f;
