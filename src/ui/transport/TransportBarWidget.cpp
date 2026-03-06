@@ -37,6 +37,7 @@ TransportBarWidget::TransportBarWidget (TransportController& transport, TempoMap
 
     tempoDisplay.setUseMonoFont (true);
     tempoDisplay.setFontSize (14.0f);
+    tempoDisplay.setInterceptsMouse (false);
 
     addChild (&playButton);
     addChild (&stopButton);

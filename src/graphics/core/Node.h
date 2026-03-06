@@ -75,6 +75,9 @@ public:
     virtual bool hitTest (Point localPoint) const;
     Node* findNodeAt (Point parentPoint);
 
+    void setInterceptsMouse (bool intercept) { interceptsMouse = intercept; }
+    bool getInterceptsMouse() const { return interceptsMouse; }
+
     // ─── Coordinate conversion ───────────────────────────
 
     Point localToParent (Point p) const;
@@ -88,6 +91,7 @@ protected:
     float opacity = 1.0f;
     bool visible = true;
     bool dirty = true;
+    bool interceptsMouse = true;
 
     Node* parent = nullptr;
     std::vector<Node*> children;

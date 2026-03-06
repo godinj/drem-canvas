@@ -89,7 +89,10 @@ Node* Node::findNodeAt (Point parentPoint)
     // Check children in reverse order (front to back)
     for (int i = static_cast<int> (children.size()) - 1; i >= 0; --i)
     {
-        Node* hit = children[static_cast<size_t> (i)]->findNodeAt (localPoint);
+        auto* child = children[static_cast<size_t> (i)];
+        if (!child->interceptsMouse)
+            continue;
+        Node* hit = child->findNodeAt (localPoint);
         if (hit)
             return hit;
     }
