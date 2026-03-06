@@ -33,7 +33,22 @@ void* getDisplay()
 
 void* openDisplay()
 {
-    return static_cast<void*> (XOpenDisplay (nullptr));
+    // Try the DISPLAY environment variable first
+    Display* d = XOpenDisplay (nullptr);
+    if (d != nullptr)
+        return static_cast<void*> (d);
+
+    // On Wayland, DISPLAY may be unset even though XWayland is running.
+    // Probe common XWayland display names (:0, :1).
+    static const char* candidates[] = { ":0", ":1" };
+    for (auto name : candidates)
+    {
+        d = XOpenDisplay (name);
+        if (d != nullptr)
+            return static_cast<void*> (d);
+    }
+
+    return nullptr;
 }
 
 void closeDisplay (void* display)

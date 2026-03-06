@@ -47,6 +47,16 @@ cmd_start()
             fi
             ;;
         Linux)
+            # Ensure XWayland access: if XAUTHORITY is unset, detect it from
+            # the running Xwayland process so XOpenDisplay can authenticate.
+            if [[ -z "${XAUTHORITY:-}" ]]; then
+                local xauth_file
+                xauth_file=$(ps -C Xwayland -o args= 2>/dev/null \
+                    | grep -oP '(?<=-auth )\S+' | head -1 || true)
+                if [[ -n "$xauth_file" && -r "$xauth_file" ]]; then
+                    export XAUTHORITY="$xauth_file"
+                fi
+            fi
             WINEESYNC=0 "$WORKTREE_ROOT/build/DremCanvas" &
             echo $! > "$PID_FILE"
             ;;
