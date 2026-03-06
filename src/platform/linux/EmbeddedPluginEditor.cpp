@@ -40,50 +40,35 @@ void EmbeddedPluginEditor::openEditor (dc::PluginInstance* plugin, GLFWwindow* p
 
     dc_log ("[EmbedEditor] editor native size: %dx%d", nativeWidth, nativeHeight);
 
-    // Get the native X11 window handle from GLFW for embedding
-    unsigned long parentX11Window = 0;
+    // Get or open an X11 display connection.
+    // X11: borrow GLFW's display (reparented = true → don't close it).
+    // Wayland: open an independent display for XWayland hosting.
     if (x11::isX11())
     {
-        parentX11Window = x11::getWindow (parentWindow);
         xDisplay = x11::getDisplay();
-    }
-
-    if (parentX11Window != 0)
-    {
-        // X11: attach the IPlugView to the GLFW parent window.
-        // The IPlugView creates a child X11 window under the parent.
-        editor_->attachToWindow (reinterpret_cast<void*> (parentX11Window));
         reparented = true;
-
-        // The IPlugView should have created an X11 window; we need to discover it.
-        // The plug view's window becomes a child of parentX11Window.
-        // For now, store the parent as the editor window — the compositor
-        // will capture the child window via XComposite.
-        // TODO: discover the actual child window created by IPlugView
-        editorXWindow = parentX11Window;
-
-        dc_log ("[EmbedEditor] X11 child window: parent=%lu", parentX11Window);
     }
     else
     {
-        // Wayland fallback: attach to an independent X11 connection.
-        // The IPlugView creates its own XWayland window.
         xDisplay = x11::openDisplay();
-        if (xDisplay != nullptr)
-        {
-            // Create a small container window for the IPlugView
-            editorXWindow = x11::createWindow (xDisplay, nativeWidth, nativeHeight);
-            if (editorXWindow != 0)
-            {
-                editor_->attachToWindow (reinterpret_cast<void*> (editorXWindow));
-                dc_log ("[EmbedEditor] Wayland mode: XWayland window %lu display=%p",
-                        editorXWindow, xDisplay);
-            }
-        }
-        else
-        {
-            dc_log ("[EmbedEditor] Wayland mode: could not open display");
-        }
+    }
+
+    if (xDisplay == nullptr)
+    {
+        dc_log ("[EmbedEditor] could not get/open X11 display");
+        return;
+    }
+
+    // Create a dedicated off-screen container window.  It starts at
+    // (-10000, -10000) with override_redirect so it never flashes on screen.
+    // The IPlugView creates its child window inside this container, and the
+    // X11Compositor captures pixels from it via XComposite.
+    editorXWindow = x11::createWindow (xDisplay, nativeWidth, nativeHeight);
+    if (editorXWindow != 0)
+    {
+        editor_->attachToWindow (reinterpret_cast<void*> (editorXWindow));
+        dc_log ("[EmbedEditor] attached to off-screen container: window=%lu display=%p x11=%d",
+                editorXWindow, xDisplay, reparented);
     }
 }
 
@@ -94,6 +79,9 @@ void EmbeddedPluginEditor::closeEditor()
         editor_->detach();
         editor_.reset();
     }
+
+    // Destroy the container window we created
+    x11::destroyWindow (xDisplay, editorXWindow);
 
     // Close our own X11 display if we opened one (Wayland mode)
     if (! reparented && xDisplay != nullptr)

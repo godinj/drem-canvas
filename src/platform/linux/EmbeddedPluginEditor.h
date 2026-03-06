@@ -14,16 +14,15 @@ namespace platform
 {
 
 /**
- * Embeds a dc::PluginEditor inside the GLFW main window via X11.
+ * Hosts a dc::PluginEditor in a dedicated off-screen X11 container window.
  *
- * On X11: the IPlugView creates an X11 child window which we reparent
- * into the GLFW window via XReparentWindow.
+ * On X11: uses GLFW's display connection. The container starts at
+ * (-10000, -10000) with override_redirect so it never appears on screen.
  *
- * On Wayland: X11 reparenting isn't possible across the Wayland/XWayland
- * boundary, so the editor is shown as a floating XWayland window.
+ * On Wayland: opens an independent X11 display for XWayland. The
+ * container is likewise off-screen.
  *
- * The editor is scaled to fit within the available panel area while
- * preserving aspect ratio.
+ * The X11Compositor captures pixels from this container via XComposite.
  */
 class EmbeddedPluginEditor
 {

@@ -62,13 +62,30 @@ unsigned long createWindow (void* display, int width, int height)
 {
     auto* d = static_cast<Display*> (display);
     Window root = DefaultRootWindow (d);
-    Window win = XCreateSimpleWindow (d, root, 0, 0,
-                                      static_cast<unsigned int> (width),
-                                      static_cast<unsigned int> (height),
-                                      0, 0, 0);
+
+    // override_redirect prevents the window manager from decorating,
+    // managing, or moving the window on-screen.
+    XSetWindowAttributes attrs;
+    attrs.override_redirect = True;
+
+    Window win = XCreateWindow (d, root, -10000, -10000,
+                                static_cast<unsigned int> (width),
+                                static_cast<unsigned int> (height),
+                                0, CopyFromParent, InputOutput,
+                                CopyFromParent, CWOverrideRedirect, &attrs);
     XMapWindow (d, win);
     XFlush (d);
     return static_cast<unsigned long> (win);
+}
+
+void destroyWindow (void* display, unsigned long window)
+{
+    if (display != nullptr && window != 0)
+    {
+        auto* d = static_cast<Display*> (display);
+        XDestroyWindow (d, static_cast<Window> (window));
+        XFlush (d);
+    }
 }
 
 void moveResize (void* display, unsigned long window, int x, int y, int w, int h)

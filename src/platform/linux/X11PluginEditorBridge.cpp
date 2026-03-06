@@ -106,21 +106,11 @@ void X11PluginEditorBridge::setTargetBounds (int x, int y, int w, int h)
     }
     else if (w > 0 && h > 0)
     {
-        if (embeddedEditor->isReparented())
-        {
-            // X11 without compositor: coordinates are relative to the GLFW
-            // parent window. setBounds scales the editor and anchors it
-            // bottom-right.
-            embeddedEditor->setBounds (x, y, w, h);
-        }
-        else
-        {
-            // Wayland without compositor: convert to absolute screen coords,
-            // then setBounds handles scaling and bottom-right anchoring.
-            int winX = 0, winY = 0;
-            platform::x11::getWindowPos (glfwWindow, winX, winY);
-            embeddedEditor->setBounds (winX + x, winY + y, w, h);
-        }
+        // No compositor: the container is a top-level window, so convert
+        // widget-relative coords to absolute screen coords.
+        int winX = 0, winY = 0;
+        platform::x11::getWindowPos (glfwWindow, winX, winY);
+        embeddedEditor->setBounds (winX + x, winY + y, w, h);
     }
 }
 
