@@ -46,6 +46,9 @@ namespace IDs
     DECLARE_ID (timeSigNumerator)
     DECLARE_ID (timeSigDenominator)
     DECLARE_ID (sampleRate)
+    DECLARE_ID (cycleEnabled)
+    DECLARE_ID (cycleStart)     // in samples
+    DECLARE_ID (cycleEnd)       // in samples
 
     // Master bus
     DECLARE_ID (MASTER_BUS)
@@ -125,6 +128,13 @@ public:
     void setTimeSigNumerator (int num);
     int getTimeSigDenominator() const;
     void setTimeSigDenominator (int den);
+
+    bool getCycleEnabled() const;
+    void setCycleEnabled (bool enabled);
+    int64_t getCycleStart() const;
+    void setCycleStart (int64_t startInSamples);
+    int64_t getCycleEnd() const;
+    void setCycleEnd (int64_t endInSamples);
 
 private:
     PropertyTree state;

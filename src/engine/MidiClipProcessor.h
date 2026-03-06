@@ -97,6 +97,8 @@ private:
     std::array<PendingNoteOff, maxPendingNoteOffs> pendingNoteOffs;
     int numPendingNoteOffs = 0;
 
+    int64_t previousBlockStart = 0;
+
     void addNoteOff (int noteNumber, int channel, int64_t offSample);
     void processNoteOffs (MidiBlock& midi, int64_t blockStart, int numSamples);
 

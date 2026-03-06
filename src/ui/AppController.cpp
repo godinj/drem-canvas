@@ -745,6 +745,11 @@ void AppController::initialise()
     transportController.setTempo (project.getTempo());
     transportController.setTimeSig (project.getTimeSigNumerator(), project.getTimeSigDenominator());
 
+    // Sync cycle/loop state
+    transportController.setLoopEnabled (project.getCycleEnabled());
+    transportController.setLoopStartInSamples (project.getCycleStart());
+    transportController.setLoopEndInSamples (project.getCycleEnd());
+
     // Select first track
     if (arrangement.getNumTracks() > 0)
         arrangement.selectTrack (0);
@@ -2067,6 +2072,7 @@ void AppController::loadSessionFromDirectory (const std::filesystem::path& dir)
 
     // Save ref to old state so we can detach listeners after replacement
     auto oldState = project.getState();
+    oldState.removeListener (this);
     auto oldSeq = oldState.getChildWithType (IDs::STEP_SEQUENCER);
     if (oldSeq.isValid())
         oldSeq.removeListener (this);
@@ -2078,6 +2084,7 @@ void AppController::loadSessionFromDirectory (const std::filesystem::path& dir)
     if (project.loadSessionFromDirectory (dir.string()))
     {
         currentSessionDirectory = dir;
+        project.getState().addListener (this);
         project.getState().getChildWithType (IDs::TRACKS).addListener (this);
         auto newSeq = project.getState().getChildWithType (IDs::STEP_SEQUENCER);
         if (newSeq.isValid())
@@ -2088,11 +2095,17 @@ void AppController::loadSessionFromDirectory (const std::filesystem::path& dir)
         rebuildAudioGraph();
         syncSequencerFromModel();
 
+        // Sync cycle/loop state from loaded session
+        transportController.setLoopEnabled (project.getCycleEnabled());
+        transportController.setLoopStartInSamples (project.getCycleStart());
+        transportController.setLoopEndInSamples (project.getCycleEnd());
+
         recentProjects.addProject (dir.string());
         refreshRecentProjectActions();
     }
     else
     {
+        oldState.addListener (this);
         oldState.getChildWithType (IDs::TRACKS).addListener (this);
         if (oldSeq.isValid())
             oldSeq.addListener (this);
@@ -2249,6 +2262,15 @@ void AppController::propertyChanged (PropertyTree& tree, PropertyId property)
         (property == IDs::timeSigNumerator || property == IDs::timeSigDenominator))
     {
         transportController.setTimeSig (project.getTimeSigNumerator(), project.getTimeSigDenominator());
+    }
+
+    // Cycle state change — sync to transport controller
+    if (tree.getType() == IDs::PROJECT &&
+        (property == IDs::cycleEnabled || property == IDs::cycleStart || property == IDs::cycleEnd))
+    {
+        transportController.setLoopEnabled (project.getCycleEnabled());
+        transportController.setLoopStartInSamples (project.getCycleStart());
+        transportController.setLoopEndInSamples (project.getCycleEnd());
     }
 
     // MIDI clip property changed (e.g. midiData, startPosition, length)

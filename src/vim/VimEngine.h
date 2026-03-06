@@ -162,6 +162,8 @@ public:
     void jumpToSessionStart();
     void jumpToSessionEnd();
     void togglePlayStop();
+    void toggleCycle();
+    void setCycleToGridVisual();
 
     // Clip operations
     void deleteSelectedRegions();

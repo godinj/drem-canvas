@@ -12,7 +12,7 @@ ArrangementWidget::ArrangementWidget (Project& proj, TransportController& transp
                                       Arrangement& arr, VimContext& vc,
                                       const TempoMap& tempo, GridSystem& gs)
     : project (proj), transportController (transport), arrangement (arr), vimContext (vc),
-      tempoMap (tempo), gridSystem (gs), timeRuler (tempo)
+      tempoMap (tempo), gridSystem (gs), timeRuler (tempo, transport)
 {
     addChild (&timeRuler);
     addChild (&scrollView);
@@ -63,6 +63,27 @@ void ArrangementWidget::paintOverChildren (gfx::Canvas& canvas)
     {
         canvas.drawLine (cursorX, rulerHeight, cursorX, getHeight(),
                          theme.playhead, 2.0f);
+    }
+
+    // Cycle overlay on track lanes
+    if (transportController.isLooping())
+    {
+        double cycleStartSec = static_cast<double> (transportController.getLoopStartInSamples()) / sr;
+        double cycleEndSec = static_cast<double> (transportController.getLoopEndInSamples()) / sr;
+
+        float cx1 = static_cast<float> (cycleStartSec * pixelsPerSecond)
+                   + theme.headerWidth - scrollView.getScrollOffsetX();
+        float cx2 = static_cast<float> (cycleEndSec * pixelsPerSecond)
+                   + theme.headerWidth - scrollView.getScrollOffsetX();
+
+        cx1 = std::max (cx1, theme.headerWidth);
+        cx2 = std::min (cx2, getWidth());
+
+        if (cx2 > cx1)
+        {
+            canvas.fillRect (Rect (cx1, rulerHeight, cx2 - cx1, getHeight() - rulerHeight),
+                             Color (74, 158, 255, 15));
+        }
     }
 
     // Active context indicator

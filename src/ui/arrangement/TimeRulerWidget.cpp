@@ -9,8 +9,8 @@ namespace dc
 namespace ui
 {
 
-TimeRulerWidget::TimeRulerWidget (const TempoMap& tempo)
-    : tempoMap (tempo)
+TimeRulerWidget::TimeRulerWidget (const TempoMap& tempo, const TransportController& transport)
+    : tempoMap (tempo), transportController (transport)
 {
 }
 
@@ -70,6 +70,30 @@ void TimeRulerWidget::paint (gfx::Canvas& canvas)
                 float bx = static_cast<float> ((beatTime - startTime) * pixelsPerSecond) + headerWidth;
                 if (bx >= headerWidth && bx <= w)
                     canvas.drawLine (bx, h * 0.5f, bx, h, Color::fromARGB (0xff404050), 1.0f);
+            }
+        }
+    }
+
+    // Cycle bar
+    if (transportController.isLooping())
+    {
+        double sr = transportController.getSampleRate();
+        if (sr > 0.0)
+        {
+            double cycleStartSec = static_cast<double> (transportController.getLoopStartInSamples()) / sr;
+            double cycleEndSec = static_cast<double> (transportController.getLoopEndInSamples()) / sr;
+
+            float cx1 = static_cast<float> ((cycleStartSec - startTime) * pixelsPerSecond) + headerWidth;
+            float cx2 = static_cast<float> ((cycleEndSec - startTime) * pixelsPerSecond) + headerWidth;
+
+            cx1 = std::max (cx1, headerWidth);
+            cx2 = std::min (cx2, w);
+
+            if (cx2 > cx1)
+            {
+                canvas.fillRect (Rect (cx1, 0, cx2 - cx1, h), Color (74, 158, 255, 50));
+                canvas.fillRect (Rect (cx1, 0, 2.0f, h), Color (74, 158, 255, 180));
+                canvas.fillRect (Rect (cx2 - 2.0f, 0, 2.0f, h), Color (74, 158, 255, 180));
             }
         }
     }

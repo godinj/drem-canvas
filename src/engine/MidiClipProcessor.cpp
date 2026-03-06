@@ -59,6 +59,16 @@ void MidiClipProcessor::process (AudioBlock& audio, MidiBlock& midi, int numSamp
     const int64_t blockStart = transportController.getPositionInSamples();
     const int64_t blockEnd = blockStart + numSamples;
 
+    // Flush pending note-offs on position discontinuity (loop wrap or seek)
+    if (blockStart < previousBlockStart && numPendingNoteOffs > 0)
+    {
+        for (int i = 0; i < numPendingNoteOffs; ++i)
+            midi.addEvent (dc::MidiMessage::noteOff (pendingNoteOffs[i].channel,
+                                                      pendingNoteOffs[i].noteNumber), 0);
+        numPendingNoteOffs = 0;
+    }
+    previousBlockStart = blockStart;
+
     // Process pending note-offs first
     processNoteOffs (midi, blockStart, numSamples);
 

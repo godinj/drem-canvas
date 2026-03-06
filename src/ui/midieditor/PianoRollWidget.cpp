@@ -11,7 +11,7 @@ namespace ui
 {
 
 PianoRollWidget::PianoRollWidget (Project& p, TransportController& t)
-    : project (p), transportController (t), velocityLane (p), ccLane (p)
+    : project (p), transportController (t), ruler (t, p), velocityLane (p), ccLane (p)
 {
     addChild (&ruler);
     addChild (&keyboard);
@@ -117,6 +117,38 @@ void PianoRollWidget::paintOverChildren (gfx::Canvas& canvas)
         {
             canvas.fillRect (Rect (phX, rulerH, 1.5f, getHeight() - rulerH),
                              Color (255, 60, 60, 200));
+        }
+    }
+
+    // Draw cycle overlay
+    if (transportController.isLooping())
+    {
+        double sr = project.getSampleRate();
+        double tempo = project.getTempo();
+        if (sr > 0.0 && tempo > 0.0)
+        {
+            int64_t clipStart = clipState.getProperty (IDs::startPosition).getIntOr (0);
+            double cycleStartBeat = (static_cast<double> (transportController.getLoopStartInSamples() - clipStart) / sr)
+                                  * tempo / 60.0;
+            double cycleEndBeat = (static_cast<double> (transportController.getLoopEndInSamples() - clipStart) / sr)
+                                * tempo / 60.0;
+
+            float cx1 = noteGrid.beatsToX (cycleStartBeat) - scrollView.getScrollOffsetX() + keyboardWidth;
+            float cx2 = noteGrid.beatsToX (cycleEndBeat) - scrollView.getScrollOffsetX() + keyboardWidth;
+
+            float rulerH = PianoRollRulerWidget::rulerHeight;
+            cx1 = std::max (cx1, keyboardWidth);
+            cx2 = std::min (cx2, getWidth());
+
+            if (cx2 > cx1)
+            {
+                canvas.fillRect (Rect (cx1, rulerH, cx2 - cx1, getHeight() - rulerH),
+                                 Color (74, 158, 255, 20));
+                canvas.fillRect (Rect (cx1, rulerH, 1.5f, getHeight() - rulerH),
+                                 Color (74, 158, 255, 120));
+                canvas.fillRect (Rect (cx2 - 1.5f, rulerH, 1.5f, getHeight() - rulerH),
+                                 Color (74, 158, 255, 120));
+            }
         }
     }
 

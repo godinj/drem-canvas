@@ -8,7 +8,8 @@ namespace dc
 namespace ui
 {
 
-PianoRollRulerWidget::PianoRollRulerWidget()
+PianoRollRulerWidget::PianoRollRulerWidget (const TransportController& transport, const Project& proj)
+    : transportController (transport), project (proj)
 {
 }
 
@@ -47,6 +48,33 @@ void PianoRollRulerWidget::paint (gfx::Canvas& canvas)
         {
             canvas.fillRect (Rect (x, h * 0.6f, 0.5f, h * 0.4f),
                              Color::fromARGB (0xff383850));
+        }
+    }
+
+    // Cycle bar
+    if (transportController.isLooping())
+    {
+        double sr = project.getSampleRate();
+        double tempo = project.getTempo();
+        if (sr > 0.0 && tempo > 0.0)
+        {
+            double cycleStartBeat = (static_cast<double> (transportController.getLoopStartInSamples()) / sr)
+                                  * tempo / 60.0 - beatOffset;
+            double cycleEndBeat = (static_cast<double> (transportController.getLoopEndInSamples()) / sr)
+                                * tempo / 60.0 - beatOffset;
+
+            float cx1 = static_cast<float> (cycleStartBeat * pixelsPerBeat) - scrollOffset;
+            float cx2 = static_cast<float> (cycleEndBeat * pixelsPerBeat) - scrollOffset;
+
+            cx1 = std::max (cx1, 0.0f);
+            cx2 = std::min (cx2, w);
+
+            if (cx2 > cx1)
+            {
+                canvas.fillRect (Rect (cx1, 0, cx2 - cx1, h), Color (74, 158, 255, 50));
+                canvas.fillRect (Rect (cx1, 0, 2.0f, h), Color (74, 158, 255, 180));
+                canvas.fillRect (Rect (cx2 - 2.0f, 0, 2.0f, h), Color (74, 158, 255, 180));
+            }
         }
     }
 

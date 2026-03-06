@@ -237,6 +237,10 @@ bool VimEngine::handleNormalKey (const dc::KeyPress& key)
         return true;
     }
 
+    // Ctrl+L toggles cycle (before motion/operator dispatch)
+    if (key.control && (keyChar == 'l' || keyChar == 'L' || keyChar == 12))
+    { toggleCycle(); return true; }
+
     // Phase 4: Operator keys d/y/c
     auto op = charToOperator (keyChar);
     if (op != OpNone)
@@ -555,6 +559,29 @@ void VimEngine::jumpToSessionEnd()
 void VimEngine::togglePlayStop()
 {
     transport.togglePlayStop();
+}
+
+void VimEngine::toggleCycle()
+{
+    project.setCycleEnabled (! project.getCycleEnabled());
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
+}
+
+void VimEngine::setCycleToGridVisual()
+{
+    auto& gvs = context.getGridVisualSelection();
+    if (gvs.active)
+    {
+        int64_t start = std::min (gvs.startPos, gvs.endPos);
+        int64_t end = std::max (gvs.startPos, gvs.endPos);
+        double sr = transport.getSampleRate();
+        if (sr > 0.0)
+            end += gridSystem.getGridUnitInSamples (sr);
+        project.setCycleStart (start);
+        project.setCycleEnd (end);
+        project.setCycleEnabled (true);
+    }
+    listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
 
 // ── Clip operations ─────────────────────────────────────────────────────────
@@ -912,6 +939,20 @@ void VimEngine::executeCommand()
         if (onCreateMidiTrack)
             onCreateMidiTrack (trackName);
     }
+    else if (cmd == "cycle" || cmd == "loop")
+    {
+        toggleCycle();
+    }
+    else if (cmd == "cs" || cmd == "cyclestart")
+    {
+        project.setCycleStart (context.getGridCursorPosition());
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
+    }
+    else if (cmd == "ce" || cmd == "cycleend")
+    {
+        project.setCycleEnd (context.getGridCursorPosition());
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
+    }
 }
 
 // ── Mode switching ──────────────────────────────────────────────────────────
@@ -1245,6 +1286,10 @@ bool VimEngine::handlePianoRollNormalKey (const dc::KeyPress& key)
         if (onSetPianoRollTool) onSetPianoRollTool (2); // Erase
         return true;
     }
+
+    // Ctrl+L toggles cycle (before navigation dispatch)
+    if (key.control && (keyChar == 'l' || keyChar == 'L' || keyChar == 12))
+    { toggleCycle(); return true; }
 
     // Navigation hjkl
     if (keyChar == 'h') { if (onPianoRollMoveCursor) onPianoRollMoveCursor (-1, 0); return true; }
@@ -2515,6 +2560,10 @@ bool VimEngine::handleVisualKey (const dc::KeyPress& key)
         return true;
     }
 
+    // Cycle: set cycle to visual selection, return to normal
+    if (key.control && (keyChar == 'l' || keyChar == 'L' || keyChar == 12))
+    { setCycleToGridVisual(); exitVisualMode(); return true; }
+
     // Motion keys
     if (isMotionKey (keyChar))
     {
@@ -2661,6 +2710,10 @@ bool VimEngine::handleVisualLineKey (const dc::KeyPress& key)
         return true;
     }
 
+    // Cycle: set cycle to visual selection, return to normal
+    if (key.control && (keyChar == 'l' || keyChar == 'L' || keyChar == 12))
+    { setCycleToGridVisual(); exitVisualMode(); return true; }
+
     // Operators
     if (keyChar == 'd' || keyChar == 'x') { executeVisualOperator (OpDelete); return true; }
     if (keyChar == 'y')                   { executeVisualOperator (OpYank);   return true; }
@@ -2763,6 +2816,10 @@ bool VimEngine::handleSequencerNormalKey (const dc::KeyPress& key)
         }
         clearPending();
     }
+
+    // Ctrl+L toggles cycle (before navigation dispatch)
+    if (key.control && (keyChar == 'l' || keyChar == 'L' || keyChar == 12))
+    { toggleCycle(); return true; }
 
     // Navigation
     if (keyChar == 'h') { seqMoveLeft();  return true; }
@@ -3186,6 +3243,10 @@ bool VimEngine::handleMixerNormalKey (const dc::KeyPress& key)
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
+
+    // ── Ctrl+L toggles cycle (before navigation dispatch)
+    if (key.control && (keyChar == 'l' || keyChar == 'L' || keyChar == 12))
+    { toggleCycle(); return true; }
 
     // ── h/l: move between strips
     if (keyChar == 'h')
@@ -3646,6 +3707,10 @@ bool VimEngine::handlePluginViewNormalKey (const dc::KeyPress& key)
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
+
+    // Ctrl+L toggles cycle (before navigation dispatch)
+    if (key.control && (keyChar == 'l' || keyChar == 'L' || keyChar == 12))
+    { toggleCycle(); return true; }
 
     // j/k: navigate parameters
     if (keyChar == 'j')

@@ -47,7 +47,7 @@ cmd_start()
             fi
             ;;
         Linux)
-            WINEESYNC=0 "$WORKTREE_ROOT/build/DremCanvas_artefacts/Release/DremCanvas" &
+            WINEESYNC=0 "$WORKTREE_ROOT/build/DremCanvas" &
             echo $! > "$PID_FILE"
             ;;
         *)

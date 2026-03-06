@@ -50,9 +50,22 @@ void ProcessContextBuilder::populate (Steinberg::Vst::ProcessContext& ctx,
     // System time — not required for correctness
     ctx.systemTime = 0;
 
-    // Cycle (loop) markers — not implemented yet
-    ctx.cycleStartMusic = 0.0;
-    ctx.cycleEndMusic   = 0.0;
+    // Cycle (loop) markers
+    if (transport.isLooping())
+    {
+        ctx.state |= ProcessContext::kCycleActive;
+        double loopSr = ctx.sampleRate;
+        if (loopSr > 0.0)
+        {
+            ctx.cycleStartMusic = (static_cast<double> (transport.getLoopStartInSamples()) / loopSr) * (ctx.tempo / 60.0);
+            ctx.cycleEndMusic   = (static_cast<double> (transport.getLoopEndInSamples()) / loopSr) * (ctx.tempo / 60.0);
+        }
+    }
+    else
+    {
+        ctx.cycleStartMusic = 0.0;
+        ctx.cycleEndMusic   = 0.0;
+    }
 }
 
 } // namespace dc

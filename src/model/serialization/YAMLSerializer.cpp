@@ -49,6 +49,9 @@ YAML::Node YAMLSerializer::emitSessionMeta (const PropertyTree& projectState, in
 
     proj["sample_rate"] = projectState.getProperty (IDs::sampleRate, Variant (44100.0)).toDouble();
     proj["master_volume"] = projectState.getProperty (masterVolumeId, Variant (1.0)).toDouble();
+    proj["cycle_enabled"] = projectState.getProperty (IDs::cycleEnabled, Variant (false)).toBool();
+    proj["cycle_start"]   = projectState.getProperty (IDs::cycleStart, Variant (int64_t (0))).toInt();
+    proj["cycle_end"]     = projectState.getProperty (IDs::cycleEnd, Variant (int64_t (0))).toInt();
 
     root["project"] = proj;
     root["track_count"] = trackCount;
@@ -151,6 +154,13 @@ PropertyTree YAMLSerializer::parseSessionMeta (const YAML::Node& node)
 
         if (proj["master_volume"])
             state.setProperty (masterVolumeId, Variant (proj["master_volume"].as<double>()));
+
+        if (proj["cycle_enabled"])
+            state.setProperty (IDs::cycleEnabled, Variant (proj["cycle_enabled"].as<bool>()));
+        if (proj["cycle_start"])
+            state.setProperty (IDs::cycleStart, Variant (proj["cycle_start"].as<int64_t>()));
+        if (proj["cycle_end"])
+            state.setProperty (IDs::cycleEnd, Variant (proj["cycle_end"].as<int64_t>()));
     }
 
     return state;

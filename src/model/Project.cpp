@@ -21,6 +21,9 @@ void Project::createDefaultState()
     state.setProperty (IDs::timeSigNumerator, Variant (4), nullptr);
     state.setProperty (IDs::timeSigDenominator, Variant (4), nullptr);
     state.setProperty (IDs::sampleRate, Variant (44100.0), nullptr);
+    state.setProperty (IDs::cycleEnabled, Variant (false), nullptr);
+    state.setProperty (IDs::cycleStart, Variant (int64_t (0)), nullptr);
+    state.setProperty (IDs::cycleEnd, Variant (int64_t (0)), nullptr);
     // Master bus with volume and empty plugin chain
     auto masterBus = PropertyTree (IDs::MASTER_BUS);
     masterBus.setProperty (IDs::volume, Variant (1.0), nullptr);
@@ -126,6 +129,13 @@ void Project::setTimeSigDenominator (int den)
 {
     state.setProperty (IDs::timeSigDenominator, Variant (den), &undoSystem.getUndoManager());
 }
+
+bool Project::getCycleEnabled() const { return state.getProperty (IDs::cycleEnabled).getBoolOr (false); }
+void Project::setCycleEnabled (bool e) { state.setProperty (IDs::cycleEnabled, Variant (e), &undoSystem.getUndoManager()); }
+int64_t Project::getCycleStart() const { return state.getProperty (IDs::cycleStart).getIntOr (0); }
+void Project::setCycleStart (int64_t p) { state.setProperty (IDs::cycleStart, Variant (p), &undoSystem.getUndoManager()); }
+int64_t Project::getCycleEnd() const { return state.getProperty (IDs::cycleEnd).getIntOr (0); }
+void Project::setCycleEnd (int64_t p) { state.setProperty (IDs::cycleEnd, Variant (p), &undoSystem.getUndoManager()); }
 
 bool Project::saveSessionToDirectory (const std::filesystem::path& sessionDir) const
 {
