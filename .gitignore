@@ -9,6 +9,9 @@ cmake-build-*/
 .idea/
 .vscode/
 
+# PID file for worktree-scoped app launch
+.drem.pid
+
 # Skia build output
 libs/skia
 third_party/skia/
