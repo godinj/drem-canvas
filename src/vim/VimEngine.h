@@ -160,6 +160,7 @@ public:
 
     void addListener (Listener* l) { listeners.add (l); }
     void removeListener (Listener* l) { listeners.remove (l); }
+    void notifyContextChanged() { listeners.call ([](Listener& l) { l.vimContextChanged(); }); }
 
     // ─── Public action methods (for ActionRegistry) ──────────
 

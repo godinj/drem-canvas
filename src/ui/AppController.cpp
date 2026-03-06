@@ -115,7 +115,7 @@ void AppController::initialise()
 
         editorAdapter->setContextChangedCallback ([this]()
         {
-            vimContextChanged();
+            vimEngine->notifyContextChanged();
         });
 
         editorAdapter->setModeChangedCallback ([this] (int newMode)

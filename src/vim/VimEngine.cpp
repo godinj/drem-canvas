@@ -315,12 +315,20 @@ bool VimEngine::handleNormalKey (const dc::KeyPress& key)
     // Visual modes (Editor panel only)
     if (keyChar == 'v' && context.getPanel() == VimContext::Editor)
     {
-        enterVisualMode();
+        auto* adapter = getActiveAdapter();
+        if (adapter)
+            adapter->enterVisualMode();
+        else
+            enterVisualMode();
         return true;
     }
     if (keyChar == 'V' && context.getPanel() == VimContext::Editor)
     {
-        enterVisualLineMode();
+        auto* adapter = getActiveAdapter();
+        if (adapter)
+            adapter->enterVisualLineMode();
+        else
+            enterVisualLineMode();
         return true;
     }
 
