@@ -8,6 +8,7 @@
 #include <vector>
 #include <algorithm>
 #include <limits>
+#include <filesystem>
 namespace dc
 {
 
@@ -120,8 +121,11 @@ void VimEngine::loadDefaultKeymap()
 
     for (auto& path : paths)
     {
-        if (keymap.loadFromYAML (path))
+        if (std::filesystem::exists (path))
+        {
+            keymap.loadFromYAML (path);
             return;
+        }
     }
 }
 

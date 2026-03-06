@@ -66,11 +66,28 @@ bool ActionRegistry::executeAction (const std::string& id) const
 
 void ActionRegistry::updateKeybindings (const KeymapRegistry& keymap)
 {
+    // Search all modes and panels for each action's keybinding
+    const int modes[] = { VimModes::Normal, VimModes::Visual, VimModes::VisualLine };
+    const VimContext::Panel panels[] = {
+        VimContext::Editor, VimContext::Mixer, VimContext::Sequencer,
+        VimContext::PianoRoll, VimContext::PluginView
+    };
+
     for (auto& action : actions)
     {
-        auto kb = keymap.getKeybindingForAction (action.id);
-        if (! kb.empty())
-            action.keybinding = kb;
+        for (auto m : modes)
+        {
+            for (auto p : panels)
+            {
+                auto kb = keymap.getKeybindingForAction (action.id, m, p);
+                if (! kb.empty())
+                {
+                    action.keybinding = kb;
+                    goto nextAction;
+                }
+            }
+        }
+        nextAction:;
     }
 }
 

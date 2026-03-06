@@ -302,6 +302,7 @@ private:
 
     // Keymap and action dispatch
     KeymapRegistry keymap;
+    ActionRegistry actionRegistry;
 
     VimEngine (const VimEngine&) = delete;
     VimEngine& operator= (const VimEngine&) = delete;
