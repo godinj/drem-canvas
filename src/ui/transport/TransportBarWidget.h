@@ -4,6 +4,7 @@
 #include "graphics/core/Event.h"
 #include "graphics/widgets/ButtonWidget.h"
 #include "graphics/widgets/LabelWidget.h"
+#include "ui/transport/CpuMeterWidget.h"
 #include "engine/TransportController.h"
 #include "model/TempoMap.h"
 
@@ -29,6 +30,8 @@ public:
     std::function<void()> onAudioSettings;
     std::function<void()> onToggleBrowser;
 
+    CpuMeterWidget& getCpuMeter() { return cpuMeter; }
+
 private:
     void updateTempoDisplay();
 
@@ -46,6 +49,7 @@ private:
     gfx::ButtonWidget audioSettingsButton;
     gfx::ButtonWidget pluginsButton;
     gfx::LabelWidget branchLabel;
+    CpuMeterWidget cpuMeter;
 };
 
 } // namespace ui

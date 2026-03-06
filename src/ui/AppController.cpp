@@ -720,6 +720,7 @@ void AppController::initialise()
         renderer->addAnimatingWidget (pianoRollWidget.get());
         renderer->addAnimatingWidget (mixerWidget.get());
         renderer->addAnimatingWidget (keyboardWidget.get());
+        renderer->addAnimatingWidget (&transportBar->getCpuMeter());
     }
 
     // Listen to model changes — register on the project root so we receive
@@ -2344,6 +2345,10 @@ void AppController::tick()
     // Poll browser scan progress (async scan updates atomics from background thread)
     if (browserWidget)
         browserWidget->tick();
+
+    // Push CPU load to transport bar meter
+    if (transportBar)
+        transportBar->getCpuMeter().setCpuLoad (audioEngine.getCpuLoad());
 
     if (! mixerWidget)
         return;

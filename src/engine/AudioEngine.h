@@ -1,6 +1,7 @@
 #pragma once
 #include "dc/engine/AudioGraph.h"
 #include "dc/audio/AudioDeviceManager.h"
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -40,12 +41,16 @@ public:
     int getBufferSize() const;
     std::string getCurrentDeviceName() const;
 
+    /** Returns the CPU load ratio (0.0–1.0) measured on the audio thread. */
+    float getCpuLoad() const { return cpuLoad_.load (std::memory_order_relaxed); }
+
 private:
     class GraphCallback;
 
     std::unique_ptr<dc::AudioDeviceManager> deviceManager_;
     dc::AudioGraph graph_;
     std::unique_ptr<GraphCallback> graphCallback_;
+    std::atomic<float> cpuLoad_ { 0.0f };
 
     AudioEngine (const AudioEngine&) = delete;
     AudioEngine& operator= (const AudioEngine&) = delete;

@@ -298,6 +298,7 @@ add_executable(DremCanvas
 
     # UI - Transport
     src/ui/transport/TransportBarWidget.cpp
+    src/ui/transport/CpuMeterWidget.cpp
 
     # UI - Vim
     src/ui/vim/VimStatusBarWidget.cpp

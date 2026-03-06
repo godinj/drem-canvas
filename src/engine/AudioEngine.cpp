@@ -14,13 +14,14 @@ namespace dc
 class AudioEngine::GraphCallback : public dc::AudioCallback
 {
 public:
-    explicit GraphCallback (dc::AudioGraph& graph)
-        : graph_ (graph)
+    GraphCallback (dc::AudioGraph& graph, std::atomic<float>& cpuLoad)
+        : graph_ (graph), cpuLoad_ (cpuLoad)
     {
     }
 
     void audioDeviceAboutToStart (double sampleRate, int bufferSize) override
     {
+        sampleRate_ = sampleRate;
         graph_.prepare (sampleRate, bufferSize);
     }
 
@@ -28,6 +29,8 @@ public:
                         float** outputChannelData, int numOutputChannels,
                         int numSamples) override
     {
+        auto t0 = std::chrono::steady_clock::now();
+
         // Wrap input channels as AudioBlock (const_cast is safe -- graph reads only)
         dc::AudioBlock inputBlock (const_cast<float**> (inputChannelData),
                                    numInputChannels, numSamples);
@@ -41,6 +44,12 @@ public:
         dc::MidiBlock midiOut;
 
         graph_.processBlock (inputBlock, midiIn, outputBlock, midiOut, numSamples);
+
+        auto t1 = std::chrono::steady_clock::now();
+        double elapsed = std::chrono::duration<double> (t1 - t0).count();
+        double bufferTime = numSamples / sampleRate_;
+        float ratio = static_cast<float> (elapsed / bufferTime);
+        cpuLoad_.store (ratio, std::memory_order_relaxed);
     }
 
     void audioDeviceStopped() override
@@ -50,6 +59,8 @@ public:
 
 private:
     dc::AudioGraph& graph_;
+    std::atomic<float>& cpuLoad_;
+    double sampleRate_ = 44100.0;
 };
 
 // --- AudioEngine -------------------------------------------------------------
@@ -65,7 +76,7 @@ void AudioEngine::initialise (int numInputChannels, int numOutputChannels)
 {
     deviceManager_ = dc::AudioDeviceManager::create();
 
-    graphCallback_ = std::make_unique<GraphCallback> (graph_);
+    graphCallback_ = std::make_unique<GraphCallback> (graph_, cpuLoad_);
     deviceManager_->setCallback (graphCallback_.get());
     deviceManager_->openDefaultDevice (numInputChannels, numOutputChannels);
 

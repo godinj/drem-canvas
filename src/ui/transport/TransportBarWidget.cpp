@@ -47,6 +47,7 @@ TransportBarWidget::TransportBarWidget (TransportController& transport, TempoMap
     addChild (&importButton);
     addChild (&audioSettingsButton);
     addChild (&pluginsButton);
+    addChild (&cpuMeter);
 
     auto badge = getBranchBadge();
     if (! badge.empty())
@@ -120,6 +121,7 @@ void TransportBarWidget::resized()
 
     // Right side: utility buttons
     float rightX = w;
+    float cpuMeterWidth = 100.0f;
     rightX -= buttonWidth;
     pluginsButton.setBounds (rightX + margin, margin, bw, bh);
     rightX -= buttonWidth;
@@ -130,6 +132,8 @@ void TransportBarWidget::resized()
     loadButton.setBounds (rightX + margin, margin, bw, bh);
     rightX -= buttonWidth;
     saveButton.setBounds (rightX + margin, margin, bw, bh);
+    rightX -= cpuMeterWidth;
+    cpuMeter.setBounds (rightX + margin, margin, cpuMeterWidth - 2.0f * margin, bh);
 
     // Branch badge (if on a feature branch) and time display fill the middle
     float timeX = buttonWidth * 2.0f + tempoWidth;
