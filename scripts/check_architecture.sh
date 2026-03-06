@@ -133,7 +133,9 @@ if should_run 2; then
                     NEEDS_SYSTEM_LIB="rtmidi"
                     ;;
                 *dc/plugins/ComponentHandler* | *dc/plugins/PluginEditor* | \
-                *dc/plugins/PluginInstance* | *dc/plugins/VST3Host*)
+                *dc/plugins/PluginInstance* | *dc/plugins/VST3Host* | \
+                *dc/plugins/ProcessContextBuilder* | \
+                *dc/plugins/ParameterChangeQueue* | *dc/plugins/MidiCCMapper*)
                     if [ -n "$VST3_SDK_DIR" ]; then
                         EXTRA_FLAGS="-I $VST3_SDK_DIR"
                     else

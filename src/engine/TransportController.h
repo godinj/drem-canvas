@@ -31,6 +31,15 @@ public:
     double getSampleRate() const { return sampleRate.load(); }
     void setSampleRate (double sr) { sampleRate.store (sr); }
 
+    // Tempo
+    double getTempo() const { return tempo.load(); }
+    void setTempo (double bpm) { tempo.store (bpm); }
+
+    // Time signature
+    int getTimeSigNumerator() const { return timeSigNumerator.load(); }
+    int getTimeSigDenominator() const { return timeSigDenominator.load(); }
+    void setTimeSig (int num, int den) { timeSigNumerator.store (num); timeSigDenominator.store (den); }
+
     // Time display helpers
     double getPositionInSeconds() const;
     std::string getTimeString() const;
@@ -52,6 +61,9 @@ private:
     std::atomic<bool> playing { false };
     std::atomic<int64_t> positionInSamples { 0 };
     std::atomic<double> sampleRate { 44100.0 };
+    std::atomic<double> tempo { 120.0 };
+    std::atomic<int> timeSigNumerator { 4 };
+    std::atomic<int> timeSigDenominator { 4 };
 
     // Loop state
     std::atomic<bool> loopEnabled { false };

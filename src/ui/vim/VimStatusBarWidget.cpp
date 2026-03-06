@@ -12,8 +12,10 @@ namespace ui
 
 VimStatusBarWidget::VimStatusBarWidget (VimEngine& e, VimContext& c,
                                         Arrangement& a, TransportController& t,
-                                        const GridSystem& gs)
-    : engine (e), context (c), arrangement (a), transport (t), gridSystem (gs)
+                                        const GridSystem& gs,
+                                        const std::vector<std::string>& til)
+    : engine (e), context (c), arrangement (a), transport (t), gridSystem (gs),
+      trackInstrumentLabels (til)
 {
     engine.addListener (this);
     setAnimating (true);
@@ -245,6 +247,21 @@ void VimStatusBarWidget::paint (gfx::Canvas& canvas)
     }
 
     canvas.drawText (breadcrumb, x + 6.0f, h * 0.5f + 5.0f, font, Color::fromARGB (0xffa6adc8));
+
+    // ── Instrument indicator (right-aligned, before grid division)
+    {
+        int tIdx = arrangement.getSelectedTrackIndex();
+        if (tIdx >= 0 && tIdx < static_cast<int> (trackInstrumentLabels.size())
+            && ! trackInstrumentLabels[static_cast<size_t> (tIdx)].empty())
+        {
+            auto label = trackInstrumentLabels[static_cast<size_t> (tIdx)];
+            bool isFallback = (label == "SimpleSynth");
+            Color instrColor = isFallback ? Color::fromARGB (0xffff9933)   // orange for fallback
+                                          : Color::fromARGB (0xffcba6f7);  // purple for plugin
+            Rect instrArea (totalWidth - 540.0f, 0, 130.0f, h);
+            canvas.drawTextRight (label, instrArea, fm.getMonoFont(), instrColor);
+        }
+    }
 
     // ── Grid division indicator (right-aligned, before playhead time)
     {

@@ -52,6 +52,7 @@ AppController::~AppController()
     meterTapProcessors.clear();
     meterTapNodes.clear();
     fallbackSynthNodes.clear();
+    trackInstrumentLabels.clear();
     trackProcessors.clear();
     midiClipProcessors.clear();
     trackNodes.clear();
@@ -641,7 +642,7 @@ void AppController::initialise()
     // Vim status bar
     vimStatusBar = std::make_unique<VimStatusBarWidget> (*vimEngine, vimContext,
                                                           arrangement, transportController,
-                                                          gridSystem);
+                                                          gridSystem, trackInstrumentLabels);
     addChild (vimStatusBar.get());
 
     // Arrangement
@@ -725,8 +726,10 @@ void AppController::initialise()
     // all descendant notifications (TRACKS, TRACK, MIDI_CLIP, etc.)
     project.getState().addListener (this);
 
-    // Sync tempo
+    // Sync tempo and time signature
     tempoMap.setTempo (project.getTempo());
+    transportController.setTempo (project.getTempo());
+    transportController.setTimeSig (project.getTimeSigNumerator(), project.getTimeSigDenominator());
 
     // Select first track
     if (arrangement.getNumTracks() > 0)
@@ -1377,6 +1380,7 @@ void AppController::rebuildAudioGraph()
         if (nodeId != 0)
             audioEngine.removeProcessor (nodeId);
     fallbackSynthNodes.clear();
+    trackInstrumentLabels.clear();
 
     // Remove existing track nodes
     for (auto& nodeId : trackNodes)
@@ -1466,6 +1470,8 @@ void AppController::rebuildAudioGraph()
                 if (! base64State.empty())
                     PluginHost::restorePluginState (*instance, base64State);
 
+                instance->setTransportController (&transportController);
+
                 auto* pluginPtr = instance.get();
                 auto wrapper = std::make_unique<PluginProcessorNode> (std::move (instance));
                 auto pluginNode = audioEngine.addProcessor (std::move (wrapper));
@@ -1496,6 +1502,7 @@ void AppController::rebuildAudioGraph()
             fallbackSynthNodes.push_back (0);
         }
 
+        trackInstrumentLabels.push_back ("");
         connectTrackPluginChain (i);
 
         // Push initial MIDI clip data if this is a MIDI track
@@ -1750,6 +1757,38 @@ void AppController::connectTrackPluginChain (int trackIndex)
 
     bool useFallback = isMidi && ! hasInstrumentPlugin && fallbackNodeId != 0;
 
+    // Update instrument label for status bar display
+    if (trackIndex < static_cast<int> (trackInstrumentLabels.size()))
+    {
+        if (! isMidi)
+        {
+            trackInstrumentLabels[static_cast<size_t> (trackIndex)] = "";
+        }
+        else if (useFallback)
+        {
+            trackInstrumentLabels[static_cast<size_t> (trackIndex)] = "SimpleSynth";
+        }
+        else
+        {
+            std::string instrName = "Plugin";
+            for (int p = 0; p < static_cast<int> (chain.size()); ++p)
+            {
+                if (track.isPluginEnabled (p))
+                {
+                    if (auto* proc = audioEngine.getGraph().getNode (chain[static_cast<size_t> (p)].node))
+                    {
+                        if (proc->acceptsMidi())
+                        {
+                            instrName = track.getPlugin (p).getProperty (IDs::pluginName).getStringOr ("Plugin");
+                            break;
+                        }
+                    }
+                }
+            }
+            trackInstrumentLabels[static_cast<size_t> (trackIndex)] = instrName;
+        }
+    }
+
     if (useFallback)
     {
         // MIDI track with no instrument plugin: route through fallback synth.
@@ -1891,6 +1930,8 @@ void AppController::insertPluginOnTrack (int trackIndex, const dc::PluginDescrip
             (void) errorMessage;
             if (instance == nullptr)
                 return;
+
+            instance->setTransportController (&transportController);
 
             auto* pluginPtr = instance.get();
 
@@ -2096,11 +2137,13 @@ void AppController::propertyChanged (PropertyTree& tree, PropertyId property)
             syncTrackProcessorsFromModel();
     }
 
-    // Tempo change — sync to sequencer and MIDI clip processors
+    // Tempo change — sync to sequencer, transport, and MIDI clip processors
     if (tree.getType() == IDs::PROJECT && property == IDs::tempo)
     {
         if (sequencerProcessor != nullptr)
             sequencerProcessor->setTempo (project.getTempo());
+
+        transportController.setTempo (project.getTempo());
 
         // Re-sync all MIDI tracks (beat→sample conversion depends on tempo)
         for (int i = 0; i < static_cast<int> (midiClipProcessors.size()); ++i)
@@ -2111,6 +2154,13 @@ void AppController::propertyChanged (PropertyTree& tree, PropertyId property)
                 syncMidiClipFromModel (i);
             }
         }
+    }
+
+    // Time signature change — sync to transport controller
+    if (tree.getType() == IDs::PROJECT &&
+        (property == IDs::timeSigNumerator || property == IDs::timeSigDenominator))
+    {
+        transportController.setTimeSig (project.getTimeSigNumerator(), project.getTimeSigDenominator());
     }
 
     // MIDI clip property changed (e.g. midiData, startPosition, length)

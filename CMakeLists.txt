@@ -199,6 +199,9 @@ add_executable(DremCanvas
     src/dc/plugins/PluginEditor.cpp
     src/dc/plugins/ProbeCache.cpp
     src/dc/plugins/VST3Host.cpp
+    src/dc/plugins/ProcessContextBuilder.cpp
+    src/dc/plugins/ParameterChangeQueue.cpp
+    src/dc/plugins/MidiCCMapper.cpp
 
     # VST3 SDK base (IID definitions)
     "${VST3_SDK_DIR}/pluginterfaces/base/coreiids.cpp"

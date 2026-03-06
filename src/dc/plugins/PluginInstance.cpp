@@ -1,9 +1,12 @@
 #include "dc/plugins/PluginInstance.h"
 #include "dc/plugins/PluginEditor.h"
 #include "dc/plugins/VST3Module.h"
+#include "dc/plugins/ProcessContextBuilder.h"
+#include "dc/plugins/MidiCCMapper.h"
 #include "dc/audio/AudioBlock.h"
 #include "dc/engine/MidiBlock.h"
 #include "dc/foundation/assert.h"
+#include "engine/TransportController.h"
 
 #include <pluginterfaces/base/ipluginbase.h>
 #include <pluginterfaces/base/ibstream.h>
@@ -528,26 +531,49 @@ std::unique_ptr<PluginInstance> PluginInstance::create (
     controller->queryInterface (IParameterFinder::iid,
                                 reinterpret_cast<void**> (&instance->parameterFinder_));
 
-    // 11. Activate audio bus (input/output)
+    // 11. Activate audio buses and update description channel counts.
+    // The description passed in may lack channel info when restoring from
+    // a session, so always query the component for the ground truth.
     auto numAudioInputBuses = component->getBusCount (kAudio, kInput);
     auto numAudioOutputBuses = component->getBusCount (kAudio, kOutput);
 
+    instance->numAudioInputBuses_ = numAudioInputBuses;
+    instance->numAudioOutputBuses_ = numAudioOutputBuses;
+
     if (numAudioInputBuses > 0)
+    {
         component->activateBus (kAudio, kInput, 0, true);
+        BusInfo busInfo {};
+        if (component->getBusInfo (kAudio, kInput, 0, busInfo) == kResultOk)
+            instance->description_.numInputChannels = busInfo.channelCount;
+    }
 
     if (numAudioOutputBuses > 0)
+    {
         component->activateBus (kAudio, kOutput, 0, true);
+        BusInfo busInfo {};
+        if (component->getBusInfo (kAudio, kOutput, 0, busInfo) == kResultOk)
+            instance->description_.numOutputChannels = busInfo.channelCount;
+    }
 
-    // Activate event bus if plugin accepts MIDI
+    instance->description_.hasEditor = (controller != nullptr);
+
+    // Activate event buses and update description to reflect actual capabilities.
+    // The description passed in may not have acceptsMidi/producesMidi set
+    // (e.g. when restoring from a session), so query the component directly.
     auto numEventInputBuses = component->getBusCount (kEvent, kInput);
 
     if (numEventInputBuses > 0)
         component->activateBus (kEvent, kInput, 0, true);
 
+    instance->description_.acceptsMidi = (numEventInputBuses > 0);
+
     auto numEventOutputBuses = component->getBusCount (kEvent, kOutput);
 
     if (numEventOutputBuses > 0)
         component->activateBus (kEvent, kOutput, 0, true);
+
+    instance->description_.producesMidi = (numEventOutputBuses > 0);
 
     // 12. Setup processing and prepare
     instance->setupProcessing (sampleRate, maxBlockSize);
@@ -555,6 +581,10 @@ std::unique_ptr<PluginInstance> PluginInstance::create (
 
     // 13. Build parameter list
     instance->buildParameterList();
+
+    // 14. Build MIDI CC -> parameter mappings
+    instance->midiCCMapper_ = std::make_unique<MidiCCMapper>();
+    instance->midiCCMapper_->buildFromController (instance->controller_);
 
     return instance;
 }
@@ -647,13 +677,24 @@ void PluginInstance::process (AudioBlock& audio, MidiBlock& midi, int numSamples
     processData_.processMode = Steinberg::Vst::kRealtime;
     processData_.symbolicSampleSize = Steinberg::Vst::kSample32;
     processData_.numSamples = numSamples;
-    processData_.numInputs = 1;
-    processData_.numOutputs = 1;
-    processData_.inputs = &inputBusBuffers_;
-    processData_.outputs = &outputBusBuffers_;
-    processData_.inputParameterChanges = nullptr;
-    processData_.outputParameterChanges = nullptr;
-    processData_.processContext = nullptr;
+    processData_.numInputs = (numAudioInputBuses_ > 0) ? 1 : 0;
+    processData_.numOutputs = (numAudioOutputBuses_ > 0) ? 1 : 0;
+    processData_.inputs = (numAudioInputBuses_ > 0) ? &inputBusBuffers_ : nullptr;
+    processData_.outputs = (numAudioOutputBuses_ > 0) ? &outputBusBuffers_ : nullptr;
+    inputParamChanges_.clear();
+    processData_.inputParameterChanges = &inputParamChanges_;
+    outputParamChanges_.clear();
+    processData_.outputParameterChanges = &outputParamChanges_;
+
+    if (transport_ != nullptr)
+    {
+        ProcessContextBuilder::populate (processContext_, *transport_, numSamples);
+        processData_.processContext = &processContext_;
+    }
+    else
+    {
+        processData_.processContext = nullptr;
+    }
 
     // --- Convert MidiBlock events to VST3 Event array ---
     EventList inputEvents;
@@ -710,8 +751,19 @@ void PluginInstance::process (AudioBlock& audio, MidiBlock& midi, int numSamples
                 vstEvent.polyPressure.noteId = -1;
                 inputEvents.addEvent (vstEvent);
             }
-            // Note: CC / pitch bend / program change are handled via
-            // IParameterChanges in a full implementation. For now, skip them.
+            else if (msg.isController() && midiCCMapper_)
+            {
+                midiCCMapper_->translateToParameterChanges (msg, event.sampleOffset, inputParamChanges_);
+            }
+            else if (msg.isPitchWheel() && midiCCMapper_)
+            {
+                midiCCMapper_->translateToParameterChanges (msg, event.sampleOffset, inputParamChanges_);
+            }
+            else if (msg.isChannelPressure() && midiCCMapper_)
+            {
+                midiCCMapper_->translateToParameterChanges (msg, event.sampleOffset, inputParamChanges_);
+            }
+            // Program change is not natively supported in VST3 — handled via IUnitInfo if needed.
         }
     }
 
@@ -821,6 +873,13 @@ bool PluginInstance::isBypassed() const
 void PluginInstance::resetBypass()
 {
     bypassed_.store (false, std::memory_order_relaxed);
+}
+
+// ─── Transport ───────────────────────────────────────────────────────────
+
+void PluginInstance::setTransportController (TransportController* transport)
+{
+    transport_ = transport;
 }
 
 // ─── Parameters ──────────────────────────────────────────────────────────

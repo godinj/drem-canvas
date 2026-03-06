@@ -2,6 +2,7 @@
 #include "dc/engine/AudioNode.h"
 #include "dc/plugins/PluginDescription.h"
 #include "dc/plugins/ComponentHandler.h"
+#include "dc/plugins/ParameterChangeQueue.h"
 #include "dc/foundation/spsc_queue.h"
 #include <pluginterfaces/vst/ivstaudioprocessor.h>
 #include <pluginterfaces/vst/ivsteditcontroller.h>
@@ -17,6 +18,8 @@ namespace dc {
 
 class VST3Module;
 class PluginEditor;
+class TransportController;
+class MidiCCMapper;
 
 class PluginInstance : public AudioNode
 {
@@ -79,6 +82,9 @@ public:
     // --- Description ---
     const PluginDescription& getDescription() const;
 
+    // --- Transport ---
+    void setTransportController (TransportController* transport);
+
     // --- Internal accessors (for PluginEditor) ---
     Steinberg::Vst::IEditController* getController() const;
 
@@ -99,6 +105,8 @@ private:
     Steinberg::Vst::ProcessData processData_ {};
     Steinberg::Vst::AudioBusBuffers inputBusBuffers_ {};
     Steinberg::Vst::AudioBusBuffers outputBusBuffers_ {};
+    int numAudioInputBuses_ = 0;
+    int numAudioOutputBuses_ = 0;
 
     // MIDI event conversion buffer (pre-allocated for audio thread)
     std::vector<Steinberg::Vst::Event> eventBuffer_;
@@ -120,6 +128,13 @@ private:
     int currentBlockSize_ = 512;
     bool prepared_ = false;
     std::atomic<bool> bypassed_ {false};
+
+    // Transport & parameter routing
+    TransportController* transport_ = nullptr;
+    Steinberg::Vst::ProcessContext processContext_ {};
+    ParameterChangeQueue inputParamChanges_;
+    ParameterChangeQueue outputParamChanges_;
+    std::unique_ptr<MidiCCMapper> midiCCMapper_;
 
     // Internal helpers
     void buildParameterList();

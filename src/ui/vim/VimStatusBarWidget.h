@@ -6,6 +6,8 @@
 #include "engine/TransportController.h"
 #include "model/Arrangement.h"
 #include "model/GridSystem.h"
+#include <vector>
+#include <string>
 
 namespace dc
 {
@@ -20,7 +22,8 @@ public:
 
     VimStatusBarWidget (VimEngine& engine, VimContext& context,
                         Arrangement& arrangement, TransportController& transport,
-                        const GridSystem& gridSystem);
+                        const GridSystem& gridSystem,
+                        const std::vector<std::string>& trackInstrumentLabels);
     ~VimStatusBarWidget() override;
 
     void paint (gfx::Canvas& canvas) override;
@@ -36,6 +39,7 @@ private:
     Arrangement& arrangement;
     TransportController& transport;
     const GridSystem& gridSystem;
+    const std::vector<std::string>& trackInstrumentLabels;
 };
 
 } // namespace ui

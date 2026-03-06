@@ -39,6 +39,7 @@ add_executable(dc_unit_tests
     unit/plugins/test_plugin_instance_bypass.cpp
     unit/plugins/test_vst3_module.cpp
     unit/plugins/test_yabridge_scan.cpp
+    unit/plugins/test_cc_to_param_translation.cpp
 
     # Regression tests
     regression/issue_001_uid_from_file_path.cpp
@@ -63,6 +64,8 @@ add_executable(dc_unit_tests
     ${CMAKE_SOURCE_DIR}/src/dc/plugins/ProbeCache.cpp
     ${CMAKE_SOURCE_DIR}/src/dc/plugins/VST3Module.cpp
     ${CMAKE_SOURCE_DIR}/src/dc/plugins/PluginScanner.cpp
+    ${CMAKE_SOURCE_DIR}/src/dc/plugins/ParameterChangeQueue.cpp
+    ${CMAKE_SOURCE_DIR}/src/dc/plugins/MidiCCMapper.cpp
     "${VST3_SDK_DIR}/pluginterfaces/base/coreiids.cpp"
     "${VST3_SDK_DIR}/pluginterfaces/base/funknown.cpp"
     "${VST3_SDK_DIR}/public.sdk/source/vst/vstinitiids.cpp"
@@ -110,6 +113,7 @@ add_executable(dc_integration_tests
     integration/test_session_roundtrip.cpp
     integration/test_vim_commands.cpp
     integration/test_audio_graph.cpp
+    integration/test_parameter_changes.cpp
 
     # Phase 8: higher-level model tests (require app-layer sources)
     integration/test_project.cpp
@@ -118,6 +122,7 @@ add_executable(dc_integration_tests
     integration/test_vim_context.cpp
     integration/test_action_registry.cpp
     integration/test_transport.cpp
+    integration/test_plugin_process_context.cpp
 
     # ─── App-layer sources needed by integration tests ────────
     # Model
@@ -148,14 +153,25 @@ add_executable(dc_integration_tests
     ${CMAKE_SOURCE_DIR}/src/engine/MixBusProcessor.cpp
     ${CMAKE_SOURCE_DIR}/src/dc/engine/MidiBlock.cpp
 
+    # Plugins
+    ${CMAKE_SOURCE_DIR}/src/dc/plugins/ProcessContextBuilder.cpp
+
     # Utils
     ${CMAKE_SOURCE_DIR}/src/utils/UndoSystem.cpp
+
+    # Plugin parameter changes (needed by test_parameter_changes)
+    ${CMAKE_SOURCE_DIR}/src/dc/plugins/ParameterChangeQueue.cpp
+    "${VST3_SDK_DIR}/pluginterfaces/base/coreiids.cpp"
+    "${VST3_SDK_DIR}/pluginterfaces/base/funknown.cpp"
+    "${VST3_SDK_DIR}/public.sdk/source/vst/vstinitiids.cpp"
+    "${VST3_SDK_DIR}/public.sdk/source/common/commoniids.cpp"
 )
 
 target_include_directories(dc_integration_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_BINARY_DIR}/generated
     ${SNDFILE_INCLUDE_DIRS}
+    "${VST3_SDK_DIR}"
 )
 
 target_link_libraries(dc_integration_tests PRIVATE
@@ -239,4 +255,11 @@ if(BUILD_TESTING)
                 $<TARGET_FILE:DremCanvas>)
     set_tests_properties(e2e.phase_plant_scan PROPERTIES
         LABELS "e2e" TIMEOUT 150)
+
+    add_test(NAME e2e.phase_plant_routing
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/test_phase_plant_routing.sh
+                $<TARGET_FILE:DremCanvas>
+                ${CMAKE_SOURCE_DIR}/tests/fixtures/e2e-phase-plant-routing)
+    set_tests_properties(e2e.phase_plant_routing PROPERTIES
+        LABELS "e2e" TIMEOUT 120)
 endif()

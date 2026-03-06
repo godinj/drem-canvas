@@ -91,6 +91,12 @@ public:
     // Browser widget access (used by E2E --browser-async-scan flag)
     BrowserWidget* getBrowserWidget() { return browserWidget.get(); }
 
+    // Audio engine access (used by E2E --bounce flag)
+    AudioEngine& getAudioEngine() { return audioEngine; }
+
+    // Transport controller access (used by E2E --bounce flag)
+    TransportController& getTransportController() { return transportController; }
+
     // Plugin chain info (used by E2E --capture-plugin-state flag)
     struct PluginNodeInfo
     {
@@ -151,6 +157,7 @@ private:
     std::vector<MeterTapProcessor*> meterTapProcessors;
     std::vector<NodeId> meterTapNodes;
     std::vector<NodeId> fallbackSynthNodes;
+    std::vector<std::string> trackInstrumentLabels;
     StepSequencerProcessor* sequencerProcessor = nullptr;
     NodeId sequencerNode = 0;
     dc::MessageQueue messageQueue;

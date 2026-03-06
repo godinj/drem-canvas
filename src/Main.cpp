@@ -22,6 +22,7 @@
 #include "graphics/rendering/Renderer.h"
 #include "graphics/core/EventDispatch.h"
 #include "model/Track.h"
+#include "engine/BounceProcessor.h"
 #include "plugins/PluginHost.h"
 #include "plugins/SpatialScanCache.h"
 #include "ui/AppController.h"
@@ -54,6 +55,8 @@ int main (int argc, char* argv[])
     int expectKnownPluginsGt = -1;
     bool capturePluginState = false;
     int processFrames = 0;
+    std::string bouncePath;
+    int bounceBars = 0;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -87,6 +90,10 @@ int main (int argc, char* argv[])
             capturePluginState = true;
         else if (arg == "--process-frames" && i + 1 < argc)
             processFrames = std::atoi (argv[++i]);
+        else if (arg == "--bounce" && i + 1 < argc)
+            bouncePath = argv[++i];
+        else if (arg == "--bounce-bars" && i + 1 < argc)
+            bounceBars = std::atoi (argv[++i]);
     }
 
     // Pointers kept alive across the NSApplication run loop.
@@ -262,6 +269,42 @@ int main (int argc, char* argv[])
                         appController->tick();
                         std::this_thread::sleep_for (std::chrono::milliseconds (10));
                     }
+                }
+
+                // Offline bounce to WAV
+                if (! bouncePath.empty() && bounceBars > 0)
+                {
+                    auto& proj = appController->getProject();
+                    double tempo = proj.getTempo();
+                    double sr = appController->getAudioEngine().getSampleRate();
+
+                    int timeSigNum = proj.getTimeSigNumerator();
+                    int timeSigDen = proj.getTimeSigDenominator();
+
+                    double beatsPerBar = 4.0 * timeSigNum / timeSigDen;
+                    double totalBeats = bounceBars * beatsPerBar;
+                    auto lengthInSamples = static_cast<int64_t> ((totalBeats / tempo) * 60.0 * sr);
+
+                    // Ensure transport is playing so MidiClipProcessor generates events
+                    appController->getTransportController().setPositionInSamples (0);
+                    appController->getTransportController().play();
+
+                    // Suspend live audio so the bounce can use the graph exclusively
+                    appController->getAudioEngine().suspendProcessing();
+
+                    dc::BounceProcessor bouncer;
+                    dc::BounceProcessor::BounceSettings settings;
+                    settings.outputFile = bouncePath;
+                    settings.sampleRate = sr;
+                    settings.lengthInSamples = lengthInSamples;
+
+                    if (! bouncer.bounce (appController->getAudioEngine().getGraph(), settings))
+                    {
+                        std::cerr << "FAIL: bounce failed\n";
+                        exitCode = 1;
+                    }
+
+                    appController->getAudioEngine().resumeProcessing();
                 }
 
                 // Run spatial scan if requested
@@ -512,6 +555,8 @@ int main (int argc, char* argv[])
     int expectKnownPluginsGt = -1;
     bool capturePluginState = false;
     int processFrames = 0;
+    std::string bouncePath;
+    int bounceBars = 0;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -545,6 +590,10 @@ int main (int argc, char* argv[])
             capturePluginState = true;
         else if (arg == "--process-frames" && i + 1 < argc)
             processFrames = std::atoi (argv[++i]);
+        else if (arg == "--bounce" && i + 1 < argc)
+            bouncePath = argv[++i];
+        else if (arg == "--bounce-bars" && i + 1 < argc)
+            bounceBars = std::atoi (argv[++i]);
     }
 
     // Create GLFW window
@@ -718,6 +767,42 @@ int main (int argc, char* argv[])
                 appController->tick();
                 std::this_thread::sleep_for (std::chrono::milliseconds (10));
             }
+        }
+
+        // Offline bounce to WAV
+        if (! bouncePath.empty() && bounceBars > 0)
+        {
+            auto& proj = appController->getProject();
+            double tempo = proj.getTempo();
+            double sr = appController->getAudioEngine().getSampleRate();
+
+            int timeSigNum = proj.getTimeSigNumerator();
+            int timeSigDen = proj.getTimeSigDenominator();
+
+            double beatsPerBar = 4.0 * timeSigNum / timeSigDen;
+            double totalBeats = bounceBars * beatsPerBar;
+            auto lengthInSamples = static_cast<int64_t> ((totalBeats / tempo) * 60.0 * sr);
+
+            // Ensure transport is playing so MidiClipProcessor generates events
+            appController->getTransportController().setPositionInSamples (0);
+            appController->getTransportController().play();
+
+            // Suspend live audio so the bounce can use the graph exclusively
+            appController->getAudioEngine().suspendProcessing();
+
+            dc::BounceProcessor bouncer;
+            dc::BounceProcessor::BounceSettings settings;
+            settings.outputFile = bouncePath;
+            settings.sampleRate = sr;
+            settings.lengthInSamples = lengthInSamples;
+
+            if (! bouncer.bounce (appController->getAudioEngine().getGraph(), settings))
+            {
+                std::cerr << "FAIL: bounce failed\n";
+                exitCode = 1;
+            }
+
+            appController->getAudioEngine().resumeProcessing();
         }
 
         // Run spatial scan if requested
