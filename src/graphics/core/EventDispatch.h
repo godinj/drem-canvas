@@ -21,6 +21,9 @@ public:
     void dispatchKeyDown (const KeyEvent& e);
     void dispatchKeyUp (const KeyEvent& e);
 
+    /** Called by Widget destructor to clear any dangling pointers. */
+    static void widgetBeingDeleted (Widget* w);
+
 private:
     Widget* findWidgetAt (float x, float y);
     MouseEvent transformEvent (const MouseEvent& e, Widget* target);
@@ -31,6 +34,8 @@ private:
     Widget* pressedWidget = nullptr;
     float pressOffsetX = 0.0f;
     float pressOffsetY = 0.0f;
+
+    static EventDispatch* sInstance;
 };
 
 } // namespace gfx

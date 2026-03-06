@@ -1,4 +1,5 @@
 #include "Widget.h"
+#include "EventDispatch.h"
 
 namespace dc
 {
@@ -6,6 +7,13 @@ namespace gfx
 {
 
 Widget* Widget::globalFocusedWidget = nullptr;
+
+Widget::~Widget()
+{
+    if (globalFocusedWidget == this)
+        globalFocusedWidget = nullptr;
+    EventDispatch::widgetBeingDeleted (this);
+}
 
 void Widget::grabFocus()
 {

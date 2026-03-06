@@ -5,9 +5,22 @@ namespace dc
 namespace gfx
 {
 
+EventDispatch* EventDispatch::sInstance = nullptr;
+
 EventDispatch::EventDispatch (Widget& root)
     : rootWidget (root)
 {
+    sInstance = this;
+}
+
+void EventDispatch::widgetBeingDeleted (Widget* w)
+{
+    if (sInstance == nullptr || w == nullptr)
+        return;
+    if (sInstance->hoveredWidget == w)
+        sInstance->hoveredWidget = nullptr;
+    if (sInstance->pressedWidget == w)
+        sInstance->pressedWidget = nullptr;
 }
 
 Widget* EventDispatch::findWidgetAt (float x, float y)

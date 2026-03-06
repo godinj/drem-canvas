@@ -13,7 +13,7 @@ class Widget : public Node, public PropertyTree::Listener
 {
 public:
     Widget() = default;
-    ~Widget() override = default;
+    ~Widget() override;
 
     // ─── Mouse events ────────────────────────────────────
 
