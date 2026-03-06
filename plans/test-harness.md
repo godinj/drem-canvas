@@ -1,0 +1,1 @@
+do exhaustive research to determine the most effective strategy for creating a rock-solid testing harness for this project. it should cover conventional testing strategies as well as an effective way to manage coding agents
