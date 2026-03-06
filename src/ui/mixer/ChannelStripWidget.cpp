@@ -2,12 +2,17 @@
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/Theme.h"
 #include "model/Project.h"
+#include "model/Track.h"
+#include <cmath>
 #include <string>
 
 namespace dc
 {
 namespace ui
 {
+
+static float dbToLinear (float db) { return std::pow (10.0f, db / 20.0f); }
+static float linearToDb (float linear) { return linear <= 0.0f ? -60.0f : 20.0f * std::log10 (linear); }
 
 ChannelStripWidget::ChannelStripWidget (const PropertyTree& state)
     : trackState (state),
@@ -32,12 +37,22 @@ ChannelStripWidget::ChannelStripWidget (const PropertyTree& state)
 
     fader.onValueChange = [this] (double value)
     {
-        if (onVolumeChange) onVolumeChange (value);
+        if (! syncing && onVolumeChange) onVolumeChange (value);
     };
 
     panKnob.onValueChange = [this] (double value)
     {
-        if (onPanChange) onPanChange (value);
+        if (! syncing && onPanChange) onPanChange (value);
+    };
+
+    muteButton.onClick = [this]()
+    {
+        if (! syncing && onMuteChange) onMuteChange (muteButton.getToggleState());
+    };
+
+    soloButton.onClick = [this]()
+    {
+        if (! syncing && onSoloChange) onSoloChange (soloButton.getToggleState());
     };
 
     addChild (&nameLabel);
@@ -47,6 +62,19 @@ ChannelStripWidget::ChannelStripWidget (const PropertyTree& state)
     addChild (&muteButton);
     addChild (&soloButton);
     addChild (&fader);
+
+    syncFromTrackState();
+}
+
+void ChannelStripWidget::syncFromTrackState()
+{
+    syncing = true;
+    Track track (trackState);
+    fader.setValue (static_cast<double> (linearToDb (track.getVolume())));
+    panKnob.setValue (static_cast<double> (track.getPan()));
+    muteButton.setToggleState (track.isMuted());
+    soloButton.setToggleState (track.isSolo());
+    syncing = false;
 }
 
 void ChannelStripWidget::paint (gfx::Canvas& canvas)

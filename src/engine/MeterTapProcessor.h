@@ -32,9 +32,20 @@ public:
     float getPeakLevelLeft() const  { return peakLeft.load(); }
     float getPeakLevelRight() const { return peakRight.load(); }
 
+    // Gain/pan/mute — applied post-insert, before metering
+    void setGain (float g) { gain.store (g); }
+    float getGain() const  { return gain.load(); }
+    void setPan (float p)  { pan.store (p); }
+    float getPan() const   { return pan.load(); }
+    void setMuted (bool m) { muted.store (m); }
+    bool isMuted() const   { return muted.load(); }
+
 private:
     std::atomic<float> peakLeft { 0.0f };
     std::atomic<float> peakRight { 0.0f };
+    std::atomic<float> gain { 1.0f };
+    std::atomic<float> pan { 0.0f };
+    std::atomic<bool> muted { false };
 
     MeterTapProcessor (const MeterTapProcessor&) = delete;
     MeterTapProcessor& operator= (const MeterTapProcessor&) = delete;

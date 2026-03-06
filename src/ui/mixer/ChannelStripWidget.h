@@ -33,11 +33,19 @@ public:
     gfx::SliderWidget& getPanKnob() { return panKnob; }
     PluginSlotListWidget& getPluginSlots() { return pluginSlots; }
 
+    gfx::ButtonWidget& getMuteButton() { return muteButton; }
+    gfx::ButtonWidget& getSoloButton() { return soloButton; }
+
+    void syncFromTrackState();
+
     std::function<void (double)> onVolumeChange;
     std::function<void (double)> onPanChange;
+    std::function<void (bool)> onMuteChange;
+    std::function<void (bool)> onSoloChange;
 
 private:
     PropertyTree trackState;
+    bool syncing = false;
     bool selected = false;
     VimContext::MixerFocus currentFocus = VimContext::FocusNone;
 

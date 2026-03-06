@@ -23,6 +23,14 @@ void MixBusProcessor::process (AudioBlock& audio, MidiBlock& /*midi*/, int numSa
 {
     transportController.advancePosition (numSamples);
 
+    if (muted.load())
+    {
+        audio.clear();
+        peakLeft.store (0.0f);
+        peakRight.store (0.0f);
+        return;
+    }
+
     const float gain = masterGain.load();
 
     // Apply master gain to all channels

@@ -87,53 +87,6 @@ void TrackProcessor::process (AudioBlock& audio, MidiBlock& /*midi*/, int numSam
     diskStreamer->read (audio, numSamples);
 
     lastSeekPosition = posInSamples + numSamples;
-
-    // Apply gain and pan
-    float currentGain = gain.load();
-    float currentPan  = pan.load();
-
-    // Equal-power panning
-    // pan ranges from -1.0 (full left) to 1.0 (full right), 0.0 = center
-    float angle   = currentPan * dc::pi<float> * 0.25f + dc::pi<float> * 0.25f;
-    float leftAmp  = currentGain * std::cos (angle);
-    float rightAmp = currentGain * std::sin (angle);
-
-    int numChannels = audio.getNumChannels();
-
-    if (numChannels >= 1)
-    {
-        float* data = audio.getChannel (0);
-        for (int i = 0; i < numSamples; ++i)
-            data[i] *= leftAmp;
-    }
-
-    if (numChannels >= 2)
-    {
-        float* data = audio.getChannel (1);
-        for (int i = 0; i < numSamples; ++i)
-            data[i] *= rightAmp;
-    }
-
-    // Update peak meters
-    if (numChannels >= 1)
-    {
-        const float* data = audio.getChannel (0);
-        float mag = 0.0f;
-        for (int i = 0; i < numSamples; ++i)
-            mag = std::max (mag, std::abs (data[i]));
-        float old = peakLeft.load();
-        peakLeft.store (std::max (mag, old * 0.95f));
-    }
-
-    if (numChannels >= 2)
-    {
-        const float* data = audio.getChannel (1);
-        float mag = 0.0f;
-        for (int i = 0; i < numSamples; ++i)
-            mag = std::max (mag, std::abs (data[i]));
-        float old = peakRight.load();
-        peakRight.store (std::max (mag, old * 0.95f));
-    }
 }
 
 int64_t TrackProcessor::getFileLengthInSamples() const

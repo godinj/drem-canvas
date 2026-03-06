@@ -2,13 +2,18 @@
 #include "graphics/rendering/Canvas.h"
 #include "graphics/theme/Theme.h"
 #include "model/Track.h"
+#include "model/MixerState.h"
 #include "vim/VimContext.h"
+#include <cmath>
 #include <string>
 
 namespace dc
 {
 namespace ui
 {
+
+static float dbToLinear (float db) { return std::pow (10.0f, db / 20.0f); }
+static float linearToDb (float linear) { return linear <= 0.0f ? -60.0f : 20.0f * std::log10 (linear); }
 
 MixerWidget::MixerWidget (Project& proj)
     : project (proj)
@@ -79,8 +84,31 @@ void MixerWidget::rebuildStrips()
         }
         strip->getPluginSlots().setSlots (slots);
 
-        // Wire plugin slot click to open editor
         int trackIndex = i;
+
+        // Wire fader/pan/mute/solo callbacks to model
+        strip->onVolumeChange = [this, trackIndex] (double dbValue)
+        {
+            Track track (project.getTrack (trackIndex));
+            track.setVolume (dbToLinear (static_cast<float> (dbValue)));
+        };
+        strip->onPanChange = [this, trackIndex] (double value)
+        {
+            Track track (project.getTrack (trackIndex));
+            track.setPan (static_cast<float> (value));
+        };
+        strip->onMuteChange = [this, trackIndex] (bool muted)
+        {
+            Track track (project.getTrack (trackIndex));
+            track.setMuted (muted);
+        };
+        strip->onSoloChange = [this, trackIndex] (bool soloed)
+        {
+            Track track (project.getTrack (trackIndex));
+            track.setSolo (soloed);
+        };
+
+        // Wire plugin slot click to open editor
         strip->getPluginSlots().onSlotClicked = [this, trackIndex] (int pluginIndex)
         {
             if (onPluginClicked)
@@ -96,7 +124,25 @@ void MixerWidget::rebuildStrips()
     {
         PropertyTree masterState (IDs::TRACK);
         masterState.setProperty (IDs::name, Variant (std::string ("Master")));
+        // Initialise master volume from model so the fader reflects saved state
+        MixerState mixer (project);
+        masterState.setProperty (IDs::volume, Variant (static_cast<double> (mixer.getMasterVolume())));
         masterStrip = std::make_unique<ChannelStripWidget> (masterState);
+        masterStrip->onVolumeChange = [this] (double dbValue)
+        {
+            float linear = dbToLinear (static_cast<float> (dbValue));
+            MixerState mixer (project);
+            mixer.setMasterVolume (linear);
+            if (onMasterVolumeChange)
+                onMasterVolumeChange (linear);
+        };
+        masterStrip->onMuteChange = [this] (bool muted)
+        {
+            static const PropertyId masterMuteId ("masterMute");
+            project.getState().setProperty (masterMuteId, Variant (muted));
+            if (onMasterMuteChange)
+                onMasterMuteChange (muted);
+        };
         addChild (masterStrip.get());
     }
 
@@ -157,6 +203,45 @@ void MixerWidget::setSelectedPluginSlot (int slotIndex)
 
     if (masterStrip)
         masterStrip->setSelectedPluginSlot (selectedStripIndex == static_cast<int> (strips.size()) ? slotIndex : -1);
+}
+
+void MixerWidget::propertyChanged (PropertyTree& tree, PropertyId property)
+{
+    if (tree.getType() == IDs::TRACK)
+    {
+        for (auto& strip : strips)
+            strip->syncFromTrackState();
+    }
+
+    if (tree.getType() == IDs::PROJECT && masterStrip)
+    {
+        static const PropertyId masterVolumeId ("masterVolume");
+        static const PropertyId masterMuteId ("masterMute");
+        if (property == masterVolumeId)
+        {
+            MixerState mixer (project);
+            masterStrip->getFader().setValue (
+                static_cast<double> (linearToDb (mixer.getMasterVolume())));
+        }
+        if (property == masterMuteId)
+        {
+            masterStrip->getMuteButton().setToggleState (
+                tree.getProperty (masterMuteId).getBoolOr (false));
+        }
+    }
+}
+
+void MixerWidget::syncStripValues()
+{
+    for (auto& strip : strips)
+        strip->syncFromTrackState();
+
+    if (masterStrip)
+    {
+        MixerState mixer (project);
+        masterStrip->getFader().setValue (
+            static_cast<double> (linearToDb (mixer.getMasterVolume())));
+    }
 }
 
 void MixerWidget::childAdded (PropertyTree&, PropertyTree&)

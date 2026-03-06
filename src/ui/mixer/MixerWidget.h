@@ -36,10 +36,16 @@ public:
     // Callback: (trackIndex, pluginIndex) when a plugin slot is clicked
     std::function<void (int, int)> onPluginClicked;
 
+    // Callbacks for master strip changes (linear gain, mute state)
+    std::function<void (float)> onMasterVolumeChange;
+    std::function<void (bool)> onMasterMuteChange;
+
     // PropertyTree::Listener
     void childAdded (PropertyTree&, PropertyTree&) override;
     void childRemoved (PropertyTree&, PropertyTree&, int) override;
-    void propertyChanged (PropertyTree&, PropertyId) override {}
+    void propertyChanged (PropertyTree&, PropertyId) override;
+
+    void syncStripValues();
 
 private:
     Project& project;

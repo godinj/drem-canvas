@@ -3,6 +3,7 @@
 #include "dc/plugins/PluginDescription.h"
 #include "graphics/rendering/Canvas.h"
 #include "model/Track.h"
+#include "model/MixerState.h"
 #include "model/AudioClip.h"
 #include "model/MidiClip.h"
 #include "model/StepSequencer.h"
@@ -659,6 +660,18 @@ void AppController::initialise()
     mixerWidget->onPluginClicked = [this] (int trackIndex, int pluginIndex)
     {
         openPluginEditor (trackIndex, pluginIndex);
+    };
+
+    mixerWidget->onMasterVolumeChange = [this] (float linearGain)
+    {
+        if (mixBusProcessor != nullptr)
+            mixBusProcessor->setMasterGain (linearGain);
+    };
+
+    mixerWidget->onMasterMuteChange = [this] (bool muted)
+    {
+        if (mixBusProcessor != nullptr)
+            mixBusProcessor->setMuted (muted);
     };
 
     // Step sequencer (hidden initially)
@@ -1417,9 +1430,6 @@ void AppController::rebuildAudioGraph()
             auto processor = std::make_unique<MidiClipProcessor> (transportController);
             auto* processorPtr = processor.get();
 
-            processorPtr->setGain (track.getVolume());
-            processorPtr->setPan (track.getPan());
-            processorPtr->setMuted (track.isMuted());
             processorPtr->setTempo (project.getTempo());
 
             auto nodeId = audioEngine.addProcessor (std::move (processor));
@@ -1444,9 +1454,7 @@ void AppController::rebuildAudioGraph()
                 }
             }
 
-            // Sync gain/pan/mute from model
-            processorPtr->setGain (track.getVolume());
-            processorPtr->setPan (track.getPan());
+            // Keep muted on TrackProcessor for disk I/O efficiency
             processorPtr->setMuted (track.isMuted());
 
             auto nodeId = audioEngine.addProcessor (std::move (processor));
@@ -1491,6 +1499,10 @@ void AppController::rebuildAudioGraph()
         // Create meter tap for this track (sits at end of chain, before MixBus)
         auto meterTap = std::make_unique<MeterTapProcessor>();
         auto* meterTapPtr = meterTap.get();
+        // Sync gain/pan/mute from model onto the meter tap (post-insert stage)
+        meterTapPtr->setGain (track.getVolume());
+        meterTapPtr->setPan (track.getPan());
+        meterTapPtr->setMuted (track.isMuted());
         auto meterTapNode = audioEngine.addProcessor (std::move (meterTap));
         meterTapProcessors.push_back (meterTapPtr);
         meterTapNodes.push_back (meterTapNode);
@@ -1539,6 +1551,14 @@ void AppController::rebuildAudioGraph()
     // Resume audio processing now that the graph topology is stable.
     audioEngine.resumeProcessing();
 
+    // Sync track gain/pan/mute and master gain to the engine
+    syncTrackProcessorsFromModel();
+    if (mixBusProcessor != nullptr)
+    {
+        MixerState mixer (project);
+        mixBusProcessor->setMasterGain (mixer.getMasterVolume());
+    }
+
     // Rebuild UI views
     if (arrangementWidget != nullptr)
         arrangementWidget->rebuildTrackLanes();
@@ -1549,26 +1569,36 @@ void AppController::rebuildAudioGraph()
 
 void AppController::syncTrackProcessorsFromModel()
 {
-    for (int i = 0; i < project.getNumTracks() && i < static_cast<int> (trackProcessors.size()); ++i)
+    // Check if any track is soloed
+    bool hasSoloed = false;
+    for (int i = 0; i < project.getNumTracks(); ++i)
+    {
+        if (Track (project.getTrack (i)).isSolo())
+        {
+            hasSoloed = true;
+            break;
+        }
+    }
+
+    for (int i = 0; i < project.getNumTracks() && i < static_cast<int> (meterTapProcessors.size()); ++i)
     {
         auto trackState = project.getTrack (i);
         Track track (trackState);
 
+        bool effectiveMute = hasSoloed ? ! track.isSolo() : track.isMuted();
+
+        // Apply gain/pan/mute via the MeterTap (post-insert, works for
+        // both audio and MIDI tracks)
+        if (auto* tap = meterTapProcessors[i])
+        {
+            tap->setGain (track.getVolume());
+            tap->setPan (track.getPan());
+            tap->setMuted (effectiveMute);
+        }
+
+        // Also set muted on TrackProcessor so muted audio tracks skip disk I/O
         if (auto* processor = trackProcessors[i])
-        {
-            processor->setGain (track.getVolume());
-            processor->setPan (track.getPan());
-            processor->setMuted (track.isMuted());
-        }
-        else if (i < static_cast<int> (midiClipProcessors.size()))
-        {
-            if (auto* midiProc = midiClipProcessors[i])
-            {
-                midiProc->setGain (track.getVolume());
-                midiProc->setPan (track.getPan());
-                midiProc->setMuted (track.isMuted());
-            }
-        }
+            processor->setMuted (effectiveMute);
     }
 }
 
@@ -2176,8 +2206,23 @@ void AppController::propertyChanged (PropertyTree& tree, PropertyId property)
 {
     if (tree.getType() == IDs::TRACK)
     {
-        if (property == IDs::volume || property == IDs::pan || property == IDs::mute)
+        if (property == IDs::volume || property == IDs::pan || property == IDs::mute || property == IDs::solo)
             syncTrackProcessorsFromModel();
+    }
+
+    {
+        static const PropertyId masterVolumeId ("masterVolume");
+        static const PropertyId masterMuteId ("masterMute");
+        if (tree.getType() == IDs::PROJECT && property == masterVolumeId)
+        {
+            if (mixBusProcessor != nullptr)
+                mixBusProcessor->setMasterGain (MixerState (project).getMasterVolume());
+        }
+        if (tree.getType() == IDs::PROJECT && property == masterMuteId)
+        {
+            if (mixBusProcessor != nullptr)
+                mixBusProcessor->setMuted (tree.getProperty (masterMuteId).getBoolOr (false));
+        }
     }
 
     // Tempo change — sync to sequencer, transport, and MIDI clip processors

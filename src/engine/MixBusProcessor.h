@@ -32,12 +32,15 @@ public:
     // Master gain
     void setMasterGain (float g) { masterGain.store (g); }
     float getMasterGain() const  { return masterGain.load(); }
+    void setMuted (bool m)       { muted.store (m); }
+    bool isMuted() const         { return muted.load(); }
 
 private:
     TransportController& transportController;
     std::atomic<float> peakLeft { 0.0f };
     std::atomic<float> peakRight { 0.0f };
     std::atomic<float> masterGain { 1.0f };
+    std::atomic<bool> muted { false };
 
     MixBusProcessor (const MixBusProcessor&) = delete;
     MixBusProcessor& operator= (const MixBusProcessor&) = delete;
