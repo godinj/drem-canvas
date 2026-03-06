@@ -163,6 +163,12 @@ add_executable(dc_integration_tests
     ${CMAKE_SOURCE_DIR}/src/vim/VimEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/vim/adapters/EditorAdapter.cpp
     ${CMAKE_SOURCE_DIR}/src/vim/ActionRegistry.cpp
+    ${CMAKE_SOURCE_DIR}/src/vim/adapters/MixerAdapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/vim/adapters/SequencerAdapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/vim/adapters/PianoRollAdapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/vim/adapters/PluginViewAdapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/vim/KeySequence.cpp
+    ${CMAKE_SOURCE_DIR}/src/vim/KeymapRegistry.cpp
 
     # Engine
     ${CMAKE_SOURCE_DIR}/src/engine/TransportController.cpp

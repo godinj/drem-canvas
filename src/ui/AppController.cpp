@@ -12,6 +12,8 @@
 #include "plugins/PluginEditorBridge.h"
 #include "utils/UndoSystem.h"
 #include "dc/foundation/assert.h"
+#include "dc/foundation/file_utils.h"
+#include "dc/foundation/string_utils.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -113,8 +115,6 @@ void AppController::initialise()
 
         editorAdapter->setContextChangedCallback ([this]()
         {
-            // Notify VimEngine listeners about context changes
-            // This uses the same mechanism as vimContextChanged()
             vimContextChanged();
         });
 
@@ -142,30 +142,66 @@ void AppController::initialise()
         vimEngine->registerAdapter (std::move (editorAdapter));
     }
 
-    // Wire :plugin command
-    vimEngine->onPluginCommand = [this] (const std::string& pluginName)
-    {
-        auto& knownPlugins = pluginManager.getKnownPlugins();
+    // Register actions that replace the removed callbacks
+    vimEngine->getActionRegistry().registerAction ({
+        "command_palette", "Command Palette", "Navigation", "Ctrl+P",
+        [this]() { showCommandPalette(); }, {}
+    });
 
-        std::string queryLower = pluginName;
-        std::transform (queryLower.begin(), queryLower.end(), queryLower.begin(),
-                        [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
+    vimEngine->getActionRegistry().registerAction ({
+        "view.toggle_browser", "Toggle Browser", "View", "gp",
+        [this]() { toggleBrowser(); }, {}
+    });
 
-        for (const auto& desc : knownPlugins)
+    vimEngine->getActionRegistry().registerAction ({
+        "command.plugin", "Install Plugin", "Command", ":plugin",
+        [this]()
         {
-            std::string nameLower = desc.name;
-            std::transform (nameLower.begin(), nameLower.end(), nameLower.begin(),
+            auto& buf = vimEngine->getCommandBuffer();
+            auto pluginName = dc::trim (dc::afterFirst (buf, " "));
+            if (pluginName.empty())
+                return;
+
+            auto& knownPlugins = pluginManager.getKnownPlugins();
+
+            std::string queryLower = pluginName;
+            std::transform (queryLower.begin(), queryLower.end(), queryLower.begin(),
                             [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
 
-            if (nameLower.find (queryLower) != std::string::npos)
+            for (const auto& desc : knownPlugins)
             {
-                insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
-                return;
-            }
-        }
-    };
+                std::string nameLower = desc.name;
+                std::transform (nameLower.begin(), nameLower.end(), nameLower.begin(),
+                                [] (unsigned char c) { return static_cast<char> (std::tolower (c)); });
 
-    vimEngine->onCreateMidiTrack = [this] (const std::string& name) { addMidiTrack (name); };
+                if (nameLower.find (queryLower) != std::string::npos)
+                {
+                    insertPluginOnTrack (arrangement.getSelectedTrackIndex(), desc);
+                    return;
+                }
+            }
+        }, {}
+    });
+
+    vimEngine->getActionRegistry().registerAction ({
+        "command.midi", "Add MIDI Track", "Command", ":midi",
+        [this]()
+        {
+            auto& buf = vimEngine->getCommandBuffer();
+            auto trackName = dc::trim (dc::afterFirst (buf, " "));
+            if (trackName.empty())
+                trackName = "MIDI";
+            addMidiTrack (trackName);
+        }, {}
+    });
+
+    // Load keymaps
+    vimEngine->loadDefaultKeymap();
+
+    // User keymap (optional)
+    auto userKeymapPath = dc::getUserAppDataDirectory() / "keymap.yaml";
+    if (std::filesystem::exists (userKeymapPath))
+        vimEngine->loadUserKeymap (userKeymapPath.string());
 
     // Wire live MIDI keyboard output to selected MIDI track
     vimEngine->onLiveMidiNote = [this] (const dc::MidiMessage& msg)
@@ -175,9 +211,6 @@ void AppController::initialise()
             if (auto* proc = midiClipProcessors[static_cast<size_t> (trackIndex)])
                 proc->injectLiveMidi (msg);
     };
-
-    // Wire browser toggle (gp keybinding)
-    vimEngine->onToggleBrowser = [this]() { toggleBrowser(); };
 
     // Wire mixer plugin navigation callbacks
     vimEngine->onMixerPluginOpen = [this] (int trackIdx, int pluginIndex)
@@ -750,9 +783,6 @@ void AppController::initialise()
     addChild (commandPalette.get());
 
     commandPalette->onDismiss = [this]() { dismissCommandPalette(); };
-
-    // Wire command palette trigger
-    vimEngine->onCommandPalette = [this]() { showCommandPalette(); };
 
     // Register all actions in the palette
     registerAllActions();

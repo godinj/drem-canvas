@@ -3,6 +3,8 @@
 #include "VimGrammar.h"
 #include "VimContext.h"
 #include "ContextAdapter.h"
+#include "KeymapRegistry.h"
+#include "ActionRegistry.h"
 #include "model/Project.h"
 #include "model/Arrangement.h"
 #include "model/Track.h"
@@ -74,20 +76,20 @@ public:
     ContextAdapter* getActiveAdapter() const;
     ContextAdapter* getAdapter (VimContext::Panel panel) const;
 
-    // Plugin command callback (wired by MainComponent)
-    std::function<void (const std::string&)> onPluginCommand;
+    // Keymap loading
+    void loadDefaultKeymap();
+    void loadUserKeymap (const std::string& path);
 
-    // Command palette callback
-    std::function<void()> onCommandPalette;
+    // ActionRegistry access (for external action registration)
+    ActionRegistry& getActionRegistry() { return actionRegistry; }
+    const ActionRegistry& getActionRegistry() const { return actionRegistry; }
 
-    // MIDI track creation callback
-    std::function<void (const std::string&)> onCreateMidiTrack;
+    // KeymapRegistry access (for keybinding display updates)
+    KeymapRegistry& getKeymapRegistry() { return keymap; }
+    const KeymapRegistry& getKeymapRegistry() const { return keymap; }
 
-    // Piano roll open callback
+    // Piano roll open callback (stays — wired by AppController for panel transition)
     std::function<void (const PropertyTree&)> onOpenPianoRoll;
-
-    // Browser toggle callback (gp keybinding)
-    std::function<void()> onToggleBrowser;
 
     // Plugin view callbacks
     std::function<void (int trackIndex, int pluginIndex)> onOpenPluginView;
@@ -297,6 +299,9 @@ private:
 
     // ─── Adapter storage ────────────────────────────────────
     std::unordered_map<int, std::unique_ptr<ContextAdapter>> adapters;
+
+    // Keymap and action dispatch
+    KeymapRegistry keymap;
 
     VimEngine (const VimEngine&) = delete;
     VimEngine& operator= (const VimEngine&) = delete;

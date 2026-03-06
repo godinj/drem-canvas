@@ -1,4 +1,5 @@
 #include "ActionRegistry.h"
+#include "KeymapRegistry.h"
 #include <algorithm>
 #include <cctype>
 
@@ -61,6 +62,16 @@ bool ActionRegistry::executeAction (const std::string& id) const
         }
     }
     return false;
+}
+
+void ActionRegistry::updateKeybindings (const KeymapRegistry& keymap)
+{
+    for (auto& action : actions)
+    {
+        auto kb = keymap.getKeybindingForAction (action.id);
+        if (! kb.empty())
+            action.keybinding = kb;
+    }
 }
 
 void ActionRegistry::removeActionsWithPrefix (const std::string& idPrefix)

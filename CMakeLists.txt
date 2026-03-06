@@ -262,6 +262,10 @@ add_executable(DremCanvas
     src/vim/ActionRegistry.cpp
     src/vim/KeySequence.cpp
     src/vim/KeymapRegistry.cpp
+    src/vim/adapters/MixerAdapter.cpp
+    src/vim/adapters/SequencerAdapter.cpp
+    src/vim/adapters/PianoRollAdapter.cpp
+    src/vim/adapters/PluginViewAdapter.cpp
 
     # Utils
     src/utils/AudioFileUtils.cpp
@@ -391,6 +395,15 @@ add_custom_command(TARGET DremCanvas POST_BUILD
         "${CMAKE_SOURCE_DIR}/assets/icon_256.png"
         "$<TARGET_FILE_DIR:DremCanvas>/drem-canvas.png"
     COMMENT "Copying app icon next to binary"
+)
+
+# Copy default keymap next to binary
+add_custom_command(TARGET DremCanvas POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:DremCanvas>/config"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/config/default_keymap.yaml"
+        "$<TARGET_FILE_DIR:DremCanvas>/config/default_keymap.yaml"
+    COMMENT "Copying default keymap next to binary"
 )
 
 # ─── Install rules (Linux desktop integration) ───────────────

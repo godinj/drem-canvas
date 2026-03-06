@@ -8,6 +8,8 @@
 namespace dc
 {
 
+class KeymapRegistry;
+
 struct ActionInfo
 {
     std::string id;           // e.g. "transport.play_stop"
@@ -35,6 +37,10 @@ public:
     bool executeAction (const std::string& id) const;
 
     void removeActionsWithPrefix (const std::string& idPrefix);
+
+    /// Update keybinding display strings from a KeymapRegistry.
+    /// This ensures the command palette shows actual user keybindings.
+    void updateKeybindings (const KeymapRegistry& keymap);
 
     const std::vector<ActionInfo>& getAllActions() const { return actions; }
 

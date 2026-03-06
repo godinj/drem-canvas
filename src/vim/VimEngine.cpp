@@ -62,14 +62,17 @@ ContextAdapter* VimEngine::getAdapter (VimContext::Panel panel) const
 
 bool VimEngine::dispatch (const dc::KeyPress& key)
 {
-    // Ctrl+P opens command palette from any mode
-    if (key.control && key.getTextCharacter() == 'p')
+    auto keyChar = key.getTextCharacter();
+
+    // 1. Global keymap bindings (Ctrl+P, etc.) — check before mode dispatch
+    if (key.control && keyChar == 'p')
     {
-        if (onCommandPalette)
-            onCommandPalette();
+        actionRegistry.executeAction ("command_palette");
+        keymap.resetFeed();
         return true;
     }
 
+    // 2. Mode-based dispatch (Keyboard, PluginMenu, Command stay internal)
     if (mode == Keyboard)
         return handleKeyboardKey (key);
 
@@ -79,6 +82,7 @@ bool VimEngine::dispatch (const dc::KeyPress& key)
     if (mode == Command)
         return handleCommandKey (key);
 
+    // 3. Visual modes
     if (mode == Visual)
     {
         // Delegate to adapter if available for current panel
@@ -96,10 +100,34 @@ bool VimEngine::dispatch (const dc::KeyPress& key)
         return handleVisualLineKey (key);
     }
 
+    // 4. Normal mode dispatch
     if (mode == Normal)
         return handleNormalKey (key);
 
+    // 5. Insert mode
     return handleInsertKey (key);
+}
+
+void VimEngine::loadDefaultKeymap()
+{
+    // Try to find the default keymap relative to the executable
+    // or in a known config location
+    std::string paths[] = {
+        "config/default_keymap.yaml",
+        "../config/default_keymap.yaml",
+        "../share/drem-canvas/default_keymap.yaml"
+    };
+
+    for (auto& path : paths)
+    {
+        if (keymap.loadFromYAML (path))
+            return;
+    }
+}
+
+void VimEngine::loadUserKeymap (const std::string& path)
+{
+    keymap.overlayFromYAML (path);
 }
 
 bool VimEngine::handleKeyEvent (const gfx::KeyEvent& event)
@@ -151,7 +179,7 @@ bool VimEngine::handleNormalKey (const dc::KeyPress& key)
         if (kc == 'p')
         {
             grammar.clearPendingKey();
-            if (onToggleBrowser) onToggleBrowser();
+            actionRegistry.executeAction ("view.toggle_browser");
             return true;
         }
         if (kc == 'k')
@@ -863,17 +891,11 @@ void VimEngine::executeCommand()
 
     if (dc::startsWith (cmd, "plugin ") || dc::startsWith (cmd, "plug "))
     {
-        auto pluginName = dc::trim (dc::afterFirst (cmd, " "));
-        if (! pluginName.empty() && onPluginCommand)
-            onPluginCommand (pluginName);
+        actionRegistry.executeAction ("command.plugin");
     }
     else if (cmd == "midi" || dc::startsWith (cmd, "midi "))
     {
-        auto trackName = dc::trim (dc::afterFirst (cmd, " "));
-        if (trackName.empty())
-            trackName = "MIDI";
-        if (onCreateMidiTrack)
-            onCreateMidiTrack (trackName);
+        actionRegistry.executeAction ("command.midi");
     }
     else if (cmd == "cycle" || cmd == "loop")
     {
@@ -1122,8 +1144,7 @@ bool VimEngine::handlePianoRollNormalKey (const dc::KeyPress& key)
     // Ctrl+P opens command palette
     if (key.control && keyChar == 'p')
     {
-        if (onCommandPalette)
-            onCommandPalette();
+        actionRegistry.executeAction ("command_palette");
         return true;
     }
 
@@ -2943,7 +2964,7 @@ bool VimEngine::handleMixerNormalKey (const dc::KeyPress& key)
         if (keyChar == 'p')
         {
             grammar.clearPendingKey();
-            if (onToggleBrowser) onToggleBrowser();
+            actionRegistry.executeAction ("view.toggle_browser");
             return true;
         }
         if (keyChar == 'k')
