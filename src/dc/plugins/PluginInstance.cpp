@@ -19,6 +19,10 @@
 #include <csetjmp>
 #include <cstring>
 
+#if defined(__linux__)
+#include "platform/linux/LinuxRunLoop.h"
+#endif
+
 namespace dc {
 
 // ─── Minimal IHostApplication for component->initialize() ────────────────
@@ -63,6 +67,16 @@ public:
             *obj = static_cast<FUnknown*> (this);
             return Steinberg::kResultOk;
         }
+#if defined(__linux__)
+        if (Steinberg::FUnknownPrivate::iidEqual (_iid,
+            Steinberg::Linux::IRunLoop::iid))
+        {
+            auto& runLoop = dc::LinuxRunLoop::instance();
+            runLoop.addRef();
+            *obj = static_cast<Steinberg::Linux::IRunLoop*> (&runLoop);
+            return Steinberg::kResultOk;
+        }
+#endif
         *obj = nullptr;
         return Steinberg::kNoInterface;
     }

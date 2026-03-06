@@ -7,6 +7,10 @@
 #include <pluginterfaces/base/funknown.h>
 #include <atomic>
 
+#if defined(__linux__)
+#include "platform/linux/LinuxRunLoop.h"
+#endif
+
 namespace dc {
 
 // ─── PlugFrame — IPlugFrame implementation ───────────────────────────────
@@ -57,6 +61,17 @@ public:
                 static_cast<IPlugFrame*> (this));
             return Steinberg::kResultOk;
         }
+
+#if defined(__linux__)
+        if (Steinberg::FUnknownPrivate::iidEqual (iid,
+            Steinberg::Linux::IRunLoop::iid))
+        {
+            auto& runLoop = dc::LinuxRunLoop::instance();
+            runLoop.addRef();
+            *obj = static_cast<Steinberg::Linux::IRunLoop*> (&runLoop);
+            return Steinberg::kResultOk;
+        }
+#endif
 
         *obj = nullptr;
         return Steinberg::kNoInterface;

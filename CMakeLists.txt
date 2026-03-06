@@ -366,6 +366,7 @@ elseif(UNIX AND NOT APPLE)
         src/platform/linux/X11SyntheticInputProbe.cpp
         src/platform/linux/X11SyntheticMouseDrag.cpp
         src/platform/linux/X11MouseEventForwarder.cpp
+        src/platform/linux/LinuxRunLoop.cpp
     )
 endif()
 

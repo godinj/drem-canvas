@@ -172,11 +172,19 @@ VST3Module* VST3Host::getOrLoadModule (const std::filesystem::path& bundlePath)
 
     auto status = probeCache_.getStatus (bundlePath);
 
-    // Previously blocked and bundle hasn't changed — skip
+    // Previously blocked — skip native plugins, but retry yabridge ones.
+    // Yabridge blocking is often transient (caused by IPC race conditions
+    // during scanning), not a permanent failure of the plugin itself.
     if (status == ProbeCache::Status::blocked)
     {
-        dc_log ("VST3Host: skipping blocked module: %s", key.c_str());
-        return nullptr;
+        if (! isYabridge)
+        {
+            dc_log ("VST3Host: skipping blocked module: %s", key.c_str());
+            return nullptr;
+        }
+
+        dc_log ("VST3Host: retrying blocked yabridge module: %s", key.c_str());
+        probeCache_.resetStatus (bundlePath);
     }
 
     // Previously safe — skip probe, load directly with pedal protection.

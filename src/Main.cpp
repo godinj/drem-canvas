@@ -15,6 +15,7 @@
 #elif defined(__linux__)
 #include "platform/linux/GlfwWindow.h"
 #include "platform/linux/VulkanBackend.h"
+#include "platform/linux/LinuxRunLoop.h"
 #endif
 
 #include "graphics/rendering/GpuBackend.h"
@@ -780,6 +781,9 @@ int main (int argc, char* argv[])
     while (! shouldQuit && ! glfwWindow->shouldClose())
     {
         glfwWindow->pollEvents();
+#if defined(__linux__)
+        dc::LinuxRunLoop::instance().poll();
+#endif
         appController->tick();
         renderer->renderFrame (*appController);
     }
