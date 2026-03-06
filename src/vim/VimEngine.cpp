@@ -34,13 +34,7 @@ VimEngine::VimEngine (Project& p, TransportController& t,
 {
 }
 
-char VimEngine::consumeRegister()
-{
-    char reg = pendingRegister;
-    pendingRegister = '\0';
-    awaitingRegisterChar = false;
-    return reg;
-}
+// consumeRegister() now delegated to grammar.consumeRegister()
 
 bool VimEngine::dispatch (const dc::KeyPress& key)
 {
@@ -116,18 +110,18 @@ bool VimEngine::handleInsertKey (const dc::KeyPress& key)
 bool VimEngine::handleNormalKey (const dc::KeyPress& key)
 {
     // gp/gk — global g-prefix commands (work from any panel context)
-    if (pendingKey == 'g')
+    if (grammar.hasPendingKey() && grammar.getPendingKey() == 'g')
     {
         auto kc = key.getTextCharacter();
         if (kc == 'p')
         {
-            clearPending();
+            grammar.clearPendingKey();
             if (onToggleBrowser) onToggleBrowser();
             return true;
         }
         if (kc == 'k')
         {
-            clearPending();
+            grammar.clearPendingKey();
             enterKeyboardMode();
             return true;
         }
@@ -155,194 +149,78 @@ bool VimEngine::handleNormalKey (const dc::KeyPress& key)
         return true;
     }
 
-    // Phase 1: Handle pending 'g' (with operator-pending awareness for dgg)
-    if (pendingKey == 'g')
-    {
-        if (keyChar == 'g'
-            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
-        {
-            clearPending();
-
-            if (isOperatorPending())
-            {
-                // e.g. dgg — resolve motion from first track to current
-                auto range = resolveMotion ('g', getEffectiveCount());
-                executeOperator (pendingOperator, range);
-                pendingOperator = OpNone;
-                resetCounts();
-                listeners.call ([](Listener& l) { l.vimContextChanged(); });
-            }
-            else
-            {
-                int count = getEffectiveCount();
-                resetCounts();
-
-                if (count > 1)
-                {
-                    // gg with count: jump to track N (1-indexed)
-                    int target = std::min (count, arrangement.getNumTracks()) - 1;
-                    arrangement.selectTrack (target);
-                    updateClipIndexFromGridCursor();
-                    listeners.call ([](Listener& l) { l.vimContextChanged(); });
-                }
-                else
-                {
-                    jumpToFirstTrack();
-                }
-            }
-            return true;
-        }
-
-        // Timeout or different key — clear pending g and fall through
-        clearPending();
-    }
-
-    // Phase 2: Escape / Ctrl-C cancels operator + counts + pending
+    // Phase: Escape / Ctrl-C cancels all pending state
     if (isEscapeOrCtrlC (key))
     {
-        cancelOperator();
-        clearPending();
+        grammar.reset();
+        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
-    // Phase 2.5: Register prefix ("x)
-    if (awaitingRegisterChar)
+    // Phase: Grammar (replaces inline count/operator/motion handling)
+    auto result = grammar.feed (keyChar, key.shift, key.control, key.alt, key.command);
+
+    switch (result.type)
     {
-        char c = static_cast<char> (keyChar);
-        if (Clipboard::isValidRegister (c) && c != '\0')
+        case VimGrammar::ParseResult::Incomplete:
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
+            return true;
+
+        case VimGrammar::ParseResult::Motion:
+            executeMotion (result.motionKey, result.count);
+            return true;
+
+        case VimGrammar::ParseResult::OperatorMotion:
         {
-            pendingRegister = c;
-            awaitingRegisterChar = false;
+            auto range = resolveMotion (result.motionKey, result.count);
+            if (range.valid)
+                executeOperator (static_cast<Operator> (result.op), range);
             listeners.call ([](Listener& l) { l.vimContextChanged(); });
             return true;
         }
-        // Invalid register char — cancel
-        awaitingRegisterChar = false;
-        listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        return true;
+
+        case VimGrammar::ParseResult::LinewiseOperator:
+        {
+            auto range = resolveLinewiseMotion (result.count);
+            executeOperator (static_cast<Operator> (result.op), range);
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
+            return true;
+        }
+
+        case VimGrammar::ParseResult::NoMatch:
+            break; // fall through to single-key actions
     }
 
-    if (keyChar == '"')
-    {
-        awaitingRegisterChar = true;
-        listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        return true;
-    }
-
-    // Phase 3: Digit accumulation
-    if (isDigitForCount (keyChar))
-    {
-        accumulateDigit (keyChar);
-        listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        return true;
-    }
-
-    // Ctrl+L toggles cycle (before motion/operator dispatch)
+    // Ctrl+L toggles cycle (before single-key actions)
     if (key.control && (keyChar == 'l' || keyChar == 'L' || keyChar == 12))
     { toggleCycle(); return true; }
 
-    // Phase 4: Operator keys d/y/c
-    auto op = charToOperator (keyChar);
-    if (op != OpNone)
-    {
-        if (isOperatorPending() && pendingOperator == op)
-        {
-            // dd / yy / cc — linewise on current track(s)
-            int count = getEffectiveCount();
-            auto range = resolveLinewiseMotion (count);
-            executeOperator (op, range);
-            pendingOperator = OpNone;
-            resetCounts();
-            listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        }
-        else
-        {
-            startOperator (op);
-            listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        }
-        return true;
-    }
-
-    // Phase 5: Motion keys — resolve + execute operator or plain motion
-    if (isMotionKey (keyChar))
-    {
-        int count = getEffectiveCount();
-
-        if (isOperatorPending())
-        {
-            auto range = resolveMotion (keyChar, count);
-            if (range.valid)
-                executeOperator (pendingOperator, range);
-
-            pendingOperator = OpNone;
-            resetCounts();
-            listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        }
-        else
-        {
-            resetCounts();
-            executeMotion (keyChar, count);
-        }
-        return true;
-    }
-
-    // Phase 6: Single-key actions with count support
+    // Phase 6: Single-key actions (NoMatch from grammar)
     if (keyChar == 'x')
     {
-        int count = getEffectiveCount();
-        resetCounts();
-        cancelOperator();
-
-        for (int i = 0; i < count; ++i)
-            deleteSelectedRegions();
-
+        deleteSelectedRegions();
         return true;
     }
 
     if (keyChar == 'p')
     {
-        int count = getEffectiveCount();
-        resetCounts();
-        cancelOperator();
-
-        for (int i = 0; i < count; ++i)
-            pasteAfterPlayhead();
-
+        pasteAfterPlayhead();
         return true;
     }
 
     if (keyChar == 'P')
     {
-        int count = getEffectiveCount();
-        resetCounts();
-        cancelOperator();
-
-        for (int i = 0; i < count; ++i)
-            pasteBeforePlayhead();
-
+        pasteBeforePlayhead();
         return true;
     }
 
     if (keyChar == 'D')
     {
-        int count = getEffectiveCount();
-        resetCounts();
-        cancelOperator();
-
-        for (int i = 0; i < count; ++i)
-            duplicateSelectedClip();
-
+        duplicateSelectedClip();
         return true;
     }
 
-    // Phase 7: Non-count actions — cancel any pending state
-    if (isOperatorPending())
-    {
-        // These keys are not motions — cancel operator
-        cancelOperator();
-    }
-
-    resetCounts();
+    // Phase 7: Non-count actions
 
     // Visual modes (Editor panel only)
     if (keyChar == 'v' && context.getPanel() == VimContext::Editor)
@@ -598,7 +476,7 @@ void VimEngine::deleteSelectedRegions()
     if (clipIdx >= 0 && clipIdx < track.getNumClips())
     {
         // Yank before delete (Vim semantics: x always yanks)
-        char reg = consumeRegister();
+        char reg = grammar.consumeRegister();
         std::vector<Clipboard::ClipEntry> entries;
         entries.push_back ({ track.getClip (clipIdx), 0, 0 });
         project.getClipboard().storeClips (reg, entries, false, false);
@@ -624,7 +502,7 @@ void VimEngine::yankSelectedRegions()
 
     if (clipIdx >= 0 && clipIdx < track.getNumClips())
     {
-        char reg = consumeRegister();
+        char reg = grammar.consumeRegister();
         std::vector<Clipboard::ClipEntry> entries;
         entries.push_back ({ track.getClip (clipIdx), 0, 0 });
         project.getClipboard().storeClips (reg, entries, false, true);
@@ -689,7 +567,7 @@ static void carveGap (Track& track, int64_t gapStart, int64_t gapEnd, dc::UndoMa
 
 void VimEngine::pasteAfterPlayhead()
 {
-    char reg = consumeRegister();
+    char reg = grammar.consumeRegister();
     auto& entry = project.getClipboard().get (reg);
     if (! entry.hasClips())
         return;
@@ -726,7 +604,7 @@ void VimEngine::pasteAfterPlayhead()
 
 void VimEngine::pasteBeforePlayhead()
 {
-    char reg = consumeRegister();
+    char reg = grammar.consumeRegister();
     auto& regEntry = project.getClipboard().get (reg);
     if (! regEntry.hasClips())
         return;
@@ -969,8 +847,7 @@ void VimEngine::enterNormalMode()
     mode = Normal;
     pluginSearchActive = false;
     pluginSearchBuffer.clear();
-    cancelOperator();
-    clearPending();
+    grammar.reset();
     context.clearVisualSelection();
     listeners.call ([](Listener& l) { l.vimModeChanged (Normal); });
 
@@ -1168,25 +1045,18 @@ bool VimEngine::handlePianoRollNormalKey (const dc::KeyPress& key)
         return true;
     }
 
-    // Register prefix ("x)
-    if (awaitingRegisterChar)
+    // Register prefix — use grammar for "x handling
+    if (keyChar == '"')
     {
-        char c = static_cast<char> (keyChar);
-        if (Clipboard::isValidRegister (c) && c != '\0')
-        {
-            pendingRegister = c;
-            awaitingRegisterChar = false;
-            listeners.call ([](Listener& l) { l.vimContextChanged(); });
-            return true;
-        }
-        awaitingRegisterChar = false;
+        grammar.feed (keyChar, key.shift, key.control, key.alt, key.command);
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
-    if (keyChar == '"')
+    // If grammar is awaiting register char, feed it
+    if (grammar.hasPendingState() && grammar.getPendingDisplay() == "\"")
     {
-        awaitingRegisterChar = true;
+        grammar.feed (keyChar, key.shift, key.control, key.alt, key.command);
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
@@ -1207,22 +1077,21 @@ bool VimEngine::handlePianoRollNormalKey (const dc::KeyPress& key)
     }
 
     // Pending 'g' for gg (jump to highest note row)
-    if (pendingKey == 'g')
+    if (grammar.hasPendingKey() && grammar.getPendingKey() == 'g')
     {
-        if (keyChar == 'g'
-            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+        if (keyChar == 'g')
         {
-            clearPending();
+            grammar.clearPendingKey();
             if (onPianoRollJumpCursor) onPianoRollJumpCursor (-1, 127);
             return true;
         }
-        clearPending();
+        grammar.clearPendingKey();
     }
 
     // Pending 'z' for zi/zo/zf
-    if (pendingKey == 'z')
+    if (grammar.hasPendingKey() && grammar.getPendingKey() == 'z')
     {
-        clearPending();
+        grammar.clearPendingKey();
         if (keyChar == 'i')
         {
             if (onPianoRollZoom) onPianoRollZoom (1.25f);
@@ -1308,8 +1177,7 @@ bool VimEngine::handlePianoRollNormalKey (const dc::KeyPress& key)
     if (keyChar == 'G') { if (onPianoRollJumpCursor) onPianoRollJumpCursor (-1, 0); return true; }
     if (keyChar == 'g')
     {
-        pendingKey = 'g';
-        pendingTimestamp = dc::currentTimeMillis();
+        grammar.setPendingKey ('g');
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
@@ -1317,21 +1185,21 @@ bool VimEngine::handlePianoRollNormalKey (const dc::KeyPress& key)
     // Delete
     if (keyChar == 'x' || key == dc::KeyCode::Delete)
     {
-        if (onPianoRollDeleteSelected) onPianoRollDeleteSelected (consumeRegister());
+        if (onPianoRollDeleteSelected) onPianoRollDeleteSelected (grammar.consumeRegister());
         return true;
     }
 
     // Yank (copy)
     if (keyChar == 'y')
     {
-        if (onPianoRollCopy) onPianoRollCopy (consumeRegister());
+        if (onPianoRollCopy) onPianoRollCopy (grammar.consumeRegister());
         return true;
     }
 
     // Paste
     if (keyChar == 'p')
     {
-        if (onPianoRollPaste) onPianoRollPaste (consumeRegister());
+        if (onPianoRollPaste) onPianoRollPaste (grammar.consumeRegister());
         return true;
     }
 
@@ -1376,8 +1244,7 @@ bool VimEngine::handlePianoRollNormalKey (const dc::KeyPress& key)
     // Zoom
     if (keyChar == 'z')
     {
-        pendingKey = 'z';
-        pendingTimestamp = dc::currentTimeMillis();
+        grammar.setPendingKey ('z');
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
@@ -1407,73 +1274,10 @@ bool VimEngine::handlePianoRollNormalKey (const dc::KeyPress& key)
     return false;
 }
 
-// ── Pending key helpers ─────────────────────────────────────────────────────
-
-void VimEngine::clearPending()
-{
-    pendingKey = 0;
-    pendingTimestamp = 0;
-    pendingRegister = '\0';
-    awaitingRegisterChar = false;
-    listeners.call ([](Listener& l) { l.vimContextChanged(); });
-}
-
-// ── Count helpers ───────────────────────────────────────────────────────────
-
-bool VimEngine::isDigitForCount (char32_t c) const
-{
-    if (c >= '1' && c <= '9')
-        return true;
-
-    // '0' is a count digit only when we're already accumulating a count
-    if (c == '0' && (countAccumulator > 0 || operatorCount > 0))
-        return true;
-
-    return false;
-}
-
-void VimEngine::accumulateDigit (char32_t c)
-{
-    int digit = c - '0';
-
-    if (isOperatorPending())
-        operatorCount = operatorCount * 10 + digit;
-    else
-        countAccumulator = countAccumulator * 10 + digit;
-}
-
-int VimEngine::getEffectiveCount() const
-{
-    return std::max (1, countAccumulator) * std::max (1, operatorCount);
-}
-
-void VimEngine::resetCounts()
-{
-    countAccumulator = 0;
-    operatorCount = 0;
-}
-
-// ── Operator state ──────────────────────────────────────────────────────────
-
-void VimEngine::startOperator (Operator op)
-{
-    pendingOperator = op;
-    operatorCount = 0;
-}
-
-void VimEngine::cancelOperator()
-{
-    pendingOperator = OpNone;
-    resetCounts();
-}
-
-VimEngine::Operator VimEngine::charToOperator (char32_t c) const
-{
-    if (c == 'd') return OpDelete;
-    if (c == 'y') return OpYank;
-    if (c == 'c') return OpChange;
-    return OpNone;
-}
+// Count/operator/pending-key helpers now live in VimGrammar.
+// clearPending, isDigitForCount, accumulateDigit, getEffectiveCount,
+// resetCounts, startOperator, cancelOperator, charToOperator, isMotionKey
+// have all been removed from VimEngine.
 
 // ── Clip edge helpers ────────────────────────────────────────────────────────
 
@@ -1500,13 +1304,6 @@ static std::vector<int64_t> collectClipEdges (const Arrangement& arr, int trackI
 }
 
 // ── Motion resolution ───────────────────────────────────────────────────────
-
-bool VimEngine::isMotionKey (char32_t c) const
-{
-    return c == 'h' || c == 'j' || c == 'k' || c == 'l'
-        || c == '0' || c == '$' || c == 'G' || c == 'g'
-        || c == 'w' || c == 'b' || c == 'e';
-}
 
 VimEngine::MotionRange VimEngine::resolveMotion (char32_t key, int count) const
 {
@@ -1757,7 +1554,7 @@ void VimEngine::executeOperator (Operator op, const MotionRange& range)
 void VimEngine::executeDelete (const MotionRange& range)
 {
     // Store deleted clips (Vim delete → unnamed + "1-"9 history)
-    char reg = consumeRegister();
+    char reg = grammar.consumeRegister();
     auto entries = collectClipsForRange (range);
     if (! entries.empty())
         project.getClipboard().storeClips (reg, entries, range.linewise, false);
@@ -1849,7 +1646,7 @@ void VimEngine::executeDelete (const MotionRange& range)
 
 void VimEngine::executeYank (const MotionRange& range)
 {
-    char reg = consumeRegister();
+    char reg = grammar.consumeRegister();
     auto entries = collectClipsForRange (range);
     if (! entries.empty())
         project.getClipboard().storeClips (reg, entries, range.linewise, true);
@@ -1930,7 +1727,7 @@ void VimEngine::executeMotion (char32_t key, int count)
         }
 
         case 'G':
-            if (count > 1 || countAccumulator > 0)
+            if (count > 1)
             {
                 // G with count: jump to track N (1-indexed)
                 int target = std::min (count, arrangement.getNumTracks()) - 1;
@@ -1948,10 +1745,8 @@ void VimEngine::executeMotion (char32_t key, int count)
             break;
 
         case 'g':
-            // Start of gg sequence
-            pendingKey = 'g';
-            pendingTimestamp = dc::currentTimeMillis();
-            listeners.call ([](Listener& l) { l.vimContextChanged(); });
+            // gg resolved by grammar — jump to first track (already handled)
+            jumpToFirstTrack();
             break;
 
         case 'w':
@@ -2093,8 +1888,7 @@ void VimEngine::exitVisualMode()
     context.clearVisualSelection();
     context.clearGridVisualSelection();
     mode = Normal;
-    cancelOperator();
-    clearPending();
+    grammar.reset();
     listeners.call ([](Listener& l) { l.vimModeChanged (Normal); });
     listeners.call ([](Listener& l) { l.vimContextChanged(); });
 }
@@ -2340,7 +2134,7 @@ void VimEngine::executeGridVisualDelete()
 
 void VimEngine::executeGridVisualYank (bool isYank)
 {
-    char reg = consumeRegister();
+    char reg = grammar.consumeRegister();
     auto& gridSel = context.getGridVisualSelection();
     double sr = transport.getSampleRate();
     if (sr <= 0.0)
@@ -2468,66 +2262,18 @@ bool VimEngine::handleVisualKey (const dc::KeyPress& key)
     // Escape or Ctrl-C exits visual mode
     if (isEscapeOrCtrlC (key) || keyChar == 'v')
     {
+        grammar.reset();
         exitVisualMode();
         return true;
     }
 
-    // Register prefix ("x)
-    if (awaitingRegisterChar)
-    {
-        char c = static_cast<char> (keyChar);
-        if (Clipboard::isValidRegister (c) && c != '\0')
-        {
-            pendingRegister = c;
-            awaitingRegisterChar = false;
-            listeners.call ([](Listener& l) { l.vimContextChanged(); });
-            return true;
-        }
-        awaitingRegisterChar = false;
-        listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        return true;
-    }
-
-    if (keyChar == '"')
-    {
-        awaitingRegisterChar = true;
-        listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        return true;
-    }
-
-    // Switch to VisualLine
+    // Switch to VisualLine (before grammar to avoid operator interception)
     if (keyChar == 'V')
     {
         mode = VisualLine;
         updateVisualSelection();
         listeners.call ([](Listener& l) { l.vimModeChanged (VisualLine); });
         return true;
-    }
-
-    // Pending 'g' for gg
-    if (pendingKey == 'g')
-    {
-        if (keyChar == 'g'
-            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
-        {
-            clearPending();
-            int count = getEffectiveCount();
-            resetCounts();
-
-            if (count > 1)
-            {
-                int target = std::min (count, arrangement.getNumTracks()) - 1;
-                arrangement.selectTrack (target);
-                updateClipIndexFromGridCursor();
-            }
-            else
-            {
-                jumpToFirstTrack();
-            }
-            updateVisualSelection();
-            return true;
-        }
-        clearPending();
     }
 
     // Grid division change in visual mode
@@ -2552,29 +2298,35 @@ bool VimEngine::handleVisualKey (const dc::KeyPress& key)
         return true;
     }
 
-    // Digit accumulation
-    if (isDigitForCount (keyChar))
+    // Use grammar for register prefix, count, and motion parsing
+    auto result = grammar.feed (keyChar, key.shift, key.control, key.alt, key.command);
+
+    switch (result.type)
     {
-        accumulateDigit (keyChar);
-        listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        return true;
+        case VimGrammar::ParseResult::Incomplete:
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
+            return true;
+
+        case VimGrammar::ParseResult::Motion:
+            executeMotion (result.motionKey, result.count);
+            updateVisualSelection();
+            return true;
+
+        case VimGrammar::ParseResult::OperatorMotion:
+        case VimGrammar::ParseResult::LinewiseOperator:
+            // In visual mode, operators act on the selection directly
+            // (grammar may have parsed d/y/c as operator-pending then doubled)
+            break;
+
+        case VimGrammar::ParseResult::NoMatch:
+            break;
     }
 
     // Cycle: set cycle to visual selection, return to normal
     if (key.control && (keyChar == 'l' || keyChar == 'L' || keyChar == 12))
     { setCycleToGridVisual(); exitVisualMode(); return true; }
 
-    // Motion keys
-    if (isMotionKey (keyChar))
-    {
-        int count = getEffectiveCount();
-        resetCounts();
-        executeMotion (keyChar, count);
-        updateVisualSelection();
-        return true;
-    }
-
-    // Operators
+    // Operators in visual mode act on selection, not grammar motions
     if (keyChar == 'd' || keyChar == 'x') { executeVisualOperator (OpDelete); return true; }
     if (keyChar == 'y')                   { executeVisualOperator (OpYank);   return true; }
     if (keyChar == 'c')                   { executeVisualOperator (OpChange); return true; }
@@ -2600,30 +2352,8 @@ bool VimEngine::handleVisualLineKey (const dc::KeyPress& key)
     // Escape or Ctrl-C or re-pressing V exits
     if (isEscapeOrCtrlC (key) || keyChar == 'V')
     {
+        grammar.reset();
         exitVisualMode();
-        return true;
-    }
-
-    // Register prefix ("x)
-    if (awaitingRegisterChar)
-    {
-        char c = static_cast<char> (keyChar);
-        if (Clipboard::isValidRegister (c) && c != '\0')
-        {
-            pendingRegister = c;
-            awaitingRegisterChar = false;
-            listeners.call ([](Listener& l) { l.vimContextChanged(); });
-            return true;
-        }
-        awaitingRegisterChar = false;
-        listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        return true;
-    }
-
-    if (keyChar == '"')
-    {
-        awaitingRegisterChar = true;
-        listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
 
@@ -2634,32 +2364,6 @@ bool VimEngine::handleVisualLineKey (const dc::KeyPress& key)
         updateVisualSelection();
         listeners.call ([](Listener& l) { l.vimModeChanged (Visual); });
         return true;
-    }
-
-    // Pending 'g' for gg
-    if (pendingKey == 'g')
-    {
-        if (keyChar == 'g'
-            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
-        {
-            clearPending();
-            int count = getEffectiveCount();
-            resetCounts();
-
-            if (count > 1)
-            {
-                int target = std::min (count, arrangement.getNumTracks()) - 1;
-                arrangement.selectTrack (target);
-                updateClipIndexFromGridCursor();
-            }
-            else
-            {
-                jumpToFirstTrack();
-            }
-            updateVisualSelection();
-            return true;
-        }
-        clearPending();
     }
 
     // Grid division change in visual mode
@@ -2684,30 +2388,33 @@ bool VimEngine::handleVisualLineKey (const dc::KeyPress& key)
         return true;
     }
 
-    // Digit accumulation
-    if (isDigitForCount (keyChar))
-    {
-        accumulateDigit (keyChar);
-        listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        return true;
-    }
+    // Use grammar for register prefix, count, and motion parsing
+    auto result = grammar.feed (keyChar, key.shift, key.control, key.alt, key.command);
 
-    // Only j/k/G/gg motions are meaningful in line mode
-    if (keyChar == 'j' || keyChar == 'k' || keyChar == 'G')
+    switch (result.type)
     {
-        int count = getEffectiveCount();
-        resetCounts();
-        executeMotion (keyChar, count);
-        updateVisualSelection();
-        return true;
-    }
+        case VimGrammar::ParseResult::Incomplete:
+            listeners.call ([](Listener& l) { l.vimContextChanged(); });
+            return true;
 
-    if (keyChar == 'g')
-    {
-        pendingKey = 'g';
-        pendingTimestamp = dc::currentTimeMillis();
-        listeners.call ([](Listener& l) { l.vimContextChanged(); });
-        return true;
+        case VimGrammar::ParseResult::Motion:
+        {
+            // Only j/k/G/gg motions are meaningful in line mode
+            char32_t mk = result.motionKey;
+            if (mk == 'j' || mk == 'k' || mk == 'G' || mk == 'g')
+            {
+                executeMotion (mk, result.count);
+                updateVisualSelection();
+            }
+            return true;
+        }
+
+        case VimGrammar::ParseResult::OperatorMotion:
+        case VimGrammar::ParseResult::LinewiseOperator:
+            break;
+
+        case VimGrammar::ParseResult::NoMatch:
+            break;
     }
 
     // Cycle: set cycle to visual selection, return to normal
@@ -2732,48 +2439,7 @@ bool VimEngine::handleVisualLineKey (const dc::KeyPress& key)
     return true; // consume all keys in visual-line mode
 }
 
-// ── Pending display (for status bar) ────────────────────────────────────────
-
-bool VimEngine::hasPendingState() const
-{
-    return pendingOperator != OpNone || countAccumulator > 0
-        || operatorCount > 0 || pendingKey != 0
-        || pendingRegister != '\0' || awaitingRegisterChar;
-}
-
-std::string VimEngine::getPendingDisplay() const
-{
-    std::string display;
-
-    if (pendingRegister != '\0')
-    {
-        display += "\"";
-        display += std::string (1, pendingRegister);
-    }
-    else if (awaitingRegisterChar)
-    {
-        display += "\"";
-    }
-
-    if (countAccumulator > 0)
-        display += std::to_string (countAccumulator);
-
-    switch (pendingOperator)
-    {
-        case OpDelete: display += "d"; break;
-        case OpYank:   display += "y"; break;
-        case OpChange: display += "c"; break;
-        case OpNone:   break;
-    }
-
-    if (operatorCount > 0)
-        display += std::to_string (operatorCount);
-
-    if (pendingKey != 0)
-        display += std::string (1, char (pendingKey));
-
-    return display;
-}
+// hasPendingState() and getPendingDisplay() now inlined in header, delegating to grammar
 
 // ── Sequencer navigation ─────────────────────────────────────────────────────
 
@@ -2805,16 +2471,15 @@ bool VimEngine::handleSequencerNormalKey (const dc::KeyPress& key)
     }
 
     // Pending 'g' for gg
-    if (pendingKey == 'g')
+    if (grammar.hasPendingKey() && grammar.getPendingKey() == 'g')
     {
-        if (keyChar == 'g'
-            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+        if (keyChar == 'g')
         {
-            clearPending();
+            grammar.clearPendingKey();
             seqJumpFirstRow();
             return true;
         }
-        clearPending();
+        grammar.clearPendingKey();
     }
 
     // Ctrl+L toggles cycle (before navigation dispatch)
@@ -2833,8 +2498,7 @@ bool VimEngine::handleSequencerNormalKey (const dc::KeyPress& key)
     if (keyChar == 'G') { seqJumpLastRow();   return true; }
     if (keyChar == 'g')
     {
-        pendingKey = 'g';
-        pendingTimestamp = dc::currentTimeMillis();
+        grammar.setPendingKey ('g');
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }
@@ -3211,35 +2875,31 @@ bool VimEngine::handleMixerNormalKey (const dc::KeyPress& key)
     // ── Escape / Ctrl-C
     if (isEscapeOrCtrlC (key))
     {
-        cancelOperator();
-        clearPending();
+        grammar.reset();
         return true;
     }
 
-    // ── g-prefix: gp toggles browser
-    if (pendingKey == 'g')
+    // ── g-prefix: gp toggles browser, gk enters keyboard
+    if (grammar.hasPendingKey() && grammar.getPendingKey() == 'g')
     {
-        if (keyChar == 'p'
-            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+        if (keyChar == 'p')
         {
-            clearPending();
+            grammar.clearPendingKey();
             if (onToggleBrowser) onToggleBrowser();
             return true;
         }
-        if (keyChar == 'k'
-            && (dc::currentTimeMillis() - pendingTimestamp) < pendingTimeoutMs)
+        if (keyChar == 'k')
         {
-            clearPending();
+            grammar.clearPendingKey();
             enterKeyboardMode();
             return true;
         }
-        clearPending();
+        grammar.clearPendingKey();
     }
 
     if (keyChar == 'g')
     {
-        pendingKey = 'g';
-        pendingTimestamp = dc::currentTimeMillis();
+        grammar.setPendingKey ('g');
         listeners.call ([](Listener& l) { l.vimContextChanged(); });
         return true;
     }

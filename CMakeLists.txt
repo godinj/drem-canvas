@@ -123,6 +123,13 @@ configure_file(
     "${CMAKE_BINARY_DIR}/generated/dc/foundation/config.h"
 )
 
+# ─── Config paths (keymap default path, etc.) ────────────────
+set(DEFAULT_KEYMAP_PATH "${CMAKE_SOURCE_DIR}/config/default_keymap.yaml")
+configure_file(
+    "${CMAKE_SOURCE_DIR}/src/generated/config_paths.h.in"
+    "${CMAKE_BINARY_DIR}/generated/config_paths.h"
+)
+
 # ═══════════════════════════════════════════════════════════════
 # dc:: Library Targets (NO Skia, NO GUI dependencies)
 # ═══════════════════════════════════════════════════════════════
@@ -249,8 +256,11 @@ add_executable(DremCanvas
 
     # Vim
     src/vim/VimContext.cpp
+    src/vim/VimGrammar.cpp
     src/vim/VimEngine.cpp
     src/vim/ActionRegistry.cpp
+    src/vim/KeySequence.cpp
+    src/vim/KeymapRegistry.cpp
 
     # Utils
     src/utils/AudioFileUtils.cpp

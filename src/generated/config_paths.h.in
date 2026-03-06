@@ -1,0 +1,2 @@
+#pragma once
+#define DC_DEFAULT_KEYMAP_PATH "@DEFAULT_KEYMAP_PATH@"

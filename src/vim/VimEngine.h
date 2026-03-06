@@ -1,5 +1,6 @@
 #pragma once
 #include "dc/foundation/keycode.h"
+#include "VimGrammar.h"
 #include "VimContext.h"
 #include "model/Project.h"
 #include "model/Arrangement.h"
@@ -51,12 +52,15 @@ public:
     bool handleKeyUp (const gfx::KeyEvent& event);
 
     Mode getMode() const { return mode; }
-    bool hasPendingKey() const { return pendingKey != 0; }
+    bool hasPendingKey() const { return grammar.hasPendingKey(); }
 
     // Operator-pending queries (used by status bar)
-    bool isOperatorPending() const { return pendingOperator != OpNone; }
-    bool hasPendingState() const;
-    std::string getPendingDisplay() const;
+    bool isOperatorPending() const { return grammar.isOperatorPending(); }
+    bool hasPendingState() const { return grammar.hasPendingState(); }
+    std::string getPendingDisplay() const { return grammar.getPendingDisplay(); }
+
+    // Grammar access (for panel-specific configuration)
+    VimGrammar& getGrammar() { return grammar; }
 
     // Command mode
     const std::string& getCommandBuffer() const { return commandBuffer; }
@@ -241,22 +245,7 @@ private:
     void openFocusedItem();
     void closePianoRoll();
 
-    // Pending key helpers
-    void clearPending();
-
-    // Count helpers
-    bool isDigitForCount (char32_t c) const;
-    void accumulateDigit (char32_t c);
-    int  getEffectiveCount() const;
-    void resetCounts();
-
-    // Operator state
-    void startOperator (Operator op);
-    void cancelOperator();
-    Operator charToOperator (char32_t c) const;
-
     // Motion
-    bool isMotionKey (char32_t c) const;
     MotionRange resolveMotion (char32_t key, int count) const;
     MotionRange resolveLinewiseMotion (int count) const;
 
@@ -289,19 +278,8 @@ private:
 
     Mode mode = Normal;
     std::string commandBuffer;
-    char32_t pendingKey = 0;
-    int64_t pendingTimestamp = 0;
-    static constexpr int64_t pendingTimeoutMs = 1000;
 
-    // Operator-pending state
-    Operator pendingOperator = OpNone;
-    int countAccumulator = 0;   // count typed before operator (e.g. the 3 in 3d2j)
-    int operatorCount = 0;      // count typed after operator  (e.g. the 2 in 3d2j)
-
-    // Register prefix state ("x prefix)
-    char pendingRegister = '\0';
-    bool awaitingRegisterChar = false;
-    char consumeRegister();     // returns pending register and resets
+    VimGrammar grammar;
 
     VirtualKeyboardState keyboardState;
 

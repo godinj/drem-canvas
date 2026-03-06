@@ -50,15 +50,30 @@ add_executable(dc_unit_tests
     regression/issue_005_set_state_setup_processing.cpp
     regression/issue_006_phase_plant_blocked.cpp
 
+    # Vim grammar tests
+    unit/vim/test_vim_grammar.cpp
+
     # Phase 8: higher-level model tests
     unit/model_layer/test_tempo_map.cpp
     unit/model_layer/test_grid_system.cpp
     unit/model_layer/test_clipboard.cpp
 
+    # Vim sources needed by vim unit tests
+    ${CMAKE_SOURCE_DIR}/src/vim/VimGrammar.cpp
+
+    # Vim keymap tests
+    unit/vim/test_key_sequence.cpp
+    unit/vim/test_keymap_registry.cpp
+
     # App-layer sources needed by model_layer unit tests
     ${CMAKE_SOURCE_DIR}/src/model/TempoMap.cpp
     ${CMAKE_SOURCE_DIR}/src/model/GridSystem.cpp
     ${CMAKE_SOURCE_DIR}/src/model/Clipboard.cpp
+
+    # Vim sources needed by keymap unit tests
+    ${CMAKE_SOURCE_DIR}/src/vim/KeySequence.cpp
+    ${CMAKE_SOURCE_DIR}/src/vim/KeymapRegistry.cpp
+    ${CMAKE_SOURCE_DIR}/src/vim/VimContext.cpp
 
     # Plugin sources needed by plugin unit tests
     ${CMAKE_SOURCE_DIR}/src/dc/plugins/ProbeCache.cpp
@@ -144,6 +159,7 @@ add_executable(dc_integration_tests
 
     # Vim
     ${CMAKE_SOURCE_DIR}/src/vim/VimContext.cpp
+    ${CMAKE_SOURCE_DIR}/src/vim/VimGrammar.cpp
     ${CMAKE_SOURCE_DIR}/src/vim/VimEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/vim/ActionRegistry.cpp
 

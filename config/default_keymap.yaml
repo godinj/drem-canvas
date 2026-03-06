@@ -1,0 +1,169 @@
+# Drem Canvas Default Keymap
+# Override in ~/.config/drem-canvas/keymap.yaml
+
+normal:
+  global:
+    "Ctrl+P": command_palette
+    "Tab": nav.cycle_panel
+    "Space": transport.play_stop
+    "i": mode.insert
+    ":": mode.command
+    "Ctrl+K": mode.keyboard
+    "gp": view.toggle_browser
+    "gk": mode.keyboard
+    "u": edit.undo
+    "Ctrl+z": edit.undo
+    "Ctrl+R": edit.redo
+    "M": track.toggle_mute
+    "S": track.toggle_solo
+    "r": track.toggle_record_arm
+    "[": grid.coarsen
+    "]": grid.refine
+    "Return": nav.open_focused
+
+  editor:
+    "v": mode.visual
+    "V": mode.visual_line
+    "x": edit.delete
+    "p": edit.paste_after
+    "P": edit.paste_before
+    "s": edit.split
+    "D": edit.duplicate
+
+  mixer:
+    "h": mixer.prev_strip
+    "l": mixer.next_strip
+    "j": mixer.focus_down
+    "k": mixer.focus_up
+    "Return": mixer.open_or_add_plugin
+    "x": mixer.remove_plugin
+    "b": mixer.bypass_plugin
+    "J": mixer.reorder_down
+    "K": mixer.reorder_up
+    "M": track.toggle_mute
+    "S": track.toggle_solo
+    "r": track.toggle_record_arm
+
+  sequencer:
+    "h": seq.move_left
+    "l": seq.move_right
+    "j": seq.move_down
+    "k": seq.move_up
+    "0": seq.jump_first_step
+    "$": seq.jump_last_step
+    "gg": seq.jump_first_row
+    "G": seq.jump_last_row
+    "Space": seq.toggle_step
+    "+": seq.velocity_up
+    "-": seq.velocity_down
+    "v": seq.cycle_velocity
+    "M": seq.toggle_row_mute
+    "S": seq.toggle_row_solo
+    "Return": transport.play_stop
+
+  pianoroll:
+    "h": pr.move_left
+    "l": pr.move_right
+    "j": pr.move_down
+    "k": pr.move_up
+    "1": pr.tool_select
+    "s": pr.tool_select
+    "2": pr.tool_draw
+    "d": pr.tool_draw
+    "3": pr.tool_erase
+    "x": pr.delete
+    "y": pr.copy
+    "p": pr.paste
+    "D": pr.duplicate
+    "+": pr.transpose_up
+    "-": pr.transpose_down
+    "q": pr.quantize
+    "Q": pr.humanize
+    "v": pr.velocity_lane
+    "zi": pr.zoom_in
+    "zo": pr.zoom_out
+    "zf": pr.zoom_fit
+    "0": pr.jump_start
+    "$": pr.jump_end
+    "gg": pr.jump_top
+    "G": pr.jump_bottom
+    "Return": pr.add_note
+    "[": pr.grid_coarsen
+    "]": pr.grid_refine
+    "Ctrl+A": pr.select_all
+    "Escape": pr.close
+
+  pluginview:
+    "h": pv.param_adjust_down
+    "l": pv.param_adjust_up
+    "j": pv.param_next
+    "k": pv.param_prev
+    "H": pv.param_adjust_down_fine
+    "L": pv.param_adjust_up_fine
+    "f": pv.hint_mode
+    "e": pv.open_native
+    "z": pv.toggle_enlarged
+    "R": pv.rescan
+    "x": pv.toggle_drag_axis
+    "q": pv.end_drag
+    "c": pv.toggle_center_reverse
+    "Escape": pv.close
+
+# Motions participate in the vim grammar (count + operator + motion)
+motions:
+  editor:
+    "j": motion.down
+    "k": motion.up
+    "h": motion.left
+    "l": motion.right
+    "0": motion.line_start
+    "$": motion.line_end
+    "G": motion.file_end
+    "gg": motion.file_start
+    "w": motion.word_next
+    "b": motion.word_prev
+    "e": motion.word_end
+
+# Operators combine with motions (e.g., d3j)
+operators:
+  editor:
+    "d": operator.delete
+    "y": operator.yank
+    "c": operator.change
+
+visual:
+  global:
+    "Escape": mode.normal
+    "v": mode.normal
+    "V": mode.visual_line
+    "d": visual.delete
+    "x": visual.delete
+    "y": visual.yank
+    "c": visual.change
+    "p": visual.paste
+    "M": visual.toggle_mute
+    "S": visual.toggle_solo
+    "j": visual.extend_down
+    "k": visual.extend_up
+    "h": visual.extend_left
+    "l": visual.extend_right
+    "G": visual.extend_last
+    "gg": visual.extend_first
+    "0": visual.extend_line_start
+    "$": visual.extend_line_end
+
+visual_line:
+  global:
+    "Escape": mode.normal
+    "V": mode.normal
+    "v": mode.visual
+    "d": visual.delete
+    "y": visual.yank
+    "c": visual.change
+    "p": visual.paste
+    "M": visual.toggle_mute
+    "S": visual.toggle_solo
+    "j": visual.extend_down
+    "k": visual.extend_up
+    "G": visual.extend_last
+    "gg": visual.extend_first
